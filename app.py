@@ -46,7 +46,7 @@ if archivo:
         conteo = df[columna].value_counts().reset_index()
         conteo.columns = [columna, "Cantidad"]
         fig = px.bar(conteo, y=columna, x="Cantidad", title=titulo, text="Cantidad", color=columna, height=400)
-        fig.update_traces(texttemplate='%{text:,}', textposition="outside")
+        fig.update_traces(texttemplate='%{text:,}', textposition="auto")
         return fig
 
     st.subheader("📈 Gráficos Generales")
