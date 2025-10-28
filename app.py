@@ -48,17 +48,30 @@ if archivo:
         fig.update_traces(texttemplate='%{text:,}', textposition="outside")
         return fig
 
-    st.subheader("📈 Gráficos Generales")
-    for col, titulo in [
-        ("EQUIPO", "Expedientes por equipo"),
-        ("USUARIO", "Expedientes por usuario"),
-        ("ESTADO", "Distribución por estado"),
-        ("NOTIFICADO", "Expedientes notificados"),
-    ]:
-        if col in df_filtrado.columns:
-            fig = crear_grafico(df_filtrado, col, titulo)
-            if fig:
-                st.plotly_chart(fig, use_container_width=True)
+   st.subheader("📈 Gráficos Generales")
+
+# Define los gráficos que quieres mostrar en paralelo
+graficos = [
+    ("EQUIPO", "Expedientes por equipo"),
+    ("USUARIO", "Expedientes por usuario"),
+    ("ESTADO", "Distribución por estado")
+]
+
+# Crea columnas para mostrarlos en paralelo
+cols = st.columns(len(graficos))
+
+# Itera sobre cada gráfico y columna
+for i, (col, titulo) in enumerate(graficos):
+    if col in df.columns:
+        fig = crear_grafico(df, col, titulo)
+        if fig:
+            cols[i].plotly_chart(fig, use_container_width=True)
+
+# Muestra el cuarto gráfico debajo
+if "NOTIFICADO" in df.columns:
+    fig = crear_grafico(df, "NOTIFICADO", "Expedientes notificados")
+    if fig:
+        st.plotly_chart(fig, use_container_width=True)
 
     st.subheader("📋 Vista general de expedientes")
     df_mostrar = df_filtrado.copy()
