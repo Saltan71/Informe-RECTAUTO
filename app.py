@@ -20,16 +20,44 @@ st.title("📊 Generador de Informes Rectauto")
 
 # Modifica la clase PDF para asegurar la correcta inicialización de FPDF
 class PDF(FPDF):
+    # Variables de clase para el título dinámico y los anchos de columna
+    col_widths = []
+    headers = []
+    report_title = "Informe de Expedientes Pendientes"
+    
     def header(self):
-        # Asegura la fuente para el encabezado
-        self.set_font('Arial', 'B', 10)
-        # Usa 'utf-8' para manejar tildes/ñ en el encabezado
-        self.cell(0, 10, 'Informe de Expedientes Pendientes', 0, 1, 'C', )
+        # Título principal del informe (con el conteo de expedientes)
+        self.set_font('Arial', 'B', 15)
+        self.cell(0, 10, self.report_title, 0, 1, 'C')
         self.ln(5)
+
+        # Encabezados de la tabla (se repiten en cada página)
+        if self.headers:
+            self.set_font("Arial", "B", 7)  # Fuente más pequeña para el encabezado (para ajustarse)
+            self.set_fill_color(200, 220, 255) # Color de fondo
+            
+            # Altura de la celda: Aumentamos a 12mm para permitir dos líneas
+            cell_height = 12 
+            
+            # Guardamos la posición X e Y antes de dibujar celdas multi-línea
+            x_start = self.get_x()
+            y_start = self.get_y()
+            
+            for i, header in enumerate(self.headers):
+                self.set_xy(x_start, y_start)
+                # Usamos multi_cell para envolver el texto si es largo
+                self.multi_cell(self.col_widths[i], 6, header, 1, 'C', 1, align='T', max_line_height=3)
+                x_start += self.col_widths[i]
+            
+            # Mover a la siguiente línea después de dibujar todos los encabezados
+            self.set_xy(10, y_start + cell_height) # Movemos Y a la posición final
+            self.set_font("Arial", "", 8) # Volvemos a la fuente de datos
+            self.set_auto_page_break(True, margin=20) # Aseguramos que el auto-break esté activado
+            
 
     def footer(self):
         self.set_y(-15)
-        self.set_font('Arial', 'I', 6)
+        self.set_font('Arial', 'I', 8)
         self.cell(0, 10, f'Página {self.page_no()}', 0, 0, 'C')
 
 # --- Función para generar PDF a partir de una tabla de DataFrame ---
@@ -37,60 +65,45 @@ class PDF(FPDF):
 
 # Ajuste el ancho de las columnas (el ancho total de A4 horizontal es ~277mm)
 # Asegúrese de que la suma de los anchos sea <= 277
+# --- Función para generar PDF a partir de una tabla de DataFrame ---
+# (La clase PDF debe estar definida antes)
 def dataframe_to_pdf_bytes(df, title):
     """Genera un archivo PDF a partir de un DataFrame, manejando saltos de página."""
     pdf = PDF('L', 'mm', 'A4') 
+    
+    # 1. Ajustar el ancho de las columnas (el ancho total debe ser <= 287mm)
+    # Ejemplo: 13 columnas. Ajuste estos valores si el informe final tiene más o menos.
+    # [EXPEDIENTE, CLIENTE, EQUIPO, ... (13 en total después de exclusiones)]
+    # Si su DataFrame final (df) tiene 13 columnas, asegúrese de que la lista tenga 13 valores.
+    
+    # Hemos excluido las columnas 1 y 10, así que quedan 13.
+    # 287mm total / 13 columnas = ~22.07mm por columna.
+    pdf.col_widths = [
+        25, 30, 20, 25, 20, 25, 20, 20, 20, 20, 20, 10, 12  # Suma total: 267mm (aprox.)
+    ] 
+
+    # 2. Asignar encabezados y título dinámico
+    pdf.headers = df.columns.tolist()
+    pdf.report_title = title
+    
+    # 3. Iniciar la generación (llama a header() por primera vez)
+    pdf.set_auto_page_break(True, margin=20) # Margen inferior de 20mm
     pdf.add_page()
     
-    # Título del informe
-    pdf.set_font("Arial", "B", 10)
-    pdf.cell(0, 10, title, 0, 1, 'C') 
-    pdf.ln(5)
-
-    # 1. Configuración de la tabla
-    pdf.set_font("Arial", "B", 6) # Fuente para encabezados
-    col_widths = [43, 14, 14, 8, 24, 14, 14, 24, 14, 40, 24, 14, 26] # Anchos de columna en mm
-    
-    # Si su DataFrame tiene más de 7 columnas (el máximo que cabe bien en A4 horizontal)
-    # AJUSTE ESTA LISTA DE ANCHOS para que sumen menos de 287mm.
-    # Usaremos las primeras 7 columnas por defecto si df.shape[1] > 7.
-    
-    # Usamos solo las columnas que podemos mostrar en una página
-    df_mostrar_pdf = df.iloc[:, :len(col_widths)]
-    
-    # 2. Imprimir encabezados de la tabla
-    y_start = pdf.get_y()
-    pdf.set_fill_color(200, 220, 255) # Color de fondo para encabezados
-    
-    for i, header in enumerate(df_mostrar_pdf.columns):
-        pdf.cell(col_widths[i], 6, header, 1, 0, 'C', 1)
-    
-    pdf.ln()
-    
-    # 3. Imprimir datos de las filas
+    # 4. Imprimir datos de las filas
     pdf.set_font("Arial", "", 8) # Fuente para los datos
 
-    for index, row in df_mostrar_pdf.iterrows():
-        # Antes de imprimir una nueva fila, comprueba si es necesario un salto de página
-        # Si la posición actual + altura de la celda es mayor que la altura máxima
-        if pdf.get_y() + 6 > 200: # 200 es una altura segura en A4 horizontal
-            pdf.add_page()
-            pdf.set_font("Arial", "B", 6)
-            pdf.set_fill_color(200, 220, 255)
-            # Re-imprimir encabezados en la nueva página
-            for i, header in enumerate(df_mostrar_pdf.columns):
-                pdf.cell(col_widths[i], 6, header, 1, 0, 'C', 1)
-            pdf.ln()
-            pdf.set_font("Arial", "", 6)
-
+    for index, row in df.iterrows():
+        # La comprobación de salto de página ya la hace pdf.add_page() y pdf.set_auto_page_break(True)
+        
         # Imprimir las celdas de la fila
         for i, col_data in enumerate(row):
-            # Convertir todos los datos a string, limitando la longitud si es necesario
             text = str(col_data).replace('\n', ' ')
-            pdf.cell(col_widths[i], 6, text, 1, 0, 'L')
-        pdf.ln()
+            # Usamos pdf.cell, la altura de la fila de datos es 6mm
+            pdf.cell(pdf.col_widths[i], 6, text, 1, 0, 'L')
+        pdf.ln() # Salto de línea después de cada fila
 
-    # 4. Obtener el PDF como bytes
+    # 5. Obtener el PDF como bytes
     pdf_output = pdf.output(dest='B')
     
     return pdf_output
@@ -240,6 +253,9 @@ if archivo:
                     
                     # 5. Seleccionar SÓLO las columnas deseadas para el informe final
                     df_pdf = df_user[NOMBRES_COLUMNAS_PDF].copy()
+
+                    # 6. Obtener el número de expedientes abiertos
+                    num_expedientes = len(df_pdf)
                     
                     # 6. Formato de fechas (si aplica)
                     for col in df_pdf.select_dtypes(include='datetime').columns:
@@ -248,7 +264,7 @@ if archivo:
                     # 7. Generar el PDF
                     #nombre_usuario_sanitizado = "".join(c for c in usuario if c.isalnum() or c in ('_',)).replace(' ', '_')
                     file_name = f"{num_semana}{usuario}.pdf"
-                    titulo_pdf = f"{num_semana}{usuario}"
+                    titulo_pdf = f"Expedientes Pendientes ({num_expedientes}) - Semana {num_semana} a {fecha_max_str} - {usuario}"
                     
                     # Llamada a la función de generación PDF (que maneja múltiples páginas)
                     pdf_data = dataframe_to_pdf_bytes(df_pdf, titulo_pdf)
