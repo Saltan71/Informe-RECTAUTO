@@ -22,14 +22,14 @@ st.title("📊 Generador de Informes Rectauto")
 class PDF(FPDF):
     def header(self):
         # Asegura la fuente para el encabezado
-        self.set_font('Arial', 'B', 15)
+        self.set_font('Arial', 'B', 10)
         # Usa 'utf-8' para manejar tildes/ñ en el encabezado
         self.cell(0, 10, 'Informe de Expedientes Pendientes', 0, 1, 'C', )
         self.ln(5)
 
     def footer(self):
         self.set_y(-15)
-        self.set_font('Arial', 'I', 8)
+        self.set_font('Arial', 'I', 6)
         self.cell(0, 10, f'Página {self.page_no()}', 0, 0, 'C')
 
 # --- Función para generar PDF a partir de una tabla de DataFrame ---
@@ -43,7 +43,7 @@ def dataframe_to_pdf_bytes(df, title):
     pdf.add_page()
     
     # Título del informe
-    pdf.set_font("Arial", "B", 14)
+    pdf.set_font("Arial", "B", 10)
     pdf.cell(0, 10, title, 0, 1, 'C') 
     pdf.ln(5)
 
