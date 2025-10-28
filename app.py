@@ -35,17 +35,16 @@ def dataframe_to_pdf_bytes(df, title):
     pdf.ln(5)
 
     # --- CONFIGURACIÓN ---
-    pdf.set_font("Arial", "B", 5)  # fuente más pequeña para encabezado
     col_widths = [43, 14, 14, 8, 24, 14, 14, 24, 14, 40, 24, 14, 26]
     df_mostrar_pdf = df.iloc[:, :len(col_widths)]
 
     # --- FUNCIÓN PARA IMPRIMIR ENCABEZADOS ---
     def imprimir_encabezados():
-        pdf.set_font("Arial", "B", 5)
+        pdf.set_font("Arial", "B", 4)  # REDUCIDO de 5 a 4
         pdf.set_fill_color(200, 220, 255)
         y_inicio = pdf.get_y()
         
-        # Usar una altura fija para todos los encabezados (más segura)
+        # Usar una altura fija para todos los encabezados
         altura_fija = 6  # 6mm de altura para todos los encabezados
         
         # Dibujar todos los encabezados con la misma altura
@@ -59,8 +58,8 @@ def dataframe_to_pdf_bytes(df, title):
             # Volver a la posición para escribir el texto
             pdf.set_xy(x, y)
             
-            # Escribir el texto centrado (usar multi_cell para ajuste automático)
-            pdf.multi_cell(col_widths[i], 3, str(header), 0, 'C')
+            # Escribir el texto centrado con tamaño de fuente reducido
+            pdf.multi_cell(col_widths[i], 2.5, str(header), 0, 'C')  # REDUCIDO de 3 a 2.5
             
             # Mover a la siguiente columna
             pdf.set_xy(x + col_widths[i], y)
@@ -87,7 +86,8 @@ def dataframe_to_pdf_bytes(df, title):
     # --- EXPORTAR COMO BYTES ---
     pdf_output = pdf.output(dest='B')
     return pdf_output
-    
+
+
 archivo = st.file_uploader("📁 Sube el archivo Excel (rectauto*.xlsx)", type=["xlsx", "xls"])
 
 if archivo:
