@@ -49,7 +49,7 @@ def dataframe_to_pdf_bytes(df, title):
 
     # 1. Configuración de la tabla
     pdf.set_font("Arial", "B", 6) # Fuente para encabezados
-    col_widths = [43, 11, 14, 14, 10, 18, 14, 18, 20, 14, 14, 35, 24, 14, 24] # Anchos de columna en mm
+    col_widths = [43, 14, 14, 10, 18, 14, 18, 20, 14, 35, 24, 14, 25] # Anchos de columna en mm
     
     # Si su DataFrame tiene más de 7 columnas (el máximo que cabe bien en A4 horizontal)
     # AJUSTE ESTA LISTA DE ANCHOS para que sumen menos de 287mm.
@@ -267,7 +267,7 @@ if st.button(f"Generar {len(usuarios_pendientes)} Informes PDF Pendientes"):
                 mime="application/zip",
                 help="Descarga todos los informes PDF listos para subirlos a SharePoint.",
                 key='pdf_download_button'
-            )
+            ))
 
 
 
