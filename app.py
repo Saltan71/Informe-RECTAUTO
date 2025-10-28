@@ -34,7 +34,7 @@ if archivo:
     df_filtrado = df.copy()
     if equipo_sel != "Todos":
         df_filtrado = df_filtrado[df_filtrado["EQUIPO"] == equipo_sel]
-    if estado_sel != "Todos":
+    if estado_sel != "Abierto":
         df_filtrado = df_filtrado[df_filtrado["ESTADO"] == estado_sel]
     if usuario_sel != "Todos":
         df_filtrado = df_filtrado[df_filtrado["USUARIO"] == usuario_sel]
