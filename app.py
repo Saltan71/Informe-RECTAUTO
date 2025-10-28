@@ -32,47 +32,65 @@ class PDF(FPDF):
         self.set_font('Arial', 'I', 8)
         self.cell(0, 10, f'Página {self.page_no()}', 0, 0, 'C')
 
-# Función para generar PDF a partir de una tabla de DataFrame (para informe)
 # --- Función para generar PDF a partir de una tabla de DataFrame ---
+# (Se asume que la clase PDF se define antes, como en tu código)
+
+# Ajuste el ancho de las columnas (el ancho total de A4 horizontal es ~277mm)
+# Asegúrese de que la suma de los anchos sea <= 277
 def dataframe_to_pdf_bytes(df, title):
-    """Genera un archivo PDF a partir de un DataFrame con un título."""
-    pdf = PDF('L', 'mm', 'A4') # 'L' para formato horizontal A4
+    """Genera un archivo PDF a partir de un DataFrame, manejando saltos de página."""
+    pdf = PDF('L', 'mm', 'A4') 
     pdf.add_page()
+    
+    # Título del informe
     pdf.set_font("Arial", "B", 14)
-    # Escribimos el título usando el método 'write' que maneja mejor el encoding
-    # del texto simple que 'cell' en algunos casos.
     pdf.cell(0, 10, title, 0, 1, 'C') 
     pdf.ln(5)
 
-    # Convertir el DataFrame a imagen usando matplotlib
-    fig, ax = plt.subplots(figsize=(28/2.54, 18/2.54))
-    ax.axis('tight')
-    ax.axis('off')
+    # 1. Configuración de la tabla
+    pdf.set_font("Arial", "B", 8) # Fuente para encabezados
+    col_widths = [45, 45, 45, 30, 30, 45, 37] # Anchos de columna en mm
     
-    # 1. Renderizar la tabla con valores del DF
-    tabla = ax.table(
-        cellText=df.values, 
-        colLabels=df.columns, 
-        loc='center', 
-        cellLoc='left'
-    )
-    tabla.auto_set_font_size(False)
-    tabla.set_fontsize(7) 
-    tabla.scale(1, 1.1) 
+    # Si su DataFrame tiene más de 7 columnas (el máximo que cabe bien en A4 horizontal)
+    # AJUSTE ESTA LISTA DE ANCHOS para que sumen menos de 287mm.
+    # Usaremos las primeras 7 columnas por defecto si df.shape[1] > 7.
+    
+    # Usamos solo las columnas que podemos mostrar en una página
+    df_mostrar_pdf = df.iloc[:, :len(col_widths)]
+    
+    # 2. Imprimir encabezados de la tabla
+    y_start = pdf.get_y()
+    pdf.set_fill_color(200, 220, 255) # Color de fondo para encabezados
+    
+    for i, header in enumerate(df_mostrar_pdf.columns):
+        pdf.cell(col_widths[i], 6, header, 1, 0, 'C', 1)
+    
+    pdf.ln()
+    
+    # 3. Imprimir datos de las filas
+    pdf.set_font("Arial", "", 8) # Fuente para los datos
 
-    # 2. Guardar la imagen de la tabla en un buffer
-    img_buffer = io.BytesIO()
-    plt.savefig(img_buffer, format='png', bbox_inches='tight')
-    plt.close(fig)
-    img_buffer.seek(0)
-    
-    # 3. Añadir la imagen al PDF (asegúrate de que el ancho sea apropiado)
-    pdf.image(img_buffer, x=5, y=25, w=287)
-    
-    # 4. Obtener el PDF como bytes directamente
-    # *** ESTE ES EL CAMBIO CLAVE ***
-    # Usamos dest='B' para obtener el resultado como un objeto bytes, 
-    # evitando el fallo de codificación de Python en dest='S'.
+    for index, row in df_mostrar_pdf.iterrows():
+        # Antes de imprimir una nueva fila, comprueba si es necesario un salto de página
+        # Si la posición actual + altura de la celda es mayor que la altura máxima
+        if pdf.get_y() + 6 > 200: # 200 es una altura segura en A4 horizontal
+            pdf.add_page()
+            pdf.set_font("Arial", "B", 8)
+            pdf.set_fill_color(200, 220, 255)
+            # Re-imprimir encabezados en la nueva página
+            for i, header in enumerate(df_mostrar_pdf.columns):
+                pdf.cell(col_widths[i], 6, header, 1, 0, 'C', 1)
+            pdf.ln()
+            pdf.set_font("Arial", "", 8)
+
+        # Imprimir las celdas de la fila
+        for i, col_data in enumerate(row):
+            # Convertir todos los datos a string, limitando la longitud si es necesario
+            text = str(col_data).replace('\n', ' ')
+            pdf.cell(col_widths[i], 6, text, 1, 0, 'L')
+        pdf.ln()
+
+    # 4. Obtener el PDF como bytes
     pdf_output = pdf.output(dest='B')
     
     return pdf_output
