@@ -1,3 +1,4 @@
+
 import streamlit as st
 import pandas as pd
 import plotly.express as px
@@ -12,7 +13,7 @@ st.title("📊 Generador de Informes Rectauto")
 archivo = st.file_uploader("📁 Sube el archivo Excel (rectauto*.xlsx)", type=["xlsx", "xls"])
 
 if archivo:
-    df = pd.read_excel(archivo, sheet_name=HOJA, header=0)
+    df = pd.read_excel(archivo, sheet_name=HOJA, header=0, engine="openpyxl" if archivo.name.endswith("xlsx") else "xlrd")
     df.columns = [col.upper() for col in df.columns]
 
     columnas = [0, 1, 2, 3, 12, 14, 15, 16, 17, 18, 20, 21, 23, 26, 27]
@@ -49,16 +50,25 @@ if archivo:
         return fig
 
     st.subheader("📈 Gráficos Generales")
-    for col, titulo in [
+
+    # Mostrar los tres gráficos en paralelo
+    columnas_graficos = st.columns(3)
+    graficos = [
         ("EQUIPO", "Expedientes por equipo"),
         ("USUARIO", "Expedientes por usuario"),
-        ("ESTADO", "Distribución por estado"),
-        ("NOTIFICADO", "Expedientes notificados"),
-    ]:
+        ("ESTADO", "Distribución por estado")
+    ]
+    for i, (col, titulo) in enumerate(graficos):
         if col in df_filtrado.columns:
             fig = crear_grafico(df_filtrado, col, titulo)
             if fig:
-                st.plotly_chart(fig, use_container_width=True)
+                columnas_graficos[i].plotly_chart(fig, use_container_width=True)
+
+    # Mostrar el gráfico de NOTIFICADO debajo
+    if "NOTIFICADO" in df_filtrado.columns:
+        fig = crear_grafico(df_filtrado, "NOTIFICADO", "Expedientes notificados")
+        if fig:
+            st.plotly_chart(fig, use_container_width=True)
 
     st.subheader("📋 Vista general de expedientes")
     df_mostrar = df_filtrado.copy()
