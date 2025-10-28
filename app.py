@@ -16,9 +16,8 @@ archivo = st.file_uploader("📁 Sube el archivo Excel (rectauto*.xlsx)", type=[
 
 if archivo:
     df = pd.read_excel(archivo, sheet_name=HOJA, header=0)
-    df.columns = [col.upper() for col in df.columns]
 
-    columnas = [0, 1, 2, 3, 12, 14, 15, 16, 17, 18, 20, 21, 23, 26, 27]
+    columnas = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]
     df = df.iloc[:, columnas]
 
     columna_fecha = df.columns[10]
