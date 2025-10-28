@@ -179,7 +179,7 @@ if archivo:
     for col in df_mostrar.select_dtypes(include='number').columns:
         df_mostrar[col] = df_mostrar[col].apply(lambda x: f"{int(x):,}" if pd.notna(x) else "")
     for col in df_mostrar.select_dtypes(include='datetime').columns:
-        df_mostrar[col] = df_mostrar[col].dt.strftime("%d/%m/%Y")
+        df_mostrar[col] = df_mostrar[col].dt.strftime("%d/%m/%y")
     st.dataframe(df_mostrar, use_container_width=True)
 
 # --- DESCARGA DE INFORMES EN EXCEL Y PDF ---
@@ -205,7 +205,7 @@ if archivo:
                         
                         # Formato de fechas para el PDF
                         for col in df_user.select_dtypes(include='datetime').columns:
-                            df_user[col] = df_user[col].dt.strftime("%d/%m/%Y")
+                            df_user[col] = df_user[col].dt.strftime("%d/%m/%y")
                             
                         # Sanear nombre de archivo
                         #nombre_usuario_sanitizado = "".join(c for c in usuario if c.isalnum() or c in ('_',)).replace(' ', '_')
