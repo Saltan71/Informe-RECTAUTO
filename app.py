@@ -27,15 +27,14 @@ class PDF(FPDF):
         self.cell(0, 10, f'Página {self.page_no()}', 0, 0, 'C')
 
 def dataframe_to_pdf_bytes(df, title):
-    """Genera un PDF desde un DataFrame, con encabezados homogéneos y repetidos."""
+    """Genera un PDF desde un DataFrame, con encabezados homogéneos, visibles y repetidos."""
     pdf = PDF('L', 'mm', 'A4')
     pdf.add_page()
     pdf.set_font("Arial", "B", 8)
     pdf.cell(0, 10, title, 0, 1, 'C')
     pdf.ln(5)
 
-    # --- CONFIGURACIÓN ---
-    pdf.set_font("Arial", "B", 5)  # letra más pequeña
+    pdf.set_font("Arial", "B", 5)
     col_widths = [43, 14, 14, 8, 24, 14, 14, 24, 14, 40, 24, 14, 26]
     df_mostrar_pdf = df.iloc[:, :len(col_widths)]
 
@@ -47,29 +46,25 @@ def dataframe_to_pdf_bytes(df, title):
         alturas = []
         for i, header in enumerate(df_mostrar_pdf.columns):
             x, y = pdf.get_x(), pdf.get_y()
-            # multi_cell invisible solo para medir
             pdf.multi_cell(col_widths[i], 3, header, border=0)
             altura = pdf.get_y() - y
             alturas.append(altura)
             pdf.set_xy(x + col_widths[i], y)
         altura_max = max(alturas)
 
-        # 2️⃣ Dibujar homogéneamente con la altura máxima
+        # 2️⃣ Dibujar celdas y texto centrado verticalmente
         y_inicio = pdf.get_y()
-        pdf.set_y(y_inicio)
         for i, header in enumerate(df_mostrar_pdf.columns):
             x = pdf.get_x()
-            y = pdf.get_y()
-            # Calcular desplazamiento vertical para centrar el texto
-            x_offset = col_widths[i]
-            y_offset = altura_max / 2 - (alturas[i] / 2)
-            pdf.set_xy(x, y + y_offset)
+            # fondo
+            pdf.set_fill_color(200, 220, 255)
+            pdf.rect(x, y_inicio, col_widths[i], altura_max, 'DF')
+
+            # texto centrado verticalmente
+            pdf.set_xy(x, y_inicio + (altura_max - alturas[i]) / 2)
             pdf.multi_cell(col_widths[i], 3, header, border=0, align='C')
-            pdf.set_xy(x + x_offset, y_inicio)
-        # Dibujar marco alrededor del conjunto de celdas
-        pdf.set_y(y_inicio)
-        for i, _ in enumerate(df_mostrar_pdf.columns):
-            pdf.cell(col_widths[i], altura_max, '', 1, 0, 'C', True)
+
+            pdf.set_xy(x + col_widths[i], y_inicio)
         pdf.ln(altura_max)
 
     # --- PRIMER ENCABEZADO ---
