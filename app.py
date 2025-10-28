@@ -1,3 +1,4 @@
+
 import streamlit as st
 import pandas as pd
 import plotly.express as px
@@ -6,40 +7,35 @@ import os
 from jinja2 import Template
 import tempfile
 
-# === CONFIGURACIÓN GENERAL ===
 FECHA_REFERENCIA = datetime(2022, 11, 1)
 HOJA = "Sheet1"
 
 st.set_page_config(page_title="Informe Rectauto", layout="wide")
 st.title("📊 Generador de Informes Rectauto")
 
-# === SUBIDA DE ARCHIVO ===
 archivo = st.file_uploader("📁 Sube el archivo Excel (rectauto*.xlsx)", type=["xlsx", "xls"])
 
 if archivo:
-    df = pd.read_excel(archivo, sheet_name=HOJA, header=0, engine="openpyxl")
+    df = pd.read_excel(archivo, sheet_name=HOJA, header=0)
 
-    # Seleccionar columnas específicas
     columnas = [0, 1, 2, 3, 12, 14, 15, 16, 17, 18, 20, 21, 23, 26, 27]
     df = df.iloc[:, columnas]
 
-    # Convertir columna de fecha
     columna_fecha = df.columns[11]
     df[columna_fecha] = pd.to_datetime(df[columna_fecha], errors='coerce')
 
-    # Calcular semana
     fecha_max = df[columna_fecha].max()
     dias_transcurridos = (fecha_max - FECHA_REFERENCIA).days
     num_semana = dias_transcurridos // 7 + 1
 
     st.subheader(f"📅 Semana detectada: {num_semana}")
 
-    # === GRÁFICOS ===
     def crear_grafico(df, columna, titulo):
         if columna not in df.columns:
             return None
         conteo = df[columna].value_counts().reset_index()
         conteo.columns = [columna, "Cantidad"]
+        conteo["Cantidad"] = conteo["Cantidad"].map("{:,.0f}".format)
         fig = px.bar(conteo, x=columna, y="Cantidad", title=titulo, text="Cantidad", color=columna, height=400)
         fig.update_traces(textposition="outside")
         return fig
@@ -56,7 +52,6 @@ if archivo:
             if fig:
                 st.plotly_chart(fig, use_container_width=True)
 
-    # === INFORMES POR USUARIO ===
     if "USUARIO" in df.columns:
         usuarios = df["USUARIO"].dropna().unique()
         st.subheader("👤 Informes individuales por usuario")
@@ -66,7 +61,11 @@ if archivo:
             os.makedirs(carpeta_usuarios, exist_ok=True)
 
             for usuario in usuarios:
-                df_user = df[df["USUARIO"] == usuario]
+                df_user = df[df["USUARIO"] == usuario].copy()
+                for col in df_user.select_dtypes(include="number").columns:
+                    df_user[col] = df_user[col].map("{:,.0f}".format)
+                for col in df_user.select_dtypes(include="datetime").columns:
+                    df_user[col] = df_user[col].dt.strftime("%d/%m/%Y")
                 tabla_user = df_user.to_html(index=False, classes="display", border=0, justify="center")
                 plantilla_user = Template("""
                 <html>
@@ -84,9 +83,13 @@ if archivo:
             st.success("✅ Informes individuales generados.")
             st.download_button("📥 Descargar informes individuales (ZIP)", data=None, disabled=True)
 
-    # === TABLA GENERAL ===
     st.subheader("📋 Vista general de expedientes")
-    st.dataframe(df, use_container_width=True)
+    df_formateado = df.copy()
+    for col in df_formateado.select_dtypes(include="number").columns:
+        df_formateado[col] = df_formateado[col].map("{:,.0f}".format)
+    for col in df_formateado.select_dtypes(include="datetime").columns:
+        df_formateado[col] = df_formateado[col].dt.strftime("%d/%m/%Y")
+    st.dataframe(df_formateado, use_container_width=True)
 
 else:
     st.info("Por favor, sube un archivo Excel para comenzar.")
