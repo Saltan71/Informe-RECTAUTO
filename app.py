@@ -33,13 +33,14 @@ class PDF(FPDF):
         self.cell(0, 10, f'Página {self.page_no()}', 0, 0, 'C')
 
 # Función para generar PDF a partir de una tabla de DataFrame (para informe)
+# --- Función para generar PDF a partir de una tabla de DataFrame ---
 def dataframe_to_pdf_bytes(df, title):
     """Genera un archivo PDF a partir de un DataFrame con un título."""
     pdf = PDF('L', 'mm', 'A4') # 'L' para formato horizontal A4
     pdf.add_page()
     pdf.set_font("Arial", "B", 14)
-    # Usa 'pdf.cell(..., text_width=0)' o 'pdf.write_html()' si quieres títulos complejos
-    # Para el título, usamos 'write' que es más simple, pero asegura que 'title' sea str
+    # Escribimos el título usando el método 'write' que maneja mejor el encoding
+    # del texto simple que 'cell' en algunos casos.
     pdf.cell(0, 10, title, 0, 1, 'C') 
     pdf.ln(5)
 
@@ -61,7 +62,6 @@ def dataframe_to_pdf_bytes(df, title):
 
     # 2. Guardar la imagen de la tabla en un buffer
     img_buffer = io.BytesIO()
-    # Usar el formato PNG es el más estable para fpdf2
     plt.savefig(img_buffer, format='png', bbox_inches='tight')
     plt.close(fig)
     img_buffer.seek(0)
@@ -70,8 +70,10 @@ def dataframe_to_pdf_bytes(df, title):
     pdf.image(img_buffer, x=5, y=25, w=287)
     
     # 4. Obtener el PDF como bytes directamente
-    # Esta es la parte CLAVE que reemplaza el .encode('latin-1') fallido
-    pdf_output = pdf.output(dest='S').encode('latin-1') 
+    # *** ESTE ES EL CAMBIO CLAVE ***
+    # Usamos dest='B' para obtener el resultado como un objeto bytes, 
+    # evitando el fallo de codificación de Python en dest='S'.
+    pdf_output = pdf.output(dest='B')
     
     return pdf_output
 
