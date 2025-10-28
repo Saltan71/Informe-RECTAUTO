@@ -50,7 +50,7 @@ if archivo:
             return None
         conteo = df[columna].value_counts().reset_index()
         conteo.columns = [columna, "Cantidad"]
-        conteo["Cantidad"] = conteo["Cantidad"].apply(lambda x: f"{x:,}".replace(",", "."))
+        conteo["Cantidad"] = conteo["Cantidad"].apply(lambda x: f"{x:.}".replace(",", "."))
         fig = px.bar(conteo, x=columna, y="Cantidad", title=titulo, text="Cantidad", color=columna, height=400)
         fig.update_traces(textposition="outside")
         return fig
