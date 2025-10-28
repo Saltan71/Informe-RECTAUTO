@@ -248,7 +248,7 @@ if archivo:
                     # 7. Generar el PDF
                     #nombre_usuario_sanitizado = "".join(c for c in usuario if c.isalnum() or c in ('_',)).replace(' ', '_')
                     file_name = f"{num_semana}{usuario}.pdf"
-                    titulo_pdf = f"{num_semana}{usuario}"
+                    titulo_pdf = f"Expedientes Pendientes ({num_expedientes}) - Semana {num_semana} a {fecha_max_str} - {usuario}"
                     
                     # Llamada a la función de generación PDF (que maneja múltiples páginas)
                     pdf_data = dataframe_to_pdf_bytes(df_pdf, titulo_pdf)
