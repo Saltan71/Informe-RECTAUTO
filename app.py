@@ -22,7 +22,6 @@ st.title("📊 Generador de Informes Rectauto")
 # --- CLASE PDF CORREGIDA (VERSION FINAL) ---
 class PDF(FPDF):
     
-    # 1. PASAR VARIABLES AL CONSTRUCTOR (para que existan al llamar header)
     def __init__(self, orientation, unit, format, title, headers, col_widths):
         super().__init__(orientation, unit, format)
         self.report_title = title
@@ -35,8 +34,8 @@ class PDF(FPDF):
         self.cell(0, 10, self.report_title, 0, 1, 'C')
         self.ln(5)
 
-        # 2. VERIFICACIÓN CRÍTICA: Solo dibuja si las variables tienen datos
-        if self.headers and self.col_widths: 
+        # Encabezados de la tabla
+        if self.headers and self.col_widths and len(self.headers) == len(self.col_widths): 
             self.set_font("Arial", "B", 7)
             self.set_fill_color(200, 220, 255) 
             
@@ -44,11 +43,12 @@ class PDF(FPDF):
             x_start = self.get_x()
             y_start = self.get_y()
             
-            for i, header in enumerate(self.headers):
+            # *** SOLUCIÓN CRÍTICA: Iterar con zip para asegurar que las longitudes coincidan ***
+            for header, width in zip(self.headers, self.col_widths):
                 self.set_xy(x_start, y_start)
-                # La lista self.col_widths[i] ya está garantizada
-                self.multi_cell(self.col_widths[i], 4, header, 1, 'C', 1, align='T', max_line_height=4)
-                x_start += self.col_widths[i]
+                # Usamos el ancho ('width') directamente
+                self.multi_cell(width, 4, header, 1, 'C', 1, align='T', max_line_height=4)
+                x_start += width
             
             self.set_xy(10, y_start + cell_height) 
             self.set_font("Arial", "", 8)
@@ -65,23 +65,28 @@ class PDF(FPDF):
 # Ajuste el ancho de las columnas (el ancho total de A4 horizontal es ~277mm)
 # Asegúrese de que la suma de los anchos sea <= 277
 # --- FUNCIÓN dataframe_to_pdf_bytes CORREGIDA ---
+# --- FUNCIÓN dataframe_to_pdf_bytes ---
 def dataframe_to_pdf_bytes(df, title):
     """Genera un archivo PDF a partir de un DataFrame, manejando saltos de página y formatos."""
     
     # 1. Preparar las variables antes de crear el objeto
     headers = df.columns.tolist()
+    num_cols = len(df.columns)
     
-    # 2. Definir los anchos de columna (EJEMPLO para 13 columnas. AJÚSTALOS SI NECESARIO)
-    col_widths = [25, 30, 20, 25, 20, 25, 20, 20, 20, 20, 20, 10, 12] 
+    # 2. Definir los anchos de columna (EJEMPLO para 13 columnas)
+    col_widths_base = [25, 30, 20, 25, 20, 25, 20, 20, 20, 20, 20, 10, 12] 
     
-    if len(col_widths) != len(df.columns):
-        # Manejo de error o ajuste dinámico
-        st.error(f"Error interno: La tabla final tiene {len(df.columns)} columnas, pero se asignaron {len(col_widths)} anchos. El PDF podría estar mal formateado.")
-        # Aquí puedes añadir una lógica para asignar anchos de forma equitativa si el conteo falla.
-        # ancho_dinamico = 280 / len(df.columns)
-        # col_widths = [ancho_dinamico] * len(df.columns)
+    # 3. VERIFICACIÓN Y AJUSTE DE ANCHOS
+    if len(col_widths_base) != num_cols:
+        st.warning(f"⚠️ Alerta: La tabla tiene {num_cols} columnas, pero la configuración base tiene {len(col_widths_base)} anchos. Autoajustando a anchos iguales.")
+        
+        # Autoajuste: 280mm de ancho total / número de columnas
+        ancho_dinamico = 280 / num_cols
+        col_widths = [ancho_dinamico] * num_cols
+    else:
+        col_widths = col_widths_base
     
-    # 3. INSTANCIACIÓN CORREGIDA: Pasar las variables al constructor
+    # 4. INSTANCIACIÓN CORREGIDA: Pasar las variables al constructor
     pdf = PDF(
         orientation='L', 
         unit='mm', 
@@ -91,21 +96,22 @@ def dataframe_to_pdf_bytes(df, title):
         col_widths=col_widths
     ) 
     
-    # 4. Iniciar la generación (llama a header(), que ahora tiene las variables)
+    # 5. Iniciar la generación
     pdf.set_auto_page_break(True, margin=20) 
-    pdf.add_page() # ¡Ahora el header() debe funcionar!
+    pdf.add_page() 
     
-    # 5. Imprimir datos de las filas
+    # 6. Imprimir datos de las filas
     pdf.set_font("Arial", "", 8)
     data_row_height = 8 
 
     for index, row in df.iterrows():
+        # Usamos pdf.col_widths directamente
         for i, col_data in enumerate(row):
             text = str(col_data).replace('\n', ' ')
             pdf.cell(pdf.col_widths[i], data_row_height, text, 1, 0, 'L') 
         pdf.ln()
 
-    # 6. Obtener el PDF como bytes
+    # 7. Obtener el PDF como bytes
     pdf_output = pdf.output(dest='B')
     
     return pdf_output
