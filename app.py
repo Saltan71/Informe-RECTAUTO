@@ -19,47 +19,42 @@ st.set_page_config(page_title="Informe Rectauto", layout="wide")
 st.title("📊 Generador de Informes Rectauto")
 
 # Modifica la clase PDF para asegurar la correcta inicialización de FPDF
+# --- CLASE PDF CORREGIDA ---
 class PDF(FPDF):
-    # Variables de clase para el título dinámico y los anchos de columna
-    col_widths = []
-    headers = []
-    report_title = "Informe de Expedientes Pendientes"
+    # Ya no definimos col_widths ni headers aquí.
+    # Se inicializarán en la función dataframe_to_pdf_bytes.
     
     def header(self):
         # Título principal del informe (con el conteo de expedientes)
         self.set_font('Arial', 'B', 15)
+        # self.report_title se asigna en dataframe_to_pdf_bytes
         self.cell(0, 10, self.report_title, 0, 1, 'C')
         self.ln(5)
 
-        # Encabezados de la tabla (se repiten en cada página)
-        if self.headers:
-            self.set_font("Arial", "B", 7)  # Fuente más pequeña para el encabezado (para ajustarse)
-            self.set_fill_color(200, 220, 255) # Color de fondo
+        # Encabezados de la tabla (solo si han sido asignados)
+        # Usamos self.headers que ya fue asignado en la función principal
+        if hasattr(self, 'headers') and self.headers: 
+            self.set_font("Arial", "B", 7)
+            self.set_fill_color(200, 220, 255) 
             
-            # Altura de la celda: Aumentamos a 12mm para permitir dos líneas
             cell_height = 12 
-            
-            # Guardamos la posición X e Y antes de dibujar celdas multi-línea
             x_start = self.get_x()
             y_start = self.get_y()
             
             for i, header in enumerate(self.headers):
                 self.set_xy(x_start, y_start)
-                # Usamos multi_cell para envolver el texto si es largo
+                # self.col_widths ya fue asignado y se usa aquí.
                 self.multi_cell(self.col_widths[i], 6, header, 1, 'C', 1, align='T', max_line_height=3)
                 x_start += self.col_widths[i]
             
-            # Mover a la siguiente línea después de dibujar todos los encabezados
-            self.set_xy(10, y_start + cell_height) # Movemos Y a la posición final
-            self.set_font("Arial", "", 8) # Volvemos a la fuente de datos
-            self.set_auto_page_break(True, margin=20) # Aseguramos que el auto-break esté activado
+            self.set_xy(10, y_start + cell_height) 
+            self.set_font("Arial", "", 8)
+            self.set_auto_page_break(True, margin=20)
             
-
     def footer(self):
         self.set_y(-15)
         self.set_font('Arial', 'I', 8)
         self.cell(0, 10, f'Página {self.page_no()}', 0, 0, 'C')
-
 # --- Función para generar PDF a partir de una tabla de DataFrame ---
 # (Se asume que la clase PDF se define antes, como en tu código)
 
@@ -67,47 +62,47 @@ class PDF(FPDF):
 # Asegúrese de que la suma de los anchos sea <= 277
 # --- Función para generar PDF a partir de una tabla de DataFrame ---
 # (La clase PDF debe estar definida antes)
+
+# --- FUNCIÓN dataframe_to_pdf_bytes CORREGIDA ---
 def dataframe_to_pdf_bytes(df, title):
     """Genera un archivo PDF a partir de un DataFrame, manejando saltos de página."""
     pdf = PDF('L', 'mm', 'A4') 
     
-    # 1. Ajustar el ancho de las columnas (el ancho total debe ser <= 287mm)
-    # Ejemplo: 13 columnas. Ajuste estos valores si el informe final tiene más o menos.
-    # [EXPEDIENTE, CLIENTE, EQUIPO, ... (13 en total después de exclusiones)]
-    # Si su DataFrame final (df) tiene 13 columnas, asegúrese de que la lista tenga 13 valores.
-    
-    # Hemos excluido las columnas 1 y 10, así que quedan 13.
-    # 287mm total / 13 columnas = ~22.07mm por columna.
-    pdf.col_widths = [
-        25, 30, 20, 25, 20, 25, 20, 20, 20, 20, 20, 10, 12  # Suma total: 267mm (aprox.)
-    ] 
-
-    # 2. Asignar encabezados y título dinámico
+    # 1. Asignar encabezados y título dinámico al objeto pdf (instancia)
     pdf.headers = df.columns.tolist()
     pdf.report_title = title
     
-    # 3. Iniciar la generación (llama a header() por primera vez)
-    pdf.set_auto_page_break(True, margin=20) # Margen inferior de 20mm
+    # 2. Definir y asignar los anchos de columna al objeto pdf
+    # Como tienes 13 columnas (15 - 2 excluidas), necesitas 13 anchos.
+    # Ajusta estos valores a tu gusto, pero deben sumar <= 287mm.
+    # [25, 30, 20, 25, 20, 25, 20, 20, 20, 20, 20, 10, 12] -> ¡13 valores!
+    pdf.col_widths = [25, 30, 20, 25, 20, 25, 20, 20, 20, 20, 20, 10, 12] 
+    
+    # CRÍTICO: Asegurarse de que el número de anchos coincide con el número de columnas
+    if len(pdf.col_widths) != len(df.columns):
+        st.error(f"Error interno: La tabla final tiene {len(df.columns)} columnas, pero se asignaron {len(pdf.col_widths)} anchos.")
+        # Opcional: ajustar dinámicamente si no coincide
+        # ancho_default = 280 / len(df.columns)
+        # pdf.col_widths = [ancho_default] * len(df.columns) 
+        
+    # 3. Iniciar la generación (llama a header() que ahora encuentra las variables)
+    pdf.set_auto_page_break(True, margin=20) 
     pdf.add_page()
     
     # 4. Imprimir datos de las filas
-    pdf.set_font("Arial", "", 8) # Fuente para los datos
+    pdf.set_font("Arial", "", 8)
 
     for index, row in df.iterrows():
-        # La comprobación de salto de página ya la hace pdf.add_page() y pdf.set_auto_page_break(True)
-        
-        # Imprimir las celdas de la fila
         for i, col_data in enumerate(row):
             text = str(col_data).replace('\n', ' ')
-            # Usamos pdf.cell, la altura de la fila de datos es 6mm
             pdf.cell(pdf.col_widths[i], 6, text, 1, 0, 'L')
-        pdf.ln() # Salto de línea después de cada fila
+        pdf.ln()
 
     # 5. Obtener el PDF como bytes
     pdf_output = pdf.output(dest='B')
     
     return pdf_output
-
+    
 # --- PROCESAMIENTO DE ARCHIVO ---
 
 archivo = st.file_uploader("📁 Sube el archivo Excel (rectauto*.xlsx)", type=["xlsx", "xls"])
