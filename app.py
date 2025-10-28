@@ -12,6 +12,9 @@ import os # Aunque no se usa directamente en este flujo, es buena práctica mant
 FECHA_REFERENCIA = datetime(2022, 11, 1)
 HOJA = "Sheet1"
 
+# ***AJUSTA ESTA LISTA CON LOS ESTADOS QUE CONSIDERAS "PENDIENTES"***
+ESTADOS_PENDIENTES = ["Abierto"]
+
 st.set_page_config(page_title="Informe Rectauto", layout="wide")
 st.title("📊 Generador de Informes Rectauto")
 
