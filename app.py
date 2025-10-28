@@ -19,9 +19,10 @@ st.set_page_config(page_title="Informe Rectauto", layout="wide")
 st.title("📊 Generador de Informes Rectauto")
 
 # Modifica la clase PDF para asegurar la correcta inicialización de FPDF
+# --- CLASE PDF CORREGIDA (VERSION FINAL) ---
 class PDF(FPDF):
     
-    # Nuevo constructor que acepta las variables
+    # 1. PASAR VARIABLES AL CONSTRUCTOR (para que existan al llamar header)
     def __init__(self, orientation, unit, format, title, headers, col_widths):
         super().__init__(orientation, unit, format)
         self.report_title = title
@@ -31,24 +32,21 @@ class PDF(FPDF):
     def header(self):
         # Título principal del informe
         self.set_font('Arial', 'B', 15)
-        # El título YA EXISTE aquí
         self.cell(0, 10, self.report_title, 0, 1, 'C')
         self.ln(5)
 
-        # Encabezados de la tabla
-        if self.headers: 
+        # 2. VERIFICACIÓN CRÍTICA: Solo dibuja si las variables tienen datos
+        if self.headers and self.col_widths: 
             self.set_font("Arial", "B", 7)
             self.set_fill_color(200, 220, 255) 
             
-            # Altura para celdas multi-línea
             cell_height = 16 
-            
             x_start = self.get_x()
             y_start = self.get_y()
             
             for i, header in enumerate(self.headers):
                 self.set_xy(x_start, y_start)
-                # Usamos multi_cell para autoajustar
+                # La lista self.col_widths[i] ya está garantizada
                 self.multi_cell(self.col_widths[i], 4, header, 1, 'C', 1, align='T', max_line_height=4)
                 x_start += self.col_widths[i]
             
