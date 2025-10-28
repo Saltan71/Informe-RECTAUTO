@@ -20,16 +20,40 @@ st.title("📊 Generador de Informes Rectauto")
 
 # Modifica la clase PDF para asegurar la correcta inicialización de FPDF
 class PDF(FPDF):
+    # Variables de instancia para el título dinámico y los anchos de columna
+    
     def header(self):
-        # Asegura la fuente para el encabezado
-        self.set_font('Arial', 'B', 8)
-        # Usa 'utf-8' para manejar tildes/ñ en el encabezado
-        self.cell(0, 10, 'Informe de Expedientes Pendientes', 0, 1, 'C', )
+        # Título principal del informe
+        self.set_font('Arial', 'B', 15)
+        # self.report_title se asigna en dataframe_to_pdf_bytes
+        self.cell(0, 10, self.report_title, 0, 1, 'C')
         self.ln(5)
 
+        # Encabezados de la tabla (se repiten en cada página)
+        if hasattr(self, 'headers') and self.headers: 
+            self.set_font("Arial", "B", 7)
+            self.set_fill_color(200, 220, 255) 
+            
+            # *** AJUSTE: Aumentamos la altura de la celda de encabezado ***
+            cell_height = 16 
+            
+            x_start = self.get_x()
+            y_start = self.get_y()
+            
+            for i, header in enumerate(self.headers):
+                self.set_xy(x_start, y_start)
+                # Usamos multi_cell para autoajustar, altura de línea ajustada a 4mm
+                self.multi_cell(self.col_widths[i], 4, header, 1, 'C', 1, align='T', max_line_height=4)
+                x_start += self.col_widths[i]
+            
+            # Movemos Y a la posición final de la celda más baja
+            self.set_xy(10, y_start + cell_height) 
+            self.set_font("Arial", "", 8)
+            self.set_auto_page_break(True, margin=20)
+            
     def footer(self):
         self.set_y(-15)
-        self.set_font('Arial', 'I', 6)
+        self.set_font('Arial', 'I', 8)
         self.cell(0, 10, f'Página {self.page_no()}', 0, 0, 'C')
 
 # --- Función para generar PDF a partir de una tabla de DataFrame ---
