@@ -22,7 +22,7 @@ st.title("📊 Generador de Informes Rectauto")
 class PDF(FPDF):
     def header(self):
         # Asegura la fuente para el encabezado
-        self.set_font('Arial', 'B', 10)
+        self.set_font('Arial', 'B', 8)
         # Usa 'utf-8' para manejar tildes/ñ en el encabezado
         self.cell(0, 10, 'Informe de Expedientes Pendientes', 0, 1, 'C', )
         self.ln(5)
@@ -43,7 +43,7 @@ def dataframe_to_pdf_bytes(df, title):
     pdf.add_page()
     
     # Título del informe
-    pdf.set_font("Arial", "B", 10)
+    pdf.set_font("Arial", "B", 8)
     pdf.cell(0, 10, title, 0, 1, 'C') 
     pdf.ln(5)
 
@@ -68,7 +68,7 @@ def dataframe_to_pdf_bytes(df, title):
     pdf.ln()
     
     # 3. Imprimir datos de las filas
-    pdf.set_font("Arial", "", 8) # Fuente para los datos
+    pdf.set_font("Arial", "", 7) # Fuente para los datos
 
     for index, row in df_mostrar_pdf.iterrows():
         # Antes de imprimir una nueva fila, comprueba si es necesario un salto de página
@@ -251,7 +251,7 @@ if archivo:
                     # 7. Generar el PDF
                     #nombre_usuario_sanitizado = "".join(c for c in usuario if c.isalnum() or c in ('_',)).replace(' ', '_')
                     file_name = f"{num_semana}{usuario}.pdf"
-                    titulo_pdf = f"Expedientes Pendientes ({num_expedientes}) - Semana {num_semana} a {fecha_max_str} - {usuario}"
+                    titulo_pdf = f"{usuario} - Semana {num_semana} a {fecha_max_str} - Expedientes Pendientes ({num_expedientes})"
                     
                     # Llamada a la función de generación PDF (que maneja múltiples páginas)
                     pdf_data = dataframe_to_pdf_bytes(df_pdf, titulo_pdf)
