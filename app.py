@@ -46,7 +46,7 @@ def dataframe_to_pdf_bytes(df, title):
         y_inicio = pdf.get_y()
         alturas = []
 
-        # Calcular altura de cada encabezado
+        # PRIMERA PASADA: Calcular altura de cada encabezado
         for i, header in enumerate(df_mostrar_pdf.columns):
             x, y = pdf.get_x(), pdf.get_y()
             pdf.multi_cell(col_widths[i], 3, header, border=0, align='C')
@@ -54,15 +54,19 @@ def dataframe_to_pdf_bytes(df, title):
             alturas.append(altura)
             pdf.set_xy(x + col_widths[i], y)
 
+        # Encontrar la altura máxima
         altura_max = max(alturas)
         pdf.set_y(y_inicio)
 
-        # Dibujar todas las celdas con esa altura máxima
+        # SEGUNDA PASADA: Dibujar todas las celdas con la misma altura máxima
         for i, header in enumerate(df_mostrar_pdf.columns):
             x, y = pdf.get_x(), pdf.get_y()
-            # Centramos verticalmente el texto del encabezado
-            pdf.multi_cell(col_widths[i], 3, header, border=1, align='C', fill=True)
+            
+            # Calcular posición vertical para centrar el texto
+            pdf.multi_cell(col_widths[i], altura_max, header, border=1, align='C', fill=True, ln=0)
             pdf.set_xy(x + col_widths[i], y)
+        
+        # Mover a la siguiente línea después de todos los encabezados
         pdf.ln(altura_max)
 
     # --- PRIMER ENCABEZADO ---
@@ -84,7 +88,6 @@ def dataframe_to_pdf_bytes(df, title):
     # --- EXPORTAR COMO BYTES ---
     pdf_output = pdf.output(dest='B')
     return pdf_output
-
 
 archivo = st.file_uploader("📁 Sube el archivo Excel (rectauto*.xlsx)", type=["xlsx", "xls"])
 
