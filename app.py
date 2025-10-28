@@ -13,6 +13,23 @@ st.title("📊 Generador de Informes Rectauto")
 archivo = st.file_uploader("📁 Sube el archivo Excel (rectauto*.xlsx)", type=["xlsx", "xls"])
 
 if archivo:
+    df = pd.read_excel(
+        archivo,
+        sheet_name=HOJA,
+        header=0,
+        engine="openpyxl" if archivo.name.endswith("xlsx") else "xlrd"
+    )
+    df.columns = [col.upper() for col in df.columns]
+    columnas = [0, 1, 2, 3, 12, 14, 15, 16, 17, 18, 20, 21, 23, 26, 27]
+    df = df.iloc[:, columnas]
+    st.session_state["df"] = df
+elif "df" in st.session_state:
+    df = st.session_state["df"]
+else:
+    st.info("Por favor, sube un archivo Excel para comenzar.")
+    st.stop()
+
+if archivo:
     df = pd.read_excel(archivo, sheet_name=HOJA, header=0, engine="openpyxl" if archivo.name.endswith("xlsx") else "xlrd")
     df.columns = [col.upper() for col in df.columns]
 
@@ -46,7 +63,7 @@ if archivo:
         conteo = df[columna].value_counts().reset_index()
         conteo.columns = [columna, "Cantidad"]
         fig = px.bar(conteo, y=columna, x="Cantidad", title=titulo, text="Cantidad", color=columna, height=400)
-        fig.update_traces(texttemplate='%{text:,}', textposition="outside")
+        fig.update_traces(texttemplate='%{text:,}', textposition="auto")
         return fig
 
     st.subheader("📈 Gráficos Generales")
