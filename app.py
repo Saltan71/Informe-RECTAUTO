@@ -21,6 +21,10 @@ st.title("📊 Generador de Informes Rectauto")
 # Modifica la clase PDF para asegurar la correcta inicialización de FPDF
 class PDF(FPDF):
     # Variables de instancia para el título dinámico y los anchos de columna
+    # Inicialización de variables para evitar errores de atributo (AttributeError)
+    report_title = "Informe Pendiente" # Valor por defecto
+    col_widths = [] # Asegura que existe para header()
+    headers = [] # Asegura que existe para header()
     
     def header(self):
         # Título principal del informe
@@ -62,8 +66,23 @@ class PDF(FPDF):
 # Ajuste el ancho de las columnas (el ancho total de A4 horizontal es ~277mm)
 # Asegúrese de que la suma de los anchos sea <= 277
 def dataframe_to_pdf_bytes(df, title):
-    """Genera un archivo PDF a partir de un DataFrame, manejando saltos de página."""
+    """Genera un archivo PDF a partir de un DataFrame, manejando saltos de página y formatos."""
     pdf = PDF('L', 'mm', 'A4') 
+    
+    # 1. Asignar encabezados y título dinámico
+    # ESTAS LÍNEAS DEBEN IR AQUÍ, ANTES DE add_page()
+    pdf.headers = df.columns.tolist()
+    pdf.report_title = title # ¡AQUÍ ESTÁ LA ASIGNACIÓN!
+    
+    # 2. Definir y asignar los anchos de columna
+    pdf.col_widths = [25, 30, 20, 25, 20, 25, 20, 20, 20, 20, 20, 10, 12] 
+    
+    if len(pdf.col_widths) != len(df.columns):
+        # ... (Manejo de error de conteo de columnas)
+        
+    # 3. Iniciar la generación (llama a header())
+    # Esta línea llama a header(), por lo que las variables deben estar asignadas
+    pdf.set_auto_page_break(True, margin=20) 
     pdf.add_page()
     
     # Título del informe
