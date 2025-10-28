@@ -129,7 +129,7 @@ if archivo:
     fecha_max = df[columna_fecha].max()
     dias_transcurridos = (fecha_max - FECHA_REFERENCIA).days
     num_semana = dias_transcurridos // 7 + 1
-    fecha_max_str = fecha_max.strftime("%d/%m/%Y") if pd.notna(fecha_max) else "Sin fecha"
+    fecha_max_str = fecha_max.strftime("%d/%m/%y") if pd.notna(fecha_max) else "Sin fecha"
     st.subheader(f"📅 Semana {num_semana} a {fecha_max_str}")
 
     equipo_sel = st.selectbox("🔍 Filtrar por EQUIPO", ["Todos"] + sorted(df["EQUIPO"].dropna().unique()))
@@ -179,7 +179,7 @@ if archivo:
     for col in df_mostrar.select_dtypes(include='number').columns:
         df_mostrar[col] = df_mostrar[col].apply(lambda x: f"{int(x):,}" if pd.notna(x) else "")
     for col in df_mostrar.select_dtypes(include='datetime').columns:
-        df_mostrar[col] = df_mostrar[col].dt.strftime("%d/%m/%Y")
+        df_mostrar[col] = df_mostrar[col].dt.strftime("%d/%m/%y")
     st.dataframe(df_mostrar, use_container_width=True)
 
     # --- DESCARGA DE INFORMES EN EXCEL Y PDF ---
@@ -243,7 +243,7 @@ if archivo:
                     
                     # 6. Formato de fechas (si aplica)
                     for col in df_pdf.select_dtypes(include='datetime').columns:
-                        df_pdf[col] = df_pdf[col].dt.strftime("%d/%m/%Y")
+                        df_pdf[col] = df_pdf[col].dt.strftime("%d/%m/%y")
                         
                     # 7. Generar el PDF
                     #nombre_usuario_sanitizado = "".join(c for c in usuario if c.isalnum() or c in ('_',)).replace(' ', '_')
