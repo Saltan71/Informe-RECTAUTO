@@ -47,27 +47,33 @@ def dataframe_to_pdf_bytes(df, title):
         alturas = []
 
         # PRIMERA PASADA: Calcular altura de cada encabezado
-        for i, header in enumerate(df_mostrar_pdf.columns):
-            x, y = pdf.get_x(), pdf.get_y()
-            pdf.multi_cell(col_widths[i], 3, header, border=0, align='C')
-            altura = pdf.get_y() - y
-            alturas.append(altura)
-            pdf.set_xy(x + col_widths[i], y)
-
-        # Encontrar la altura máxima
-        altura_max = max(alturas)
-        pdf.set_y(y_inicio)
-
-        # SEGUNDA PASADA: Dibujar todas las celdas con la misma altura máxima
-        for i, header in enumerate(df_mostrar_pdf.columns):
-            x, y = pdf.get_x(), pdf.get_y()
-            
-            # Calcular posición vertical para centrar el texto
-            pdf.multi_cell(col_widths[i], altura_max, header, border=1, align='C', fill=True, ln=0)
-            pdf.set_xy(x + col_widths[i], y)
+def imprimir_encabezados():
+    pdf.set_font("Arial", "B", 5)
+    pdf.set_fill_color(200, 220, 255)
+    y_inicio = pdf.get_y()
+    
+    # Usar una altura fija para todos los encabezados (más segura)
+    altura_fija = 6  # 6mm de altura para todos los encabezados
+    
+    # Dibujar todos los encabezados con la misma altura
+    for i, header in enumerate(df_mostrar_pdf.columns):
+        x = pdf.get_x()
+        y = pdf.get_y()
         
-        # Mover a la siguiente línea después de todos los encabezados
-        pdf.ln(altura_max)
+        # Dibujar el rectángulo de fondo
+        pdf.cell(col_widths[i], altura_fija, "", 1, 0, 'C', True)
+        
+        # Volver a la posición para escribir el texto
+        pdf.set_xy(x, y)
+        
+        # Escribir el texto centrado (usar multi_cell para ajuste automático)
+        pdf.multi_cell(col_widths[i], 3, str(header), 0, 'C')
+        
+        # Mover a la siguiente columna
+        pdf.set_xy(x + col_widths[i], y)
+    
+    # Mover a la siguiente línea para los datos
+    pdf.set_xy(pdf.l_margin, y_inicio + altura_fija)
 
     # --- PRIMER ENCABEZADO ---
     imprimir_encabezados()
