@@ -244,7 +244,10 @@ if archivo:
                     # 6. Formato de fechas (si aplica)
                     for col in df_pdf.select_dtypes(include='datetime').columns:
                         df_pdf[col] = df_pdf[col].dt.strftime("%d/%m/%y")
-                        
+                    
+                    # 6. Obtener el número de expedientes abiertos
+                    num_expedientes = len(df_pdf)
+                    
                     # 7. Generar el PDF
                     #nombre_usuario_sanitizado = "".join(c for c in usuario if c.isalnum() or c in ('_',)).replace(' ', '_')
                     file_name = f"{num_semana}{usuario}.pdf"
