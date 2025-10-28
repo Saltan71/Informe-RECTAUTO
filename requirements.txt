@@ -3,3 +3,5 @@ pandas
 plotly
 openpyxl
 jinja2
+fpdf2
+matplotlib
