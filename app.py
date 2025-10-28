@@ -38,34 +38,47 @@ def dataframe_to_pdf_bytes(df, title):
     col_widths = [43, 14, 14, 8, 24, 14, 14, 24, 14, 40, 24, 14, 26]
     df_mostrar_pdf = df.iloc[:, :len(col_widths)]
 
+    # --- CONFIGURACIÓN DE ALTURA FIJA ---
+    ALTURA_ENCABEZADO = 8  # Altura fija en mm para todos los encabezados
+
     # --- FUNCIÓN PARA IMPRIMIR ENCABEZADOS ---
     def imprimir_encabezados():
-        pdf.set_font("Arial", "B", 4)  # REDUCIDO de 5 a 4
+        pdf.set_font("Arial", "B", 5)
         pdf.set_fill_color(200, 220, 255)
         y_inicio = pdf.get_y()
         
-        # Usar una altura fija para todos los encabezados
-        altura_fija = 6  # 6mm de altura para todos los encabezados
-        
-        # Dibujar todos los encabezados con la misma altura
+        # Dibujar todos los encabezados con altura fija
         for i, header in enumerate(df_mostrar_pdf.columns):
             x = pdf.get_x()
             y = pdf.get_y()
             
-            # Dibujar el rectángulo de fondo
-            pdf.cell(col_widths[i], altura_fija, "", 1, 0, 'C', True)
+            # Dibujar el rectángulo de fondo con altura fija
+            pdf.cell(col_widths[i], ALTURA_ENCABEZADO, "", 1, 0, 'C', True)
             
             # Volver a la posición para escribir el texto
             pdf.set_xy(x, y)
             
-            # Escribir el texto centrado con tamaño de fuente reducido
-            pdf.multi_cell(col_widths[i], 2.5, str(header), 0, 'C')  # REDUCIDO de 3 a 2.5
+            # Calcular posición vertical para centrar el texto
+            texto = str(header)
+            ancho_texto = pdf.get_string_width(texto)
+            
+            # Si el texto cabe en una línea, centrarlo verticalmente
+            if ancho_texto <= col_widths[i] - 2:  # Margen de 2mm
+                # Centrar verticalmente para una línea
+                altura_texto = 3  # Altura aproximada del texto
+                y_pos = y + (ALTURA_ENCABEZADO - altura_texto) / 2
+                pdf.set_xy(x, y_pos)
+                pdf.cell(col_widths[i], altura_texto, texto, 0, 0, 'C')
+            else:
+                # Para texto multilínea, usar multi_cell
+                pdf.set_xy(x, y + 1)  # Pequeño margen superior
+                pdf.multi_cell(col_widths[i], 2.5, texto, 0, 'C')
             
             # Mover a la siguiente columna
             pdf.set_xy(x + col_widths[i], y)
         
         # Mover a la siguiente línea para los datos
-        pdf.set_xy(pdf.l_margin, y_inicio + altura_fija)
+        pdf.set_xy(pdf.l_margin, y_inicio + ALTURA_ENCABEZADO)
 
     # --- PRIMER ENCABEZADO ---
     imprimir_encabezados()
@@ -86,7 +99,7 @@ def dataframe_to_pdf_bytes(df, title):
     # --- EXPORTAR COMO BYTES ---
     pdf_output = pdf.output(dest='B')
     return pdf_output
-
+    
 
 archivo = st.file_uploader("📁 Sube el archivo Excel (rectauto*.xlsx)", type=["xlsx", "xls"])
 
