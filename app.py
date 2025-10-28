@@ -27,7 +27,7 @@ class PDF(FPDF):
         self.cell(0, 10, f'Página {self.page_no()}', 0, 0, 'C')
 
 def dataframe_to_pdf_bytes(df, title):
-    """Genera un PDF desde un DataFrame, con encabezados ajustables y repetidos."""
+    """Genera un PDF desde un DataFrame, con encabezados homogéneos y repetidos."""
     pdf = PDF('L', 'mm', 'A4')
     pdf.add_page()
     pdf.set_font("Arial", "B", 8)
@@ -35,53 +35,58 @@ def dataframe_to_pdf_bytes(df, title):
     pdf.ln(5)
 
     # --- CONFIGURACIÓN ---
-    pdf.set_font("Arial", "B", 5)  # fuente más pequeña para encabezado
+    pdf.set_font("Arial", "B", 5)  # letra más pequeña
     col_widths = [43, 14, 14, 8, 24, 14, 14, 24, 14, 40, 24, 14, 26]
     df_mostrar_pdf = df.iloc[:, :len(col_widths)]
 
-    # --- FUNCIÓN PARA IMPRIMIR ENCABEZADOS ---
     def imprimir_encabezados():
         pdf.set_font("Arial", "B", 5)
         pdf.set_fill_color(200, 220, 255)
-        y_inicio = pdf.get_y()
-        alturas = []
 
-        # Calcular altura de cada encabezado
+        # 1️⃣ Medir alturas individuales
+        alturas = []
         for i, header in enumerate(df_mostrar_pdf.columns):
             x, y = pdf.get_x(), pdf.get_y()
-            pdf.multi_cell(col_widths[i], 3, header, border=0, align='C')
+            # multi_cell invisible solo para medir
+            pdf.multi_cell(col_widths[i], 3, header, border=0)
             altura = pdf.get_y() - y
             alturas.append(altura)
             pdf.set_xy(x + col_widths[i], y)
-
         altura_max = max(alturas)
-        pdf.set_y(y_inicio)
 
-        # Dibujar todas las celdas con esa altura máxima
+        # 2️⃣ Dibujar homogéneamente con la altura máxima
+        y_inicio = pdf.get_y()
+        pdf.set_y(y_inicio)
         for i, header in enumerate(df_mostrar_pdf.columns):
-            x, y = pdf.get_x(), pdf.get_y()
-            # Centramos verticalmente el texto del encabezado
-            pdf.multi_cell(col_widths[i], 3, header, border=1, align='C', fill=True)
-            pdf.set_xy(x + col_widths[i], y)
+            x = pdf.get_x()
+            y = pdf.get_y()
+            # Calcular desplazamiento vertical para centrar el texto
+            x_offset = col_widths[i]
+            y_offset = altura_max / 2 - (alturas[i] / 2)
+            pdf.set_xy(x, y + y_offset)
+            pdf.multi_cell(col_widths[i], 3, header, border=0, align='C')
+            pdf.set_xy(x + x_offset, y_inicio)
+        # Dibujar marco alrededor del conjunto de celdas
+        pdf.set_y(y_inicio)
+        for i, _ in enumerate(df_mostrar_pdf.columns):
+            pdf.cell(col_widths[i], altura_max, '', 1, 0, 'C', True)
         pdf.ln(altura_max)
 
     # --- PRIMER ENCABEZADO ---
     imprimir_encabezados()
 
-    # --- IMPRIMIR DATOS ---
+    # --- DATOS ---
     pdf.set_font("Arial", "", 7)
     for _, row in df_mostrar_pdf.iterrows():
-        # Si la siguiente fila no cabe, añadir nueva página y repetir encabezados
         if pdf.get_y() + 6 > 190:
             pdf.add_page()
             imprimir_encabezados()
 
         for i, col_data in enumerate(row):
-            text = str(col_data).replace("\n", " ")
+            text = str(col_data).replace('\n', ' ')
             pdf.cell(col_widths[i], 6, text, 1, 0, 'L')
         pdf.ln()
 
-    # --- EXPORTAR COMO BYTES ---
     pdf_output = pdf.output(dest='B')
     return pdf_output
 
