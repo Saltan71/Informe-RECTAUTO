@@ -182,44 +182,44 @@ if archivo:
         df_mostrar[col] = df_mostrar[col].dt.strftime("%d/%m/%Y")
     st.dataframe(df_mostrar, use_container_width=True)
 
-# --- DESCARGA DE INFORMES EN EXCEL Y PDF ---
+    # --- DESCARGA DE INFORMES EN EXCEL Y PDF ---
     
     st.markdown("---")
     st.header("Descarga de Informes")
 
-# B. Generación de Informes PDF por Usuario (ZIP)
-st.subheader("Generar Informes PDF Pendientes por Usuario")
+    # B. Generación de Informes PDF por Usuario (ZIP)
+    st.subheader("Generar Informes PDF Pendientes por Usuario")
 
-# Usamos el DataFrame completo (df) para la selección inicial de pendientes
-df_pendientes = df[df["ESTADO"].isin(ESTADOS_PENDIENTES)].copy()
-usuarios_pendientes = df_pendientes["USUARIO"].dropna().unique()
+    # Usamos el DataFrame completo (df) para la selección inicial de pendientes
+    df_pendientes = df[df["ESTADO"].isin(ESTADOS_PENDIENTES)].copy()
+    usuarios_pendientes = df_pendientes["USUARIO"].dropna().unique()
 
-if st.button(f"Generar {len(usuarios_pendientes)} Informes PDF Pendientes"):
-    if usuarios_pendientes.size == 0:
-        st.info("No se encontraron expedientes pendientes para generar informes.")
-    else:
-        with st.spinner('Generando PDFs y comprimiendo...'):
-            zip_buffer = io.BytesIO()
+    if st.button(f"Generar {len(usuarios_pendientes)} Informes PDF Pendientes"):
+        if usuarios_pendientes.size == 0:
+            st.info("No se encontraron expedientes pendientes para generar informes.")
+        else:
+            with st.spinner('Generando PDFs y comprimiendo...'):
+                zip_buffer = io.BytesIO()
             
-            # --- PREPARACIÓN Y SELECCIÓN DE COLUMNAS PARA EL PDF ---
+                # --- PREPARACIÓN Y SELECCIÓN DE COLUMNAS PARA EL PDF ---
             
-            # 1. Identificar las columnas a excluir y redondear
-            # Indices basados en el DataFrame de 15 columnas (df_pendientes):
-            # Columna 4 (índice 4) -> Redondear
-            # Columna 1 (índice 1) -> Excluir
-            # Columna 10 (índice 10) -> Excluir
+                # 1. Identificar las columnas a excluir y redondear
+                # Indices basados en el DataFrame de 15 columnas (df_pendientes):
+                # Columna 4 (índice 4) -> Redondear
+                # Columna 1 (índice 1) -> Excluir
+                # Columna 10 (índice 10) -> Excluir
             
-            # Creamos una lista con todos los índices de columna
-            indices_a_incluir = list(range(df_pendientes.shape[1])) 
+                # Creamos una lista con todos los índices de columna
+                indices_a_incluir = list(range(df_pendientes.shape[1])) 
             
-            # Identificamos los índices a excluir
-            indices_a_excluir = {1, 10} 
+                # Identificamos los índices a excluir
+                indices_a_excluir = {1, 10} 
             
-            # Filtramos para obtener solo los índices que queremos
-            indices_finales = [i for i in indices_a_incluir if i not in indices_a_excluir]
+                # Filtramos para obtener solo los índices que queremos
+                indices_finales = [i for i in indices_a_incluir if i not in indices_a_excluir]
             
-            # 2. Creamos la lista final de nombres de columnas
-            NOMBRES_COLUMNAS_PDF = df_pendientes.columns[indices_finales].tolist()
+                # 2. Creamos la lista final de nombres de columnas
+                NOMBRES_COLUMNAS_PDF = df_pendientes.columns[indices_finales].tolist()
 
             # -----------------------------------------------------------
             
