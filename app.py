@@ -28,7 +28,7 @@ if archivo:
     dias_transcurridos = (fecha_max - FECHA_REFERENCIA).days
     num_semana = dias_transcurridos // 7 + 1
 
-    st.subheader(f"📅 Semana detectada: {num_semana}")
+    st.subheader(f"📅 Semana detectada: {num_semana} ", fecha_max)
 
     def crear_grafico(df, columna, titulo):
         if columna not in df.columns:
