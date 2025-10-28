@@ -27,7 +27,7 @@ class PDF(FPDF):
         self.cell(0, 10, f'Página {self.page_no()}', 0, 0, 'C')
 
 def dataframe_to_pdf_bytes(df, title):
-    """Genera un PDF desde un DataFrame, con encabezados homogéneos, visibles y repetidos."""
+    """Genera un PDF desde un DataFrame, con encabezados homogéneos, color de fondo y repetidos."""
     pdf = PDF('L', 'mm', 'A4')
     pdf.add_page()
     pdf.set_font("Arial", "B", 8)
@@ -52,13 +52,17 @@ def dataframe_to_pdf_bytes(df, title):
             pdf.set_xy(x + col_widths[i], y)
         altura_max = max(alturas)
 
-        # 2️⃣ Dibujar celdas y texto centrado verticalmente
+        # 2️⃣ Dibujar celdas con fondo y texto centrado
         y_inicio = pdf.get_y()
         for i, header in enumerate(df_mostrar_pdf.columns):
             x = pdf.get_x()
-            # fondo
+
+            # fondo de color
             pdf.set_fill_color(200, 220, 255)
-            pdf.rect(x, y_inicio, col_widths[i], altura_max, 'DF')
+            pdf.rect(x, y_inicio, col_widths[i], altura_max, 'F')  # solo relleno
+
+            # borde fino (opcional)
+            pdf.rect(x, y_inicio, col_widths[i], altura_max, 'D')
 
             # texto centrado verticalmente
             pdf.set_xy(x, y_inicio + (altura_max - alturas[i]) / 2)
