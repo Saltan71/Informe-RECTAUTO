@@ -170,7 +170,7 @@ if archivo:
                 zip_buffer = io.BytesIO()
                 
                 # Columnas a incluir en los informes PDF
-                COLUMNAS_CLAVE = ["EXPEDIENTE", "CLIENTE", "EQUIPO", "ESTADO", columna_fecha]
+                COLUMNAS_CLAVE = [0, 1, 2, 3, 12, 14, 15, 16, 17, 18, 20, 21, 23, 26, 27]
                 
                 with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zip_file:
                     for usuario in usuarios_pendientes:
