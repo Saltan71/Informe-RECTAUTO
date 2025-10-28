@@ -268,6 +268,6 @@ if st.button(f"Generar {len(usuarios_pendientes)} Informes PDF Pendientes"):
                 help="Descarga todos los informes PDF listos para subirlos a SharePoint.",
                 key='pdf_download_button'
             )
-else:
+            
 else:
     st.info("Por favor, sube un archivo Excel para comenzar.")
