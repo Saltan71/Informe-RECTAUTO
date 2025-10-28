@@ -177,11 +177,11 @@ if archivo:
                             df_user[col] = df_user[col].dt.strftime("%d/%m/%Y")
                             
                         # Sanear nombre de archivo
-                        nombre_usuario_sanitizado = "".join(c for c in usuario if c.isalnum() or c in ('_',)).replace(' ', '_')
-                        file_name = f"Semana_{num_semana}_{nombre_usuario_sanitizado}_PENDIENTES.pdf"
+                        #nombre_usuario_sanitizado = "".join(c for c in usuario if c.isalnum() or c in ('_',)).replace(' ', '_')
+                        file_name = f"{num_semana}{usuario}.pdf"
                         
                         # Generar el PDF
-                        titulo_pdf = f"Expedientes Pendientes - Semana {num_semana} - {usuario}"
+                        titulo_pdf = f"{num_semana}{usuario}"
                         pdf_data = dataframe_to_pdf_bytes(df_user, titulo_pdf)
                         
                         # Añadir al ZIP
