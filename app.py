@@ -187,36 +187,74 @@ if archivo:
     st.markdown("---")
     st.header("Descarga de Informes")
 
-    # B. Generación de Informes PDF por Usuario (ZIP)
-    st.subheader("Generar Informes PDF de Pendiente por Usuario")
+# B. Generación de Informes PDF por Usuario (ZIP)
+st.subheader("Generar Informes PDF Pendientes por Usuario")
 
-    df_pendientes = df[df["ESTADO"].isin(ESTADOS_PENDIENTES)].copy()
-    usuarios_pendientes = df_pendientes["USUARIO"].dropna().unique()
-    
-    if st.button(f"Generar {len(usuarios_pendientes)} Informes PDF del Pendiente"):
-        if usuarios_pendientes.size == 0:
-            st.info("No se encontraron expedientes pendientes para generar informes.")
-        else:
-            with st.spinner('Generando PDFs y comprimiendo...'):
-                zip_buffer = io.BytesIO()
-                with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zip_file:
-                    for usuario in usuarios_pendientes:
-                        df_user = df_pendientes[df_pendientes["USUARIO"] == usuario].copy()
+# Usamos el DataFrame completo (df) para la selección inicial de pendientes
+df_pendientes = df[df["ESTADO"].isin(ESTADOS_PENDIENTES)].copy()
+usuarios_pendientes = df_pendientes["USUARIO"].dropna().unique()
+
+if st.button(f"Generar {len(usuarios_pendientes)} Informes PDF Pendientes"):
+    if usuarios_pendientes.size == 0:
+        st.info("No se encontraron expedientes pendientes para generar informes.")
+    else:
+        with st.spinner('Generando PDFs y comprimiendo...'):
+            zip_buffer = io.BytesIO()
+            
+            # --- PREPARACIÓN Y SELECCIÓN DE COLUMNAS PARA EL PDF ---
+            
+            # 1. Identificar las columnas a excluir y redondear
+            # Indices basados en el DataFrame de 15 columnas (df_pendientes):
+            # Columna 4 (índice 4) -> Redondear
+            # Columna 1 (índice 1) -> Excluir
+            # Columna 10 (índice 10) -> Excluir
+            
+            # Creamos una lista con todos los índices de columna
+            indices_a_incluir = list(range(df_pendientes.shape[1])) 
+            
+            # Identificamos los índices a excluir
+            indices_a_excluir = {1, 10} 
+            
+            # Filtramos para obtener solo los índices que queremos
+            indices_finales = [i for i in indices_a_incluir if i not in indices_a_excluir]
+            
+            # 2. Creamos la lista final de nombres de columnas
+            NOMBRES_COLUMNAS_PDF = df_pendientes.columns[indices_finales].tolist()
+
+            # -----------------------------------------------------------
+            
+            with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zip_file:
+                for usuario in usuarios_pendientes:
+                    # 3. Filtrar por usuario (obteniendo TODAS las columnas pendientes)
+                    df_user = df_pendientes[df_pendientes["USUARIO"] == usuario].copy()
+                    
+                    # 4. Redondear la Columna 4 (índice 4)
+                    indice_columna_a_redondear = 4
+                    nombre_columna_a_redondear = df_user.columns[indice_columna_a_redondear]
+                    
+                    if nombre_columna_a_redondear in df_user.columns:
+                         # Forzar a numérico, redondear y convertir a entero (si no es nulo)
+                        df_user[nombre_columna_a_redondear] = pd.to_numeric(
+                            df_user[nombre_columna_a_redondear], errors='coerce'
+                        ).fillna(0).round(0).astype(int)
+                    
+                    # 5. Seleccionar SÓLO las columnas deseadas para el informe final
+                    df_pdf = df_user[NOMBRES_COLUMNAS_PDF].copy()
+                    
+                    # 6. Formato de fechas (si aplica)
+                    for col in df_pdf.select_dtypes(include='datetime').columns:
+                        df_pdf[col] = df_pdf[col].dt.strftime("%d/%m/%Y")
                         
-                        # Formato de fechas para el PDF
-                        for col in df_user.select_dtypes(include='datetime').columns:
-                            df_user[col] = df_user[col].dt.strftime("%d/%m/%y")
-                            
-                        # Sanear nombre de archivo
-                        #nombre_usuario_sanitizado = "".join(c for c in usuario if c.isalnum() or c in ('_',)).replace(' ', '_')
-                        file_name = f"{num_semana}{usuario}.pdf"
-                        
-                        # Generar el PDF
-                        titulo_pdf = f"{num_semana}{usuario}"
-                        pdf_data = dataframe_to_pdf_bytes(df_user, titulo_pdf)
-                        
-                        # Añadir al ZIP
-                        zip_file.writestr(file_name, pdf_data)
+                    # 7. Generar el PDF
+                    nombre_usuario_sanitizado = "".join(c for c in usuario if c.isalnum() or c in ('_',)).replace(' ', '_')
+                    file_name = f"Semana_{num_semana}_{nombre_usuario_sanitizado}_PENDIENTES.pdf"
+                    titulo_pdf = f"Expedientes Pendientes - Semana {num_semana} - {usuario}"
+                    
+                    # Llamada a la función de generación PDF (que maneja múltiples páginas)
+                    pdf_data = dataframe_to_pdf_bytes(df_pdf, titulo_pdf)
+                    
+                    # 8. Añadir al ZIP
+                    zip_file.writestr(file_name, pdf_data)
 
             # Botón de descarga del ZIP
             zip_buffer.seek(0)
