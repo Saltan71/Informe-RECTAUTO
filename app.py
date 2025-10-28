@@ -20,7 +20,7 @@ if archivo:
     df = pd.read_excel(archivo, sheet_name=HOJA, header=0, engine="openpyxl")
 
     # Seleccionar columnas específicas
-    columnas = [0, 1, 2, 3, 12, 14, 15, 16, 17, 18, 19, 20, 22, 23, 25, 28, 29]
+    columnas = [0, 1, 2, 3, 12, 14, 15, 16, 17, 18, 20, 21, 23, 26, 27]
     df = df.iloc[:, columnas]
 
     # Convertir columna de fecha
