@@ -157,24 +157,20 @@ if archivo:
     st.header("Descarga de Informes")
 
     # B. Generación de Informes PDF por Usuario (ZIP)
-    st.subheader("Generar Informes PDF Pendientes por Usuario")
+    st.subheader("Generar Informes PDF de Pendiente por Usuario")
 
     df_pendientes = df[df["ESTADO"].isin(ESTADOS_PENDIENTES)].copy()
     usuarios_pendientes = df_pendientes["USUARIO"].dropna().unique()
     
-    if st.button(f"Generar {len(usuarios_pendientes)} Informes PDF Pendientes"):
+    if st.button(f"Generar {len(usuarios_pendientes)} Informes PDF del Pendiente"):
         if usuarios_pendientes.size == 0:
             st.info("No se encontraron expedientes pendientes para generar informes.")
         else:
             with st.spinner('Generando PDFs y comprimiendo...'):
                 zip_buffer = io.BytesIO()
-                
-                # Columnas a incluir en los informes PDF
-                COLUMNAS_CLAVE = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]
-                
                 with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zip_file:
                     for usuario in usuarios_pendientes:
-                        df_user = df_pendientes[df_pendientes["USUARIO"] == usuario][COLUMNAS_CLAVE].copy()
+                        df_user = df_pendientes[df_pendientes["USUARIO"] == usuario].copy()
                         
                         # Formato de fechas para el PDF
                         for col in df_user.select_dtypes(include='datetime').columns:
