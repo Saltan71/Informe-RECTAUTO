@@ -27,8 +27,9 @@ if archivo:
     fecha_max = df[columna_fecha].max()
     dias_transcurridos = (fecha_max - FECHA_REFERENCIA).days
     num_semana = dias_transcurridos // 7 + 1
+    fecha_max_str = fecha_max.strftime("%d/%m/%Y") if pd.notna(fecha_max) else "Fecha no disponible"
 
-    st.subheader(f"📅 Semana {num_semana} a {fecha_max}")
+    st.subheader(f"📅 Semana  {num_semana}  a  {fecha_max_str}")
 
     def crear_grafico(df, columna, titulo):
         if columna not in df.columns:
