@@ -49,7 +49,7 @@ def dataframe_to_pdf_bytes(df, title):
 
     # 1. Configuración de la tabla
     pdf.set_font("Arial", "B", 6) # Fuente para encabezados
-    col_widths = [43, 14, 14, 10, 18, 14, 18, 20, 14, 35, 24, 14, 25] # Anchos de columna en mm
+    col_widths = [43, 14, 14, 8, 24, 14, 14, 24, 14, 40, 24, 14, 26] # Anchos de columna en mm
     
     # Si su DataFrame tiene más de 7 columnas (el máximo que cabe bien en A4 horizontal)
     # AJUSTE ESTA LISTA DE ANCHOS para que sumen menos de 287mm.
@@ -75,13 +75,13 @@ def dataframe_to_pdf_bytes(df, title):
         # Si la posición actual + altura de la celda es mayor que la altura máxima
         if pdf.get_y() + 6 > 200: # 200 es una altura segura en A4 horizontal
             pdf.add_page()
-            pdf.set_font("Arial", "B", 8)
+            pdf.set_font("Arial", "B", 6)
             pdf.set_fill_color(200, 220, 255)
             # Re-imprimir encabezados en la nueva página
             for i, header in enumerate(df_mostrar_pdf.columns):
                 pdf.cell(col_widths[i], 6, header, 1, 0, 'C', 1)
             pdf.ln()
-            pdf.set_font("Arial", "", 8)
+            pdf.set_font("Arial", "", 6)
 
         # Imprimir las celdas de la fila
         for i, col_data in enumerate(row):
@@ -129,7 +129,7 @@ if archivo:
     fecha_max = df[columna_fecha].max()
     dias_transcurridos = (fecha_max - FECHA_REFERENCIA).days
     num_semana = dias_transcurridos // 7 + 1
-    fecha_max_str = fecha_max.strftime("%d/%m/%Y") if pd.notna(fecha_max) else "Sin fecha"
+    fecha_max_str = fecha_max.strftime("%d/%m/%y") if pd.notna(fecha_max) else "Sin fecha"
     st.subheader(f"📅 Semana {num_semana} a {fecha_max_str}")
 
     equipo_sel = st.selectbox("🔍 Filtrar por EQUIPO", ["Todos"] + sorted(df["EQUIPO"].dropna().unique()))
@@ -243,7 +243,7 @@ if st.button(f"Generar {len(usuarios_pendientes)} Informes PDF Pendientes"):
                     
                     # 6. Formato de fechas (si aplica)
                     for col in df_pdf.select_dtypes(include='datetime').columns:
-                        df_pdf[col] = df_pdf[col].dt.strftime("%d/%m/%Y")
+                        df_pdf[col] = df_pdf[col].dt.strftime("%d/%m/%y")
                         
                     # 7. Generar el PDF
                     nombre_usuario_sanitizado = "".join(c for c in usuario if c.isalnum() or c in ('_',)).replace(' ', '_')
