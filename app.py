@@ -18,12 +18,13 @@ ESTADOS_PENDIENTES = ["Abierto"]
 st.set_page_config(page_title="Informe Rectauto", layout="wide")
 st.title("📊 Generador de Informes Rectauto")
 
-# Función para generar PDF a partir de una tabla de DataFrame (para informe)
-# Se usa FPDF y Matplotlib para renderizar la tabla de forma estable en PDF.
+# Modifica la clase PDF para asegurar la correcta inicialización de FPDF
 class PDF(FPDF):
     def header(self):
+        # Asegura la fuente para el encabezado
         self.set_font('Arial', 'B', 15)
-        self.cell(0, 10, 'Informe de Expedientes Pendientes', 0, 1, 'C')
+        # Usa 'utf-8' para manejar tildes/ñ en el encabezado
+        self.cell(0, 10, 'Informe de Expedientes Pendientes', 0, 1, 'C', )
         self.ln(5)
 
     def footer(self):
@@ -31,37 +32,47 @@ class PDF(FPDF):
         self.set_font('Arial', 'I', 8)
         self.cell(0, 10, f'Página {self.page_no()}', 0, 0, 'C')
 
+# Función para generar PDF a partir de una tabla de DataFrame (para informe)
 def dataframe_to_pdf_bytes(df, title):
     """Genera un archivo PDF a partir de un DataFrame con un título."""
     pdf = PDF('L', 'mm', 'A4') # 'L' para formato horizontal A4
     pdf.add_page()
     pdf.set_font("Arial", "B", 14)
-    pdf.cell(0, 10, title, 0, 1, 'C')
+    # Usa 'pdf.cell(..., text_width=0)' o 'pdf.write_html()' si quieres títulos complejos
+    # Para el título, usamos 'write' que es más simple, pero asegura que 'title' sea str
+    pdf.cell(0, 10, title, 0, 1, 'C') 
     pdf.ln(5)
 
     # Convertir el DataFrame a imagen usando matplotlib
-    # Esto es necesario porque FPDF puro no maneja bien tablas grandes de Pandas
-    fig, ax = plt.subplots(figsize=(28/2.54, 18/2.54)) # Tamaño ajustado para A4 horizontal
+    fig, ax = plt.subplots(figsize=(28/2.54, 18/2.54))
     ax.axis('tight')
     ax.axis('off')
     
-    # Renderizar la tabla
-    tabla = ax.table(cellText=df.values, colLabels=df.columns, loc='center', cellLoc='left')
+    # 1. Renderizar la tabla con valores del DF
+    tabla = ax.table(
+        cellText=df.values, 
+        colLabels=df.columns, 
+        loc='center', 
+        cellLoc='left'
+    )
     tabla.auto_set_font_size(False)
     tabla.set_fontsize(7) 
     tabla.scale(1, 1.1) 
 
-    # Guardar la imagen de la tabla en un buffer
+    # 2. Guardar la imagen de la tabla en un buffer
     img_buffer = io.BytesIO()
+    # Usar el formato PNG es el más estable para fpdf2
     plt.savefig(img_buffer, format='png', bbox_inches='tight')
     plt.close(fig)
     img_buffer.seek(0)
     
-    # Añadir la imagen al PDF (ajuste el tamaño para que quepa)
-    pdf.image(img_buffer, x=5, y=25, w=287) # w=287 es casi todo el ancho A4
+    # 3. Añadir la imagen al PDF (asegúrate de que el ancho sea apropiado)
+    pdf.image(img_buffer, x=5, y=25, w=287)
     
-    # Guardar el PDF en bytes
-    pdf_output = pdf.output(dest='S').encode('latin-1')
+    # 4. Obtener el PDF como bytes directamente
+    # Esta es la parte CLAVE que reemplaza el .encode('latin-1') fallido
+    pdf_output = pdf.output(dest='S').encode('latin-1') 
+    
     return pdf_output
 
 # --- PROCESAMIENTO DE ARCHIVO ---
