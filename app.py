@@ -48,7 +48,7 @@ def dataframe_to_pdf_bytes(df, title):
     pdf.ln(5)
 
     # 1. Configuración de la tabla
-    pdf.set_font("Arial", "B", 8) # Fuente para encabezados
+    pdf.set_font("Arial", "B", 6) # Fuente para encabezados
     col_widths = [43, 14, 14, 14, 10, 18, 14, 18, 14, 14, 14, 43, 24, 14, 18] # Anchos de columna en mm
     
     # Si su DataFrame tiene más de 7 columnas (el máximo que cabe bien en A4 horizontal)
