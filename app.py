@@ -142,9 +142,9 @@ if archivo:
         #    df_filtrado = df_filtrado[df_filtrado["USUARIO"] == usuario_sel]
     
     #Sidebar para filtros
+    st.sidebar.image("https://github.com/Saltan71/Informe-RECTAUTO/edit/main/Logo Atrian.png", width=500)
     st.sidebar.header("Filtros")
-    st.sidebar.image("https://github.com/Saltan71/Informe-RECTAUTO/edit/main/Logo Atrian.png", width=120)
-
+    
     # Inicializar session_state para los filtros si no existen
     if 'filtro_estado' not in st.session_state:
         st.session_state.filtro_estado = ['Abierto'] if 'Abierto' in df['ESTADO'].values else []
