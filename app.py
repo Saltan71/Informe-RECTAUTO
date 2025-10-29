@@ -154,7 +154,7 @@ if archivo:
 
     # Botón para resetear
     if st.sidebar.button("Mostrar todos / Resetear filtros"):
-        st.session_state.estado_sel = list(sorted(df['ESTADO'].dropna().unique()))
+        st.session_state.estado_sel = ['Abierto'] if 'Abierto' in df['ESTADO'].values else []
         st.session_state.equipo_sel = list(sorted(df['EQUIPO'].dropna().unique()))
         st.session_state.usuario_sel = list(sorted(df['USUARIO'].dropna().unique()))
         st.rerun()
