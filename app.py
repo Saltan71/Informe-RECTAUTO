@@ -129,6 +129,29 @@ if archivo:
     fecha_max_str = fecha_max.strftime("%d/%m/%Y") if pd.notna(fecha_max) else "Sin fecha"
     st.subheader(f"📅 Semana {num_semana} a {fecha_max_str}")
 
+
+    # === NUEVAS COLUMNAS (tras calcular fecha y semana) ===
+    st.markdown("### 🧮 Generando columnas adicionales...")
+
+    # Copiamos el DataFrame original para no modificar el cargado
+    df_enriquecido = df.copy()
+
+    # Ejemplo de creación de 12 columnas
+    df_enriquecido["DIAS_DESDE_REFERENCIA"] = (df_enriquecido[columna_fecha] - FECHA_REFERENCIA).dt.days
+    df_enriquecido["DIAS_HASTA_MAX"] = (fecha_max - df_enriquecido[columna_fecha]).dt.days
+    df_enriquecido["SEMANA_EXPEDIENTE"] = ((df_enriquecido[columna_fecha] - FECHA_REFERENCIA).dt.days // 7 + 1)
+    df_enriquecido["ANTIGUEDAD_MESES"] = df_enriquecido["DIAS_DESDE_REFERENCIA"] / 30.4
+    df_enriquecido["ES_RECIENTE"] = df_enriquecido["DIAS_HASTA_MAX"] < 7
+    df_enriquecido["PENDIENTE"] = df_enriquecido["ESTADO"].isin(ESTADOS_PENDIENTES)
+    df_enriquecido["EQUIPO_USUARIO"] = df_enriquecido["EQUIPO"] + " - " + df_enriquecido["USUARIO"]
+    df_enriquecido["FECHA_REFERENCIA_STR"] = FECHA_REFERENCIA.strftime("%d/%m/%Y")
+    df_enriquecido["FECHA_MAX_STR"] = fecha_max_str
+    df_enriquecido["SEMANA_ACTUAL"] = num_semana
+    df_enriquecido["DIFERENCIA_DIAS_REF_MAX"] = (fecha_max - FECHA_REFERENCIA).days
+    df_enriquecido["RATIO_TIEMPO"] = df_enriquecido["DIAS_DESDE_REFERENCIA"] / df_enriquecido["DIFERENCIA_DIAS_REF_MAX"]
+
+
+    
     #equipo_sel = st.selectbox("🔍 Filtrar por EQUIPO", ["Todos"] + sorted(df["EQUIPO"].dropna().unique()))
     #estado_sel = st.selectbox("🔍 Filtrar por ESTADO", ["Todos"] + sorted(df["ESTADO"].dropna().unique()))
     #usuario_sel = st.selectbox("🔍 Filtrar por USUARIO", ["Todos"] + sorted(df["USUARIO"].dropna().unique()))
