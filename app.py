@@ -150,8 +150,12 @@ if archivo:
     df_enriquecido["DIFERENCIA_DIAS_REF_MAX"] = (fecha_max - FECHA_REFERENCIA).days
     df_enriquecido["RATIO_TIEMPO"] = df_enriquecido["DIAS_DESDE_REFERENCIA"] / df_enriquecido["DIFERENCIA_DIAS_REF_MAX"]
 
+    # Mostrar las tres primeras columnas nuevas
+    st.subheader("📊 Vista previa de las nuevas columnas")
+    columnas_preview = ["DIAS_DESDE_REFERENCIA", "DIAS_HASTA_MAX", "SEMANA_EXPEDIENTE"]
+    st.dataframe(df[columnas_preview].head(10), use_container_width=True)
 
-    
+
     #equipo_sel = st.selectbox("🔍 Filtrar por EQUIPO", ["Todos"] + sorted(df["EQUIPO"].dropna().unique()))
     #estado_sel = st.selectbox("🔍 Filtrar por ESTADO", ["Todos"] + sorted(df["ESTADO"].dropna().unique()))
     #usuario_sel = st.selectbox("🔍 Filtrar por USUARIO", ["Todos"] + sorted(df["USUARIO"].dropna().unique()))
