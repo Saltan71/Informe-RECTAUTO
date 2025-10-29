@@ -141,8 +141,13 @@ if archivo:
         #if usuario_sel != "Todos":
         #    df_filtrado = df_filtrado[df_filtrado["USUARIO"] == usuario_sel]
     
+    
+    # Logo que funciona como enlace
+    st.sidebar.markdown(
+        f'<a href="https://github.com/Saltan71/Informe-RECTAUTO/edit/main/"><img src="Logo Atrian.png" width="120"></a>',
+        unsafe_allow_html=True
+    )
     #Sidebar para filtros
-    st.sidebar.image("https://github.com/Saltan71/Informe-RECTAUTO/edit/main/Logo Atrian.png", width=500)
     st.sidebar.header("Filtros")
     
     # Inicializar session_state para los filtros si no existen
