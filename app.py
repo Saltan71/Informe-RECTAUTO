@@ -39,7 +39,7 @@ def dataframe_to_pdf_bytes(df, title):
     df_mostrar_pdf = df.iloc[:, :len(col_widths)]
 
     # --- CONFIGURACIÓN DE ALTURA FIJA ---
-    ALTURA_ENCABEZADO = 10  # Altura fija en mm para todos los encabezados
+    ALTURA_ENCABEZADO = 11  # Altura fija en mm para todos los encabezados
 
     # --- FUNCIÓN PARA IMPRIMIR ENCABEZADOS ---
     def imprimir_encabezados():
