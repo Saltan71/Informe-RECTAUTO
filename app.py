@@ -135,19 +135,19 @@ if archivo:
 
     #Sidebar para filtros
     st.sidebar.header("Filtros")
-    estado_sel = st.sidebar.multiselec(
+    estado_sel = st.sidebar.multiselect(
         "Selecciona Estado:",
         options=df['ESTADO'].unique(),
         default=df['ESTADO'].unique(),
     )
 
-    equipo_sel = st.sidebar.multiselec(
+    equipo_sel = st.sidebar.multiselect(
         "Selecciona Equipos:",
         options=df['EQUIPO'].unique(),
         default=df['EQUIPO'].unique(),
     )
     
-    usuario_sel = st.sidebar.multiselec(
+    usuario_sel = st.sidebar.multiselect(
         "Selecciona Usuarios:",
         options=df['USUARIO'].unique(),
         default=df['USUARIO'].unique(),
