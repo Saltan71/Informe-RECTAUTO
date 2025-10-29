@@ -13,11 +13,11 @@ HOJA = "Sheet1"
 ESTADOS_PENDIENTES = ["Abierto"]
 
 st.set_page_config(page_title="Informe Rectauto", layout="wide")
+st.set_text_color(64, 64, 64)
 st.title("📊 Generador de Informes Rectauto")
 
 class PDF(FPDF):
     def header(self):
-        self.set_text_color(64, 64, 64)
         self.set_font('Arial', 'B', 8)
         self.cell(0, 10, 'Informe de Expedientes Pendientes', 0, 1, 'C')
         self.ln(5)
