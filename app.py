@@ -159,7 +159,7 @@ if archivo:
     
         /* Fondo general de la página */
         .stApp {
-            background-color: #63A462 !important;
+            background-color: #92C88F !important;
         }
     
         /* Texto en barra lateral */
