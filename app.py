@@ -13,7 +13,6 @@ HOJA = "Sheet1"
 ESTADOS_PENDIENTES = ["Abierto"]
 
 st.set_page_config(page_title="Informe Rectauto", layout="wide")
-self.set_text_color(64, 64, 64)
 st.title("📊 Generador de Informes Rectauto")
 
 class PDF(FPDF):
