@@ -198,6 +198,16 @@ if archivo:
         df_filtrado = df_filtrado[df_filtrado['EQUIPO'].isin(equipo_sel)]
     if usuario_sel:
         df_filtrado = df_filtrado[df_filtrado['USUARIO'].isin(usuario_sel)]
+
+    # Mostrar qué filtros están activos
+    st.sidebar.markdown("---")
+    st.sidebar.subheader("Filtros activos")
+    if estado_sel:
+        st.sidebar.write(f"Estados: {', '.join(estado_sel)}")
+    if equipo_sel:
+        st.sidebar.write(f"Equipos: {len(equipo_sel)} seleccionados")
+    if usuario_sel:
+        st.sidebar.write(f"Usuarios: {len(usuario_sel)} seleccionados")
     
 
     def crear_grafico(df, columna, titulo):
