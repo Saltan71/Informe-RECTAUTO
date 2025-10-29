@@ -151,13 +151,13 @@ if archivo:
 
     equipo_sel = st.sidebar.multiselect(
         "Selecciona Equipos:",
-        options=sorted(df['EQUIPO'].unique(),
+        options=sorted(df['EQUIPO'].unique()),
         default=df['EQUIPO'].unique(),
     )
     
     usuario_sel = st.sidebar.multiselect(
         "Selecciona Usuarios:",
-        options=sorted(df['USUARIO'].unique(),
+        options=sorted(df['USUARIO'].unique()),
         default=df['USUARIO'].unique(),
     )
     
