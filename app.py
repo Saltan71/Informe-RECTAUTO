@@ -137,7 +137,7 @@ if archivo:
     df_enriquecido = df.copy()
 
     # Ejemplo de creación de 12 columnas
-    df_enriquecido["DIAS_DESDE_REFERENCIA"] = (df_enriquecido[columna_fecha] - FECHA_REFERENCIA).dt.days
+    df_enriquecido["EQUIPO"] = df_enriquecido["EQUIPO"]
     df_enriquecido["DIAS_HASTA_MAX"] = (fecha_max - df_enriquecido[columna_fecha]).dt.days
     df_enriquecido["SEMANA_EXPEDIENTE"] = ((df_enriquecido[columna_fecha] - FECHA_REFERENCIA).dt.days // 7 + 1)
     df_enriquecido["ANTIGUEDAD_MESES"] = df_enriquecido["DIAS_DESDE_REFERENCIA"] / 30.4
@@ -152,7 +152,7 @@ if archivo:
 
     # Mostrar las tres primeras columnas nuevas
     st.subheader("📊 Vista previa de las nuevas columnas")
-    columnas_preview = ["DIAS_DESDE_REFERENCIA", "DIAS_HASTA_MAX", "SEMANA_EXPEDIENTE"]
+    columnas_preview = ["EQUIPO"]
     st.dataframe(df[columnas_preview].head(10), use_container_width=True)
 
 
