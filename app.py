@@ -143,6 +143,7 @@ if archivo:
     
     #Sidebar para filtros
     st.sidebar.header("Filtros")
+    st.logo(Atrian, *, size="medium", link="https://github.com/Saltan71/Informe-RECTAUTO/edit/main/Logo Atrian.png", icon_image=None)
 
     # Inicializar session_state para los filtros si no existen
     if 'filtro_estado' not in st.session_state:
