@@ -133,6 +133,14 @@ if archivo:
     #estado_sel = st.selectbox("🔍 Filtrar por ESTADO", ["Todos"] + sorted(df["ESTADO"].dropna().unique()))
     #usuario_sel = st.selectbox("🔍 Filtrar por USUARIO", ["Todos"] + sorted(df["USUARIO"].dropna().unique()))
 
+    #df_filtrado = df.copy()
+        #if equipo_sel != "Todos":
+        #    df_filtrado = df_filtrado[df_filtrado["EQUIPO"] == equipo_sel]
+        #if estado_sel != "Todos":
+        #    df_filtrado = df_filtrado[df_filtrado["ESTADO"] == estado_sel]
+        #if usuario_sel != "Todos":
+        #    df_filtrado = df_filtrado[df_filtrado["USUARIO"] == usuario_sel]
+    
     #Sidebar para filtros
     st.sidebar.header("Filtros")
     estado_sel = st.sidebar.multiselect(
@@ -153,13 +161,13 @@ if archivo:
         default=df['USUARIO'].unique(),
     )
     
-    df_filtrado = df.copy()
-    if equipo_sel != "Todos":
-        df_filtrado = df_filtrado[df_filtrado["EQUIPO"] == equipo_sel]
-    if estado_sel != "Todos":
-        df_filtrado = df_filtrado[df_filtrado["ESTADO"] == estado_sel]
-    if usuario_sel != "Todos":
-        df_filtrado = df_filtrado[df_filtrado["USUARIO"] == usuario_sel]
+    #Filtrar basado en la selección
+    df_filtrado = df[
+        (df['ESTADO'].isin(estado_sel)) &
+        (df['EQUIPO'].isin(equipo_sel)) &
+        (df['USUARIO'].isin(usuario_sel))
+    ]
+    
 
     def crear_grafico(df, columna, titulo):
         if columna not in df.columns:
