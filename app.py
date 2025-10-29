@@ -13,8 +13,7 @@ HOJA = "Sheet1"
 ESTADOS_PENDIENTES = ["Abierto"]
 
 st.set_page_config(page_title="Informe Rectauto", layout="wide")
-
-st.title("st.image("icono.png", width=20) 📊 Seguimiento Equipo Regional RECTAUTO")
+st.title("📊 Seguimiento Equipo Regional RECTAUTO")
 
 class PDF(FPDF):
     def header(self):
