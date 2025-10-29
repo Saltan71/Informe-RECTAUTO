@@ -144,25 +144,26 @@ if archivo:
     #Sidebar para filtros
     st.sidebar.header("Filtros")
 
-# Usar una clave única para forzar la recreación de los widgets
-if 'widget_key' not in st.session_state:
-    st.session_state.widget_key = 0
+    # Usar una clave única para forzar la recreación de los widgets
+    if 'widget_key' not in st.session_state:
+        st.session_state.widget_key = 0
 
-# Inicializar session_state para los filtros
-if 'filtro_estado' not in st.session_state:
-    st.session_state.filtro_estado = ['Abierto'] if 'Abierto' in df['ESTADO'].values else []
+    # Inicializar session_state para los filtros
+    if 'filtro_estado' not in st.session_state:
+        st.session_state.filtro_estado = ['Abierto'] if 'Abierto' in df['ESTADO'].values else []
     
-if 'filtro_equipo' not in st.session_state:
-    st.session_state.filtro_equipo = sorted(df['EQUIPO'].dropna().unique())
+    if 'filtro_equipo' not in st.session_state:
+        st.session_state.filtro_equipo = sorted(df['EQUIPO'].dropna().unique())
     
-if 'filtro_usuario' not in st.session_state:
-    st.session_state.filtro_usuario = sorted(df['USUARIO'].dropna().unique())
+    if 'filtro_usuario' not in st.session_state:
+        st.session_state.filtro_usuario = sorted(df['USUARIO'].dropna().unique())
 
-# Botón para mostrar todos los elementos
-if st.sidebar.button("Mostrar todos / Resetear filtros"):
-    st.session_state.filtro_estado = ['Abierto'] if 'Abierto' in df['ESTADO'].values else []
-    st.session_state.filtro_equipo = sorted(df['EQUIPO'].dropna().unique())
-    st.session_state.filtro_usuario = sorted(df['USUARIO'].dropna().unique())
+    # Botón para mostrar todos los elementos
+    if st.sidebar.button("Mostrar todos / Resetear filtros"):
+        st.session_state.filtro_estado = ['Abierto'] if 'Abierto' in df['ESTADO'].values else []
+        st.session_state.filtro_equipo = sorted(df['EQUIPO'].dropna().unique())
+        st.session_state.filtro_usuario = sorted(df['USUARIO'].dropna().unique())
+    
     # Cambiar la clave para forzar la recreación de todos los widgets
     st.session_state.widget_key += 1
     st.rerun()
