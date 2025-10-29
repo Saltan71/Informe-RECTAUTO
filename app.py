@@ -141,6 +141,19 @@ if archivo:
         #if usuario_sel != "Todos":
         #    df_filtrado = df_filtrado[df_filtrado["USUARIO"] == usuario_sel]
     
+    # CSS más específico
+    st.markdown("""
+    <style>
+        [data-testid="stSidebar"] {
+            background-color: #007933 !important;
+        }
+    
+        /* Opcional: cambiar color del texto si es necesario */
+        [data-testid="stSidebar"] * {
+            color: white;
+        }
+    </style>
+    """, unsafe_allow_html=True)
     
     # Logo que funciona como enlace
     st.sidebar.image("Logo Atrian.png", width=260)
