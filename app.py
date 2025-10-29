@@ -186,12 +186,6 @@ if archivo:
 
     if usuario_sel:
         df_filtrado = df_filtrado[df_filtrado['USUARIO'].isin(usuario_sel)]
-
-    # Mostrar el DataFrame filtrado
-    st.dataframe(df_filtrado)
-
-    # Mostrar contador de registros
-    st.write(f"Mostrando {len(df_filtrado)} de {len(df)} registros")
     
 
     def crear_grafico(df, columna, titulo):
@@ -225,6 +219,10 @@ if archivo:
     for col in df_mostrar.select_dtypes(include='datetime').columns:
         df_mostrar[col] = df_mostrar[col].dt.strftime("%d/%m/%y")
     st.dataframe(df_mostrar, use_container_width=True)
+    
+    # Mostrar contador de registros
+    st.write(f"Mostrando {len(df_mostrar)} de {len(df)} registros")
+
 
     st.markdown("---")
     st.header("Descarga de Informes")
