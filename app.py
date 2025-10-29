@@ -141,16 +141,34 @@ if archivo:
         #if usuario_sel != "Todos":
         #    df_filtrado = df_filtrado[df_filtrado["USUARIO"] == usuario_sel]
     
-    # CSS más específico
+    # CSS para ambos fondos
     st.markdown("""
     <style>
+        /* Barra lateral - Verde oscuro */
         [data-testid="stSidebar"] {
             background-color: #007933 !important;
         }
     
-        /* Opcional: cambiar color del texto si es necesario */
+        /* Área principal - Verde claro */
+        .main .block-container {
+            background-color: #C4DDCA !important;
+            padding: 2rem;
+            border-radius: 10px;
+        }
+    
+        /* Fondo general de la página */
+        .stApp {
+            background-color: #C4DDCA !important;
+        }
+    
+        /* Texto en barra lateral */
         [data-testid="stSidebar"] * {
-            color: white;
+            color: white !important;
+        }
+    
+        /* Mejorar contraste en área principal */
+        .main .stMarkdown, .main h1, .main h2, .main h3 {
+            color: #333333 !important;
         }
     </style>
     """, unsafe_allow_html=True)
