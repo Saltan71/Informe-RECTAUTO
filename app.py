@@ -143,40 +143,55 @@ if archivo:
     
     #Sidebar para filtros
     st.sidebar.header("Filtros")
-    
-    # Obtener todos los estados únicos ordenados alfabéticamente
-    opciones_estado = sorted(df['ESTADO'].astype(str).unique())
-    # Establecer 'Abierto' como valor por defecto si existe
-    default_estado = ['Abierto'] if 'Abierto' in df['ESTADO'].values else []
+
+    # Botón para mostrar todos los elementos
+    if st.sidebar.button("Mostrar todos / Resetear filtros"):
+        # Esto recargará la página y reseteará todos los filtros
+        st.rerun()
+
+    # Obtener opciones ordenadas
+    opciones_estado = sorted(df['ESTADO'].dropna().unique())
+    opciones_equipo = sorted(df['EQUIPO'].dropna().unique())
+    opciones_usuario = sorted(df['USUARIO'].dropna().unique())
+
+    # Filtro de ESTADO
     estado_sel = st.sidebar.multiselect(
         "Selecciona Estado:",
-        options = opciones_estado,  # Opciones ordenadas alfabéticamente
-        default = default_estado,   # 'Abierto' seleccionado por defecto
+        options=opciones_estado,
+        default=['Abierto'] if 'Abierto' in opciones_estado else []
     )
 
-    # Obtener todos los estados únicos ordenados alfabéticamente
-    opciones_equipo = sorted(df['EQUIPO'].astype(str).unique())
-    default_equipo = df['EQUIPO'].unique()
+    # Filtro de EQUIPO
     equipo_sel = st.sidebar.multiselect(
-        "Selecciona Equipos:",
-        options = opciones_equipo,
-        default = default_equipo,
+        "Selecciona Equipo:",
+        options=opciones_equipo,
+        default=opciones_equipo  # Todos seleccionados por defecto
     )
-    
-    opciones_usuario = sorted(df['USUARIO'].astype(str).unique())
-    default_usuario = df['USUARIO'].unique()
+
+    # Filtro de USUARIO
     usuario_sel = st.sidebar.multiselect(
-        "Selecciona Usuarios:",
-        options = opciones_usuario,
-        default = default_usuario,
+        "Selecciona Usuario:",
+        options=opciones_usuario,
+        default=opciones_usuario  # Todos seleccionados por defecto
     )
-    
-    #Filtrar basado en la selección
-    df_filtrado = df[
-        (df['ESTADO'].isin(estado_sel)) &
-        (df['EQUIPO'].isin(equipo_sel)) &
-        (df['USUARIO'].isin(usuario_sel))
-    ]
+
+    # Aplicar filtros al DataFrame
+    if estado_sel:
+        df_filtrado = df[df['ESTADO'].isin(estado_sel)]
+    else:
+        df_filtrado = df
+
+    if equipo_sel:
+        df_filtrado = df_filtrado[df_filtrado['EQUIPO'].isin(equipo_sel)]
+
+    if usuario_sel:
+        df_filtrado = df_filtrado[df_filtrado['USUARIO'].isin(usuario_sel)]
+
+    # Mostrar el DataFrame filtrado
+    st.dataframe(df_filtrado)
+
+    # Mostrar contador de registros
+    st.write(f"Mostrando {len(df_filtrado)} de {len(df)} registros")
     
 
     def crear_grafico(df, columna, titulo):
