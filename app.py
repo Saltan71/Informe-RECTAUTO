@@ -144,7 +144,7 @@ if archivo:
     
     # Logo que funciona como enlace
     st.sidebar.markdown(
-        f'<a href="https://github.com/Saltan71/Informe-RECTAUTO/edit/main/"><img src="Logo Atrian.png" width="120"></a>',
+        f'<a href="https://github.com/Saltan71/Informe-RECTAUTO/edit/main/"><img src="Logo%20Atrian.png" width="120"></a>',
         unsafe_allow_html=True
     )
     #Sidebar para filtros
