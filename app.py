@@ -163,8 +163,8 @@ if archivo:
         default = default_equipo,
     )
     
-    opciones_equipo = sorted(df['USUARIO'].astype(str).unique())
-    default_equipo = df['USUARIO'].unique()
+    opciones_usuario = sorted(df['USUARIO'].astype(str).unique())
+    default_usuario = df['USUARIO'].unique()
     usuario_sel = st.sidebar.multiselect(
         "Selecciona Usuarios:",
         options = opciones_usuario,
