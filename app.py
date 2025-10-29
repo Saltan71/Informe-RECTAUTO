@@ -140,7 +140,7 @@ if archivo:
     df_enriquecido["EQUIPO"] = df_enriquecido["EQUIPO"]
     df_enriquecido["DIAS_HASTA_MAX"] = (fecha_max - df_enriquecido[columna_fecha]).dt.days
     df_enriquecido["SEMANA_EXPEDIENTE"] = ((df_enriquecido[columna_fecha] - FECHA_REFERENCIA).dt.days // 7 + 1)
-    df_enriquecido["ANTIGUEDAD_MESES"] = df_enriquecido["DIAS_DESDE_REFERENCIA"] / 30.4
+    df_enriquecido["ANTIGUEDAD_MESES"] = df_enriquecido[4] / 30.4
     df_enriquecido["ES_RECIENTE"] = df_enriquecido["DIAS_HASTA_MAX"] < 7
     df_enriquecido["PENDIENTE"] = df_enriquecido["ESTADO"].isin(ESTADOS_PENDIENTES)
     df_enriquecido["EQUIPO_USUARIO"] = df_enriquecido["EQUIPO"] + " - " + df_enriquecido["USUARIO"]
