@@ -126,7 +126,7 @@ if archivo:
     fecha_max = df[columna_fecha].max()
     dias_transcurridos = (fecha_max - FECHA_REFERENCIA).days
     num_semana = dias_transcurridos // 7 + 1
-    fecha_max_str = fecha_max.strftime("%d/%m/%y") if pd.notna(fecha_max) else "Sin fecha"
+    fecha_max_str = fecha_max.strftime("%d/%m/%Y") if pd.notna(fecha_max) else "Sin fecha"
     st.subheader(f"📅 Semana {num_semana} a {fecha_max_str}")
 
     #equipo_sel = st.selectbox("🔍 Filtrar por EQUIPO", ["Todos"] + sorted(df["EQUIPO"].dropna().unique()))
