@@ -143,7 +143,7 @@ if archivo:
     
     
     # Logo que funciona como enlace
-    st.sidebar.image("Logo Atrian.png" width=120)
+    st.sidebar.image("assets/Logo Atrian.png", width=120)
     
     #Sidebar para filtros
     st.sidebar.header("Filtros")
