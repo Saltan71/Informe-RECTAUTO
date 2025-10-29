@@ -144,58 +144,75 @@ if archivo:
     #Sidebar para filtros
     st.sidebar.header("Filtros")
 
-    # Inicializar session_state para los filtros si no existen
-    if 'estado_sel' not in st.session_state:
-        st.session_state.estado_sel = ['Abierto'] if 'Abierto' in df['ESTADO'].values else []
-    if 'equipo_sel' not in st.session_state:
-        st.session_state.equipo_sel = list(sorted(df['EQUIPO'].dropna().unique()))
-    if 'usuario_sel' not in st.session_state:
-        st.session_state.usuario_sel = list(sorted(df['USUARIO'].dropna().unique()))
+# Usar una clave única para forzar la recreación de los widgets
+if 'widget_key' not in st.session_state:
+    st.session_state.widget_key = 0
 
-    # Botón para resetear
-    if st.sidebar.button("Mostrar todos / Resetear filtros"):
-        st.session_state.estado_sel = ['Abierto'] if 'Abierto' in df['ESTADO'].values else []
-        st.session_state.equipo_sel = list(sorted(df['EQUIPO'].dropna().unique()))
-        st.session_state.usuario_sel = list(sorted(df['USUARIO'].dropna().unique()))
-        st.rerun()
+# Inicializar session_state para los filtros
+if 'filtro_estado' not in st.session_state:
+    st.session_state.filtro_estado = ['Abierto'] if 'Abierto' in df['ESTADO'].values else []
+    
+if 'filtro_equipo' not in st.session_state:
+    st.session_state.filtro_equipo = sorted(df['EQUIPO'].dropna().unique())
+    
+if 'filtro_usuario' not in st.session_state:
+    st.session_state.filtro_usuario = sorted(df['USUARIO'].dropna().unique())
+
+# Botón para mostrar todos los elementos
+if st.sidebar.button("Mostrar todos / Resetear filtros"):
+    st.session_state.filtro_estado = ['Abierto'] if 'Abierto' in df['ESTADO'].values else []
+    st.session_state.filtro_equipo = sorted(df['EQUIPO'].dropna().unique())
+    st.session_state.filtro_usuario = sorted(df['USUARIO'].dropna().unique())
+    # Cambiar la clave para forzar la recreación de todos los widgets
+    st.session_state.widget_key += 1
+    st.rerun()
 
     # Obtener opciones ordenadas
     opciones_estado = sorted(df['ESTADO'].dropna().unique())
     opciones_equipo = sorted(df['EQUIPO'].dropna().unique())
     opciones_usuario = sorted(df['USUARIO'].dropna().unique())
 
+    # Usar la clave en los widgets para forzar su recreación cuando cambie
+    key_suffix = st.session_state.widget_key
+
     # Filtro de ESTADO
     estado_sel = st.sidebar.multiselect(
         "Selecciona Estado:",
         options=opciones_estado,
-        default=st.session_state.estado_sel
+        default=st.session_state.filtro_estado,
+        key=f"estado_{key_suffix}"
     )
 
     # Filtro de EQUIPO
     equipo_sel = st.sidebar.multiselect(
         "Selecciona Equipo:",
         options=opciones_equipo,
-        default=st.session_state.equipo_sel
+        default=st.session_state.filtro_equipo,
+        key=f"equipo_{key_suffix}"
     )
 
     # Filtro de USUARIO
     usuario_sel = st.sidebar.multiselect(
         "Selecciona Usuario:",
         options=opciones_usuario,
-        default=st.session_state.usuario_sel
+        default=st.session_state.filtro_usuario,
+        key=f"usuario_{key_suffix}"
     )
 
     # Actualizar session_state con las selecciones actuales
-    st.session_state.estado_sel = estado_sel
-    st.session_state.equipo_sel = equipo_sel
-    st.session_state.usuario_sel = usuario_sel
+    st.session_state.filtro_estado = estado_sel
+    st.session_state.filtro_equipo = equipo_sel
+    st.session_state.filtro_usuario = usuario_sel
 
     # Aplicar filtros al DataFrame
     df_filtrado = df.copy()
+
     if estado_sel:
         df_filtrado = df_filtrado[df_filtrado['ESTADO'].isin(estado_sel)]
+
     if equipo_sel:
         df_filtrado = df_filtrado[df_filtrado['EQUIPO'].isin(equipo_sel)]
+
     if usuario_sel:
         df_filtrado = df_filtrado[df_filtrado['USUARIO'].isin(usuario_sel)]
 
