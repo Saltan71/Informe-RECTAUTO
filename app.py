@@ -129,10 +129,30 @@ if archivo:
     fecha_max_str = fecha_max.strftime("%d/%m/%y") if pd.notna(fecha_max) else "Sin fecha"
     st.subheader(f"📅 Semana {num_semana} a {fecha_max_str}")
 
-    equipo_sel = st.selectbox("🔍 Filtrar por EQUIPO", ["Todos"] + sorted(df["EQUIPO"].dropna().unique()))
-    estado_sel = st.selectbox("🔍 Filtrar por ESTADO", ["Todos"] + sorted(df["ESTADO"].dropna().unique()))
-    usuario_sel = st.selectbox("🔍 Filtrar por USUARIO", ["Todos"] + sorted(df["USUARIO"].dropna().unique()))
+    #equipo_sel = st.selectbox("🔍 Filtrar por EQUIPO", ["Todos"] + sorted(df["EQUIPO"].dropna().unique()))
+    #estado_sel = st.selectbox("🔍 Filtrar por ESTADO", ["Todos"] + sorted(df["ESTADO"].dropna().unique()))
+    #usuario_sel = st.selectbox("🔍 Filtrar por USUARIO", ["Todos"] + sorted(df["USUARIO"].dropna().unique()))
 
+    #Sidebar para filtros
+    st.sidebar.header("Filtros")
+    estado_sel = st.sidebar.multiselec(
+        "Selecciona Estado:",
+        options=df['ESTADO'].unique(),
+        default=df['ESTADO'].unique(),
+    )
+
+    equipo_sel = st.sidebar.multiselec(
+        "Selecciona Equipos:",
+        options=df['EQUIPO'].unique(),
+        default=df['EQUIPO'].unique(),
+    )
+    
+    usuario_sel = st.sidebar.multiselec(
+        "Selecciona Usuarios:",
+        options=df['USUARIO'].unique(),
+        default=df['USUARIO'].unique(),
+    )
+    
     df_filtrado = df.copy()
     if equipo_sel != "Todos":
         df_filtrado = df_filtrado[df_filtrado["EQUIPO"] == equipo_sel]
