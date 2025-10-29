@@ -144,9 +144,19 @@ if archivo:
     #Sidebar para filtros
     st.sidebar.header("Filtros")
 
-    # Botón para mostrar todos los elementos
+    # Inicializar session_state para los filtros si no existen
+    if 'estado_sel' not in st.session_state:
+        st.session_state.estado_sel = ['Abierto'] if 'Abierto' in df['ESTADO'].values else []
+    if 'equipo_sel' not in st.session_state:
+        st.session_state.equipo_sel = list(sorted(df['EQUIPO'].dropna().unique()))
+    if 'usuario_sel' not in st.session_state:
+        st.session_state.usuario_sel = list(sorted(df['USUARIO'].dropna().unique()))
+
+    # Botón para resetear
     if st.sidebar.button("Mostrar todos / Resetear filtros"):
-        # Esto recargará la página y reseteará todos los filtros
+        st.session_state.estado_sel = list(sorted(df['ESTADO'].dropna().unique()))
+        st.session_state.equipo_sel = list(sorted(df['EQUIPO'].dropna().unique()))
+        st.session_state.usuario_sel = list(sorted(df['USUARIO'].dropna().unique()))
         st.rerun()
 
     # Obtener opciones ordenadas
@@ -158,32 +168,34 @@ if archivo:
     estado_sel = st.sidebar.multiselect(
         "Selecciona Estado:",
         options=opciones_estado,
-        default=['Abierto'] if 'Abierto' in opciones_estado else []
+        default=st.session_state.estado_sel
     )
 
     # Filtro de EQUIPO
     equipo_sel = st.sidebar.multiselect(
         "Selecciona Equipo:",
         options=opciones_equipo,
-        default=opciones_equipo  # Todos seleccionados por defecto
+        default=st.session_state.equipo_sel
     )
 
     # Filtro de USUARIO
     usuario_sel = st.sidebar.multiselect(
         "Selecciona Usuario:",
         options=opciones_usuario,
-        default=opciones_usuario  # Todos seleccionados por defecto
+        default=st.session_state.usuario_sel
     )
 
-    # Aplicar filtros al DataFrame
-    if estado_sel:
-        df_filtrado = df[df['ESTADO'].isin(estado_sel)]
-    else:
-        df_filtrado = df
+    # Actualizar session_state con las selecciones actuales
+    st.session_state.estado_sel = estado_sel
+    st.session_state.equipo_sel = equipo_sel
+    st.session_state.usuario_sel = usuario_sel
 
+    # Aplicar filtros al DataFrame
+    df_filtrado = df.copy()
+    if estado_sel:
+        df_filtrado = df_filtrado[df_filtrado['ESTADO'].isin(estado_sel)]
     if equipo_sel:
         df_filtrado = df_filtrado[df_filtrado['EQUIPO'].isin(equipo_sel)]
-
     if usuario_sel:
         df_filtrado = df_filtrado[df_filtrado['USUARIO'].isin(usuario_sel)]
     
