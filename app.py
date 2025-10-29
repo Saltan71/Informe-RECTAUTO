@@ -143,22 +143,32 @@ if archivo:
     
     #Sidebar para filtros
     st.sidebar.header("Filtros")
+    
+    # Obtener todos los estados únicos ordenados alfabéticamente
+    opciones_estado = sorted(df['ESTADO'].astype(str).unique())
+    # Establecer 'Abierto' como valor por defecto si existe
+    default_estado = ['Abierto'] if 'Abierto' in df['ESTADO'].values else []
     estado_sel = st.sidebar.multiselect(
         "Selecciona Estado:",
-        options=sorted(df['ESTADO'].unique()),  # Orden alfabético
-        default=['Abierto'] if 'Abierto' in df['ESTADO'].values else [],  # Verifica existencia
+        options = opciones_estado,  # Opciones ordenadas alfabéticamente
+        default = default_estado,   # 'Abierto' seleccionado por defecto
     )
 
+    # Obtener todos los estados únicos ordenados alfabéticamente
+    opciones_equipo = sorted(df['EQUIPO'].astype(str).unique())
+    default_equipo = df['EQUIPO'].unique()
     equipo_sel = st.sidebar.multiselect(
         "Selecciona Equipos:",
-        options=sorted(df['EQUIPO'].unique()),
-        default=df['EQUIPO'].unique(),
+        options = opciones_equipo,
+        default = default_equipo,
     )
     
+    opciones_equipo = sorted(df['USUARIO'].astype(str).unique())
+    default_equipo = df['USUARIO'].unique()
     usuario_sel = st.sidebar.multiselect(
         "Selecciona Usuarios:",
-        options=sorted(df['USUARIO'].unique()),
-        default=df['USUARIO'].unique(),
+        options = opciones_usuario,
+        default = default_usuario,
     )
     
     #Filtrar basado en la selección
