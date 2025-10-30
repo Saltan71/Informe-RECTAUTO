@@ -452,7 +452,7 @@ elif eleccion == "Indicadores clave (KPI)":
                 label="👥 Total expedientes abiertos",
                 value=f"{kpis['Total expedientes abiertos']:,.0f}",
                 delta=None
-        #    )
+            )
         
         #with col4:
         #    st.metric(
