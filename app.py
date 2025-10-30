@@ -410,7 +410,7 @@ def calcular_kpis_semana(df, semana_seleccionada):
     
     # Calcular KPIs (AJUSTA SEGÚN TUS COLUMNAS)
     kpis = {
-        'Nuevos expedientes': datos_semana['FECHA APERTURA'].count() if datos_semana['FECHA APERTURA'] in df.columns else 0
+        'Nuevos expedientes': datos_semana['FECHA APERTURA'].counts() if datos_semana['FECHA APERTURA'] in df.columns else 0
     }
     
     return kpis
