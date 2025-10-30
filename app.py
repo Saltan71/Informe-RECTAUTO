@@ -142,7 +142,7 @@ archivo = st.file_uploader("📁 Sube el archivo Excel (rectauto*.xlsx)", type=[
 if archivo:
     df = pd.read_excel(archivo, sheet_name=HOJA, header=0, thousands='.', decimal=',', engine="openpyxl" if archivo.name.endswith("xlsx") else "xlrd")
     df.columns = [col.upper() for col in df.columns]
-    columnas = [0, 1, 2, 3, 12, 14, 15, 16, 17, 18, 20, 21, 23, 26, 27]
+    columnas = [0, 1, 2, 3, 6, 12, 14, 15, 16, 17, 18, 20, 21, 23, 26, 27]
     df = df.iloc[:, columnas]
     st.session_state["df"] = df
 elif "df" in st.session_state:
@@ -154,13 +154,13 @@ else:
 if archivo:
     df = pd.read_excel(archivo, sheet_name=HOJA, header=0, thousands='.', decimal=',', engine="openpyxl" if archivo.name.endswith("xlsx") else "xlrd")
     df.columns = [col.upper() for col in df.columns]
-    columnas = [0, 1, 2, 3, 12, 14, 15, 16, 17, 18, 20, 21, 23, 26, 27]
+    columnas = [0, 1, 2, 3, 6, 12, 14, 15, 16, 17, 18, 20, 21, 23, 26, 27]
     df = df.iloc[:, columnas]
 
 menu = ["Principal", "Indicadores clave (KPI)", "Envío de correos"]
 eleccion = st.sidebar.selectbox("Menú", menu)
 if eleccion == "Principal":
-    columna_fecha = df.columns[10]
+    columna_fecha = df.columns[11]
     df[columna_fecha] = pd.to_datetime(df[columna_fecha], errors='coerce')
     fecha_max = df[columna_fecha].max()
     dias_transcurridos = (fecha_max - FECHA_REFERENCIA).days
@@ -305,7 +305,7 @@ if eleccion == "Principal":
             with st.spinner('Generando PDFs y comprimiendo...'):
                 zip_buffer = io.BytesIO()
                 indices_a_incluir = list(range(df_pendientes.shape[1]))
-                indices_a_excluir = {1, 10}
+                indices_a_excluir = {1, 6, 11}
                 indices_finales = [i for i in indices_a_incluir if i not in indices_a_excluir]
                 NOMBRES_COLUMNAS_PDF = df_pendientes.columns[indices_finales].tolist()
 
@@ -406,13 +406,20 @@ elif eleccion == "Indicadores clave (KPI)":
             ].shape[0]
         else:
             expedientes_cerrados_semana = 0
-        
+
+        if 'FECHA CIERRE' in df.columns:
+            total_expedientes_abiertos = df[
+                (df['FECHA_CIERRE'] < fin_semana or 
+                (df['FECHA_CIERRA'] == '09/09/999')
+            ].shape[0]
+        else:
+            total_expedientes_abiertos = 0
         
         # Calcular KPIs (AJUSTA SEGÚN TUS COLUMNAS)
         kpis = {
             'Nuevos expedientes': len(datos_semana),
             'Expedientes cerrados': expedientes_cerrados_semana,
-            #'Total abiertos': len(df['ESTADO']) == 'Abierto',
+            'Total expedientes abiertos': total_expedientes_abiertos,
         }
         
         return kpis
@@ -440,11 +447,11 @@ elif eleccion == "Indicadores clave (KPI)":
                 delta=None
             )
         
-        #with col3:
-        #    st.metric(
-        #        label="👥 Total abiertos",
-        #        value=f"{kpis['Total abiertos']:,.0f}",
-        #        delta=None
+        with col3:
+            st.metric(
+                label="👥 Total expedientes abiertos",
+                value=f"{kpis['Total expedientes abiertos']:,.0f}",
+                delta=None
         #    )
         
         #with col4:
