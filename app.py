@@ -348,8 +348,24 @@ elif eleccion == "Indicadores clave (KPI)":
     columna_fecha = df.columns[10]
     df[columna_fecha] = pd.to_datetime(df[columna_fecha], errors='coerce')
     fecha_max = df[columna_fecha].max()
-    fecha_max = fecha_max.dt.strftime("%d/%m/%Y")
-    st.write(fecha_max)
+
+    semanas = pd.date_range(
+        start=pd.to_datetime(fecha_inicio),
+        end=pd.to_datetime(fecha_max),
+        freq=frecuencia
+    )
+    
+    df_timeline = pd.DataFrame({
+        'semana': semanas,
+        'año_semana': semanas.strftime('%Y-%U'),
+        'año_mes': semanas.strftime('%Y-%m'),
+        'semana_numero': semanas.isocalendar().week,
+        'año': semanas.year,
+        'mes': semanas.strftime('%B'),
+        'trimestre': semanas.quarter
+    })
+
+    st.dataframe(df_timeline, use_container_width=True)
 
 
 
