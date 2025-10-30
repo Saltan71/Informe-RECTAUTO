@@ -396,12 +396,12 @@ elif eleccion == "Indicadores clave (KPI)":
     mostrar_kpis_principales(kpis_semana, semana_seleccionada)
     #mostrar_detalles_semana(df, semana_seleccionada)
 
-def calcular_kpis_semana(df, semana_seleccionada):
+    def calcular_kpis_semana(df, semana_seleccionada):
     """
     Calcula KPIs específicos para la semana seleccionada
     """
     # Definir rango de la semana (de viernes a jueves)
-    inicio_semana = semana_seleccionada - timedelta(days=4)  # Viernes
+    inicio_semana = semana_seleccionada - timedelta(days=3)  # Viernes
     fin_semana = semana_seleccionada  # Jueves
     
     # Filtrar datos de la semana
