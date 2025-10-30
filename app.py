@@ -410,7 +410,7 @@ elif eleccion == "Indicadores clave (KPI)":
         
         # Calcular KPIs (AJUSTA SEGÚN TUS COLUMNAS)
         kpis = {
-            'Nuevos expedientes': len(datos_semana,
+            'Nuevos expedientes': len(datos_semana),
             'Expedientes cerrados': expedientes_cerrados_semana,
             #'Total abiertos': len(df['ESTADO']) == 'Abierto',
         }
