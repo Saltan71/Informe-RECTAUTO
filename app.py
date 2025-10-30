@@ -403,7 +403,10 @@ elif eleccion == "Indicadores clave (KPI)":
                     if idx < len(semanas_disponibles) - 1:
                         st.session_state.semana_seleccionada = semanas_disponibles[idx + 1]
                         st.rerun()  # Forzar actualización
-    
+
+            # Mostrar información de navegación
+            idx_actual = list(semanas_disponibles).index(st.session_state.semana_seleccionada)
+            st.caption(f"Semana {idx_actual + 1} de {len(semanas_disponibles)}")
 
 
     def calcular_kpis_semana(df, semana_seleccionada):
