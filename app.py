@@ -141,7 +141,7 @@ st.sidebar.image("Logo Atrian.png", width=260)
 archivo = st.file_uploader("📁 Sube el archivo Excel (rectauto*.xlsx)", type=["xlsx", "xls"])
 
 if archivo:
-    df = pd.read_excel(archivo, sheet_name=HOJA, header=0, index=False, thousands='.', decimal=',', engine="openpyxl" if archivo.name.endswith("xlsx") else "xlrd")
+    df = pd.read_excel(archivo, sheet_name=HOJA, header=0, thousands='.', decimal=',', engine="openpyxl" if archivo.name.endswith("xlsx") else "xlrd")
     df.columns = [col.upper() for col in df.columns]
     columnas = [0, 1, 2, 3, 12, 14, 15, 16, 17, 18, 20, 21, 23, 26, 27]
     df = df.iloc[:, columnas]
@@ -153,7 +153,7 @@ else:
     st.stop()
 
 if archivo:
-    df = pd.read_excel(archivo, sheet_name=HOJA, header=0, index=False, thousands='.', decimal=',', engine="openpyxl" if archivo.name.endswith("xlsx") else "xlrd")
+    df = pd.read_excel(archivo, sheet_name=HOJA, header=0, thousands='.', decimal=',', engine="openpyxl" if archivo.name.endswith("xlsx") else "xlrd")
     df.columns = [col.upper() for col in df.columns]
     columnas = [0, 1, 2, 3, 12, 14, 15, 16, 17, 18, 20, 21, 23, 26, 27]
     df = df.iloc[:, columnas]
