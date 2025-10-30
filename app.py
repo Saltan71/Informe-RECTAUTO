@@ -389,12 +389,7 @@ elif eleccion == "Indicadores clave (KPI)":
                 if idx < len(semanas_disponibles) - 1:
                     semana_seleccionada = semanas_disponibles[idx + 1]
     
-    # Calcular KPIs para la semana seleccionada
-    kpis_semana = calcular_kpis_semana(df, semana_seleccionada)
 
-    # Mostrar dashboard principal
-    mostrar_kpis_principales(kpis_semana, semana_seleccionada)
-    #mostrar_detalles_semana(df, semana_seleccionada)
 
     def calcular_kpis_semana(df, semana_seleccionada):
         """
@@ -567,6 +562,13 @@ elif eleccion == "Indicadores clave (KPI)":
             return df_filtrado  # Tu DataFrame existente
         except:
             return None
+            
+    # Calcular KPIs para la semana seleccionada
+    kpis_semana = calcular_kpis_semana(df, semana_seleccionada)
+
+    # Mostrar dashboard principal
+    mostrar_kpis_principales(kpis_semana, semana_seleccionada)
+    #mostrar_detalles_semana(df, semana_seleccionada)
     
     if __name__ == "__main__":
         main()
