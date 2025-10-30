@@ -278,19 +278,13 @@ if eleccion == "Principal":
         if fig:
             st.plotly_chart(fig, use_container_width=True)
 
-    def formatear_numero(x):
-        if pd.isna(x):
-            return ""
-        try:
-            return f"{float(x):,.0f}".replace(",", ".")
-        except (ValueError, TypeError):
-            return x
-    
     st.subheader("📋 Vista general de expedientes")
     df_mostrar = df_filtrado.copy()
-    for col in df_mostrar.select_dtypes(include='number').columns:
-        df_mostrar[col] = df_mostrar[col].apply(formatear_numero)
-        #for col in df_mostrar.select_dtypes(include='number').columns:
+    df_mostrar = df_mostrar.style.format(
+        lambda x: f"{x:,.0f}".replace(",", ".") if pd.notna(x) else "",
+        subset=df_mostrar.select_dtypes(include='number').columns
+    )
+    #for col in df_mostrar.select_dtypes(include='number').columns:
     #    df_mostrar.style.format("{:,}", thousands=".", na_rep="")
     for col in df_mostrar.select_dtypes(include='datetime').columns:
         df_mostrar[col] = df_mostrar[col].dt.strftime("%d/%m/%y")
