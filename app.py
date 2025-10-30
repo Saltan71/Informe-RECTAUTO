@@ -410,18 +410,7 @@ def calcular_kpis_semana(df, semana_seleccionada):
     
     # Calcular KPIs (AJUSTA SEGÚN TUS COLUMNAS)
     kpis = {
-        'ventas_totales': datos_semana['ventas'].sum() if 'ventas' in df.columns else 0,
-        'transacciones': len(datos_semana),
-        'clientes_unicos': datos_semana['cliente_id'].nunique() if 'cliente_id' in df.columns else 0,
-        'ticket_promedio': datos_semana['ventas'].mean() if 'ventas' in df.columns else 0,
-        'productos_vendidos': datos_semana['producto_id'].nunique() if 'producto_id' in df.columns else 0,
-        'dias_activos': datos_semana['fecha'].nunique(),
-        'venta_maxima': datos_semana['ventas'].max() if 'ventas' in df.columns else 0,
-        'venta_minima': datos_semana['ventas'].min() if 'ventas' in df.columns else 0,
-        'empleados_activos': datos_semana['empleado_id'].nunique() if 'empleado_id' in df.columns else 0,
-        'eficiencia_ventas': datos_semana['ventas'].sum() / len(datos_semana) if len(datos_semana) > 0 else 0,
-        'tasa_conversion': "N/A",  # Ajusta según tu métrica
-        'satisfaccion_promedio': datos_semana['satisfaccion'].mean() if 'satisfaccion' in df.columns else 0
+        'Nuevos expedientes': datos_semana['FECHA DE APERTURA'].count() if datos_semana['FECHA DE APERTURA'] in df.columns else 0
     }
     
     return kpis
