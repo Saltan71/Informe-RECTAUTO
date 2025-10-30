@@ -393,8 +393,8 @@ elif eleccion == "Indicadores clave (KPI)":
     kpis_semana = calcular_kpis_semana(df_filtrado, semana_seleccionada)
 
     # Mostrar dashboard principal
-    # mostrar_kpis_principales(kpis_semana, semana_seleccionada)
-    # mostrar_detalles_semana(df_filtrado, semana_seleccionada)
+    mostrar_kpis_principales(kpis_semana, semana_seleccionada)
+    mostrar_detalles_semana(df_filtrado, semana_seleccionada)
 
 def calcular_kpis_semana(df, semana_seleccionada):
 """
