@@ -409,9 +409,11 @@ elif eleccion == "Indicadores clave (KPI)":
         else:
             expedientes_cerrados_semana = 0
 
-        if 'FECHA CIERRE' in df.columns:
+        if 'FECHA CIERRE' in df.columns and 'FECHA APERTURA' in df.columns:
             total_expedientes_abiertos = df[
+                (df['FECHA APERTURA'] < fin_semana) &
                 (df['FECHA CIERRE'] >= fin_semana) | 
+                (df['FECHA APERTURA'] < fin_semana) &
                 (df['FECHA CIERRE'] == fecha_especial)
             ].shape[0]
         else:
