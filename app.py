@@ -141,11 +141,14 @@ st.sidebar.image("Logo Atrian.png", width=260)
 archivo = st.file_uploader("📁 Sube el archivo Excel (rectauto*.xlsx)", type=["xlsx", "xls"])
 
 if archivo:
-    df = pd.read_excel(archivo, sheet_name=HOJA, header=0, engine="openpyxl" if archivo.name.endswith("xlsx") else "xlrd")
+    df = pd.read_excel(archivo, sheet_name=HOJA, header=0, thousands='.', decimal=',', engine="openpyxl" if archivo.name.endswith("xlsx") else "xlrd")
     df.columns = [col.upper() for col in df.columns]
     columnas = [0, 1, 2, 3, 12, 14, 15, 16, 17, 18, 20, 21, 23, 26, 27]
     df = df.iloc[:, columnas]
-    st.session_state["df"] = df
+    
+
+    
+    session_state["df"] = df
 elif "df" in st.session_state:
     df = st.session_state["df"]
 else:
@@ -153,7 +156,7 @@ else:
     st.stop()
 
 if archivo:
-    df = pd.read_excel(archivo, sheet_name=HOJA, header=0, engine="openpyxl" if archivo.name.endswith("xlsx") else "xlrd")
+    df = pd.read_excel(archivo, sheet_name=HOJA, header=0, thousands='.', decimal=',', engine="openpyxl" if archivo.name.endswith("xlsx") else "xlrd")
     df.columns = [col.upper() for col in df.columns]
     columnas = [0, 1, 2, 3, 12, 14, 15, 16, 17, 18, 20, 21, 23, 26, 27]
     df = df.iloc[:, columnas]
@@ -280,10 +283,6 @@ if eleccion == "Principal":
 
     st.subheader("📋 Vista general de expedientes")
     df_mostrar = df_filtrado.copy()
-    df_mostrar = df_mostrar.style.format(
-        lambda x: f"{x:,.0f}".replace(",", ".") if pd.notna(x) else "",
-        subset=df_mostrar.select_dtypes(include='number').columns
-    )
     #for col in df_mostrar.select_dtypes(include='number').columns:
     #    df_mostrar.style.format("{:,}", thousands=".", na_rep="")
     for col in df_mostrar.select_dtypes(include='datetime').columns:
