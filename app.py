@@ -279,7 +279,6 @@ if eleccion == "Principal":
 
     st.subheader("📋 Vista general de expedientes")
     df_mostrar = df_filtrado.copy()
-    del df_mostrar.index.name
     for col in df_mostrar.select_dtypes(include='number').columns:
         df_mostrar[col] = df_mostrar[col].apply(lambda x: f"{int(x):,}" if pd.notna(x) else "")
     for col in df_mostrar.select_dtypes(include='datetime').columns:
