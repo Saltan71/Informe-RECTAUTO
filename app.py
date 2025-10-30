@@ -342,6 +342,7 @@ if eleccion == "Principal":
     
 elif eleccion == "Envío de correos":
     st.subheader("Envío de correos")
+    print("prueba1")
 elif eleccion == "Indicadores clave (KPI)":
     st.subheader("Indicadores clave (KPI)")
-    display("Ya")
+    display("prueba2")
