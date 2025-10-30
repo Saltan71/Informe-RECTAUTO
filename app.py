@@ -359,6 +359,6 @@ if eleccion == "Principal":
                 )
     else:
         st.info("Por favor, sube un archivo Excel para comenzar.")
-elif eleccion == "Envío de correos"
+elif eleccion == "Envío de correos":
     st.subheader("Envío de correos")
 
