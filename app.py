@@ -391,7 +391,7 @@ elif eleccion == "Indicadores clave (KPI)":
         Calcula KPIs específicos para la semana seleccionada
         """
         # Definir rango de la semana (de viernes a jueves)
-        inicio_semana = semana_seleccionada - timedelta(days=6)  # Viernes
+        inicio_semana = semana_seleccionada - timedelta(days=7)  # Viernes
         fin_semana = semana_seleccionada  # Jueves
         
         # Filtrar datos de la semana
@@ -410,7 +410,7 @@ elif eleccion == "Indicadores clave (KPI)":
         
         # Calcular KPIs (AJUSTA SEGÚN TUS COLUMNAS)
         kpis = {
-            'Nuevos expedientes': datos_semana,
+            'Nuevos expedientes': len(datos_semana,
             'Expedientes cerrados': expedientes_cerrados_semana,
             #'Total abiertos': len(df['ESTADO']) == 'Abierto',
         }
