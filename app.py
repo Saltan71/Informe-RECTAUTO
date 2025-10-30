@@ -280,11 +280,8 @@ if eleccion == "Principal":
 
     st.subheader("📋 Vista general de expedientes")
     df_mostrar = df_filtrado.copy()
-    formateadores = {col: "{:,.0f}".replace(",", ".") for col in df_mostrar.select_dtypes(include='number').columns}
-    Styler = df_mostrar.style.format(formateadores, na_rep="", thousands=".")
-    Styler
-    #for col in df_mostrar.select_dtypes(include='number').columns:
-    #    df_mostrar[col].style.format("{:,.0f}", thousands=".", na_rep="")
+    for col in df_mostrar.select_dtypes(include='number').columns:
+        df_mostrar[col].style.format("{:,.0f}", thousands=".", na_rep="")
     for col in df_mostrar.select_dtypes(include='datetime').columns:
         df_mostrar[col] = df_mostrar[col].dt.strftime("%d/%m/%y")
     st.dataframe(df_mostrar, use_container_width=True)
