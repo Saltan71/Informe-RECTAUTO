@@ -348,32 +348,56 @@ elif eleccion == "Indicadores clave (KPI)":
     columna_fecha = df.columns[10]
     df[columna_fecha] = pd.to_datetime(df[columna_fecha], errors='coerce')
     fecha_max = df[columna_fecha].max()
-
-    # Seleccionar frecuencia
-    frecuencia = st.selectbox(
-        "Frecuencia del timeline",
-        options=["W-MON", "W-TUE", "W-WED", "W-THU", "W-FRI", "W-SAT", "W-SUN"],
-        index=4,  # W-FRI por defecto
-        help="Día de la semana para terminar cada período"
+    
+    if not fecha_max:
+        st.error("No se pudo encontrar la fecha máxima")
+        return
+    
+    # Crear rango de semanas disponibles
+    fecha_inicio = pd.to_datetime("2022-11-04")
+    semanas_disponibles = pd.date_range(
+        start=fecha_inicio,
+        end=fecha_max,
+        freq='W-FRI'
     )
     
-    semanas = pd.date_range(
-        start=pd.to_datetime(FECHA_REFERENCIA),
-        end=pd.to_datetime(fecha_max),
-        freq=frecuencia
-    )
+    # Sidebar para selección
+    with st.sidebar:
+        st.header("🗓️ Selector de Semana")
+        
+        # Selector de fecha con slider
+        semana_seleccionada = st.select_slider(
+            "Selecciona la semana:",
+            options=semanas_disponibles,
+            value=semanas_disponibles[-1],  # Última semana por defecto
+            format_func=lambda x: x.strftime("%d/%m/%Y")
+        )
+        
+        st.markdown("---")
+        st.info(f"**Semana seleccionada:** {semana_seleccionada.strftime('%d/%m/%Y')}")
+        
+        # Navegación rápida
+        st.subheader("Navegación Rápida")
+        col1, col2 = st.columns(2)
+        with col1:
+            if st.button("⬅️ Semana Anterior"):
+                idx = list(semanas_disponibles).index(semana_seleccionada)
+                if idx > 0:
+                    semana_seleccionada = semanas_disponibles[idx - 1]
+        with col2:
+            if st.button("Semana Siguiente ➡️"):
+                idx = list(semanas_disponibles).index(semana_seleccionada)
+                if idx < len(semanas_disponibles) - 1:
+                    semana_seleccionada = semanas_disponibles[idx + 1]
     
-    df_timeline = pd.DataFrame({
-        'semana': semanas,
-        'año_semana': semanas.strftime('%Y-%U'),
-        'año_mes': semanas.strftime('%Y-%m'),
-        'semana_numero': semanas.isocalendar().week,
-        'año': semanas.year,
-        'mes': semanas.strftime('%B'),
-        'trimestre': semanas.quarter
-    })
+    # Calcular KPIs para la semana seleccionada
+    # kpis_semana = calcular_kpis_semana(df_filtrado, semana_seleccionada)
+    
+    # Mostrar dashboard principal
+    # mostrar_kpis_principales(kpis_semana, semana_seleccionada)
+    # mostrar_detalles_semana(df_filtrado, semana_seleccionada)
 
-    st.dataframe(df_timeline, use_container_width=True)
+    
 
 
 
