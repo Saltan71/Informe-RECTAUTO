@@ -172,14 +172,14 @@ if eleccion == "Principal":
     df_enriquecido = df.copy()
 
     # Ejemplo de creación de 12 columnas
-    df_enriquecido["EQUIPO"] = df_enriquecido["EQUIPO"]
-    df_enriquecido["DIAS_HASTA_MAX"] = (fecha_max - df_enriquecido[columna_fecha]).dt.days
-    df_enriquecido["SEMANA_EXPEDIENTE"] = ((df_enriquecido[columna_fecha] - FECHA_REFERENCIA).dt.days // 7 + 1)
+    #df_enriquecido["EQUIPO"] = df_enriquecido["EQUIPO"]
+    #df_enriquecido["DIAS_HASTA_MAX"] = (fecha_max - df_enriquecido[columna_fecha]).dt.days
+    #df_enriquecido["SEMANA_EXPEDIENTE"] = ((df_enriquecido[columna_fecha] - FECHA_REFERENCIA).dt.days // 7 + 1)
 
     # Mostrar las tres primeras columnas nuevas
-    st.subheader("📊 Vista previa de las nuevas columnas")
-    columnas_preview = ["EQUIPO"]
-    st.dataframe(df[columnas_preview].head(10), use_container_width=True)
+    #st.subheader("📊 Vista previa de las nuevas columnas")
+    #columnas_preview = ["EQUIPO"]
+    #st.dataframe(df[columnas_preview].head(10), use_container_width=True)
     
     #Sidebar para filtros
     st.sidebar.header("Filtros")
@@ -390,7 +390,7 @@ elif eleccion == "Indicadores clave (KPI)":
                     semana_seleccionada = semanas_disponibles[idx + 1]
     
     # Calcular KPIs para la semana seleccionada
-    kpis_semana = calcular_kpis_semana(df_enriquecido, semana_seleccionada)
+    kpis_semana = calcular_kpis_semana(df, semana_seleccionada)
 
     # Mostrar dashboard principal
     mostrar_kpis_principales(kpis_semana, semana_seleccionada)
@@ -405,12 +405,12 @@ def calcular_kpis_semana(df, semana_seleccionada):
     fin_semana = semana_seleccionada  # Jueves
     
     # Filtrar datos de la semana
-    mascara_semana = (df['fecha'] >= inicio_semana) & (df['fecha'] <= fin_semana)
+    mascara_semana = (df['FECHA APERTURA'] >= inicio_semana) & (df['FECHA APERTURA'] <= fin_semana)
     datos_semana = df[mascara_semana]
     
     # Calcular KPIs (AJUSTA SEGÚN TUS COLUMNAS)
     kpis = {
-        'Nuevos expedientes': datos_semana['FECHA DE APERTURA'].count() if datos_semana['FECHA DE APERTURA'] in df.columns else 0
+        'Nuevos expedientes': datos_semana['FECHA APERTURA'].count() if datos_semana['FECHA APERTURA'] in df.columns else 0
     }
     
     return kpis
@@ -426,7 +426,7 @@ def mostrar_kpis_principales(kpis, semana_seleccionada):
     
     with col1:
         st.metric(
-            label="💰 Ventas Totales",
+            label="💰 Nuevos Expedientes",
             value=f"${kpis['ventas_totales']:,.0f}",
             delta=None
         )
