@@ -397,178 +397,178 @@ elif eleccion == "Indicadores clave (KPI)":
     #mostrar_detalles_semana(df, semana_seleccionada)
 
     def calcular_kpis_semana(df, semana_seleccionada):
-    """
-    Calcula KPIs específicos para la semana seleccionada
-    """
-    # Definir rango de la semana (de viernes a jueves)
-    inicio_semana = semana_seleccionada - timedelta(days=3)  # Viernes
-    fin_semana = semana_seleccionada  # Jueves
-    
-    # Filtrar datos de la semana
-    mascara_semana = (df['FECHA APERTURA'] >= inicio_semana) & (df['FECHA APERTURA'] <= fin_semana)
-    datos_semana = df[mascara_semana]
-    
-    # Calcular KPIs (AJUSTA SEGÚN TUS COLUMNAS)
-    kpis = {
-        'Nuevos expedientes': datos_semana['FECHA APERTURA'].counts() if datos_semana['FECHA APERTURA'] in df.columns else 0
-    }
-    
-    return kpis
-
-def mostrar_kpis_principales(kpis, semana_seleccionada):
-    """
-    Muestra los KPIs principales en tarjetas estilo dashboard
-    """
-    st.header(f"📊 KPIs de la Semana: {semana_seleccionada.strftime('%d/%m/%Y')}")
-    
-    # KPIs principales (primera fila)
-    col1, col2, col3, col4 = st.columns(4)
-    
-    with col1:
-        st.metric(
-            label="💰 Nuevos Expedientes",
-            value=f"${kpis['Nuevos expedientes']:,.0f}",
-            delta=None
-        )
-    
-    #with col2:
-    #    st.metric(
-    #        label="🛒 Transacciones",
-    #        value=f"{kpis['transacciones']:,}",
-    #        delta=None
-    #    )
-    
-    #with col3:
-    #    st.metric(
-    #        label="👥 Clientes Únicos",
-    #        value=f"{kpis['clientes_unicos']:,}",
-    #        delta=None
-    #    )
-    
-    #with col4:
-    #    st.metric(
-    #        label="🎫 Ticket Promedio",
-    #        value=f"${kpis['ticket_promedio']:,.2f}",
-    #        delta=None
-    #    )
-    
-    # Segunda fila de KPIs
-    #col5, col6, col7, col8 = st.columns(4)
-    
-    #with col5:
-    #    st.metric(
-    #        label="📦 Productos Vendidos",
-    #        value=f"{kpis['productos_vendidos']:,}",
-    #        delta=None
-    #    )
-    
-    #with col6:
-    #    st.metric(
-    #        label="📅 Días Activos",
-    #        value=f"{kpis['dias_activos']}",
-    #        delta=None
-    #    )
-    
-    #with col7:
-    #    st.metric(
-    #        label="📈 Venta Máxima",
-    #        value=f"${kpis['venta_maxima']:,.0f}",
-    #        delta=None
-    #    )
-    
-    #with col8:
-    #    st.metric(
-    #        label="📉 Venta Mínima",
-    #        value=f"${kpis['venta_minima']:,.0f}",
-    #        delta=None
-    #    )
-    
-    st.markdown("---")
-
-def mostrar_detalles_semana(df, semana_seleccionada):
-    """
-    Muestra detalles adicionales y visualizaciones para la semana seleccionada
-    """
-    # Filtrar datos de la semana
-    inicio_semana = semana_seleccionada - timedelta(days=6)
-    fin_semana = semana_seleccionada
-    datos_semana = df[(df['fecha'] >= inicio_semana) & (df['fecha'] <= fin_semana)]
-    
-    if datos_semana.empty:
-        st.warning("No hay datos para la semana seleccionada")
-        return
-    
-    # Pestañas para diferentes vistas
-    tab1, tab2, tab3 = st.tabs(["📈 Tendencia Diaria", "📊 Análisis Detallado", "📋 Datos Crudos"])
-    
-    with tab1:
-        st.subheader("Tendencia Diaria de Ventas")
+        """
+        Calcula KPIs específicos para la semana seleccionada
+        """
+        # Definir rango de la semana (de viernes a jueves)
+        inicio_semana = semana_seleccionada - timedelta(days=3)  # Viernes
+        fin_semana = semana_seleccionada  # Jueves
         
-        # Agrupar por día
-        ventas_diarias = datos_semana.groupby('fecha')['ventas'].sum().reset_index()
+        # Filtrar datos de la semana
+        mascara_semana = (df['FECHA APERTURA'] >= inicio_semana) & (df['FECHA APERTURA'] <= fin_semana)
+        datos_semana = df[mascara_semana]
         
-        if not ventas_diarias.empty:
-            fig = px.line(
-                ventas_diarias, 
-                x='fecha', 
-                y='ventas',
-                title=f"Ventas Diarias - Semana del {inicio_semana.strftime('%d/%m/%Y')} al {fin_semana.strftime('%d/%m/%Y')}",
-                markers=True
+        # Calcular KPIs (AJUSTA SEGÚN TUS COLUMNAS)
+        kpis = {
+            'Nuevos expedientes': datos_semana['FECHA APERTURA'].counts() if datos_semana['FECHA APERTURA'] in df.columns else 0
+        }
+        
+        return kpis
+
+    def mostrar_kpis_principales(kpis, semana_seleccionada):
+        """
+        Muestra los KPIs principales en tarjetas estilo dashboard
+        """
+        st.header(f"📊 KPIs de la Semana: {semana_seleccionada.strftime('%d/%m/%Y')}")
+        
+        # KPIs principales (primera fila)
+        col1, col2, col3, col4 = st.columns(4)
+        
+        with col1:
+            st.metric(
+                label="💰 Nuevos Expedientes",
+                value=f"${kpis['Nuevos expedientes']:,.0f}",
+                delta=None
             )
-            st.plotly_chart(fig, use_container_width=True)
-        else:
-            st.info("No hay datos de ventas para mostrar")
+        
+        #with col2:
+        #    st.metric(
+        #        label="🛒 Transacciones",
+        #        value=f"{kpis['transacciones']:,}",
+        #        delta=None
+        #    )
+        
+        #with col3:
+        #    st.metric(
+        #        label="👥 Clientes Únicos",
+        #        value=f"{kpis['clientes_unicos']:,}",
+        #        delta=None
+        #    )
+        
+        #with col4:
+        #    st.metric(
+        #        label="🎫 Ticket Promedio",
+        #        value=f"${kpis['ticket_promedio']:,.2f}",
+        #        delta=None
+        #    )
+        
+        # Segunda fila de KPIs
+        #col5, col6, col7, col8 = st.columns(4)
+        
+        #with col5:
+        #    st.metric(
+        #        label="📦 Productos Vendidos",
+        #        value=f"{kpis['productos_vendidos']:,}",
+        #        delta=None
+        #    )
+        
+        #with col6:
+        #    st.metric(
+        #        label="📅 Días Activos",
+        #        value=f"{kpis['dias_activos']}",
+        #        delta=None
+        #    )
+        
+        #with col7:
+        #    st.metric(
+        #        label="📈 Venta Máxima",
+        #        value=f"${kpis['venta_maxima']:,.0f}",
+        #        delta=None
+        #    )
+        
+        #with col8:
+        #    st.metric(
+        #        label="📉 Venta Mínima",
+        #        value=f"${kpis['venta_minima']:,.0f}",
+        #        delta=None
+        #    )
+        
+        st.markdown("---")
     
-    with tab2:
-        st.subheader("Análisis Detallado")
+    def mostrar_detalles_semana(df, semana_seleccionada):
+        """
+        Muestra detalles adicionales y visualizaciones para la semana seleccionada
+        """
+        # Filtrar datos de la semana
+        inicio_semana = semana_seleccionada - timedelta(days=6)
+        fin_semana = semana_seleccionada
+        datos_semana = df[(df['fecha'] >= inicio_semana) & (df['fecha'] <= fin_semana)]
         
-        col1, col2 = st.columns(2)
+        if datos_semana.empty:
+            st.warning("No hay datos para la semana seleccionada")
+            return
         
-        with col1:
-            # Top productos/clientes (ajusta según tus columnas)
-            if 'producto_id' in datos_semana.columns:
-                top_productos = datos_semana['producto_id'].value_counts().head(10)
-                st.write("**Top 10 Productos:**")
-                st.dataframe(top_productos)
+        # Pestañas para diferentes vistas
+        tab1, tab2, tab3 = st.tabs(["📈 Tendencia Diaria", "📊 Análisis Detallado", "📋 Datos Crudos"])
         
-        with col2:
-            if 'cliente_id' in datos_semana.columns:
-                top_clientes = datos_semana.groupby('cliente_id')['ventas'].sum().nlargest(5)
-                st.write("**Top 5 Clientes por Ventas:**")
-                st.dataframe(top_clientes)
+        with tab1:
+            st.subheader("Tendencia Diaria de Ventas")
+            
+            # Agrupar por día
+            ventas_diarias = datos_semana.groupby('fecha')['ventas'].sum().reset_index()
+            
+            if not ventas_diarias.empty:
+                fig = px.line(
+                    ventas_diarias, 
+                    x='fecha', 
+                    y='ventas',
+                    title=f"Ventas Diarias - Semana del {inicio_semana.strftime('%d/%m/%Y')} al {fin_semana.strftime('%d/%m/%Y')}",
+                    markers=True
+                )
+                st.plotly_chart(fig, use_container_width=True)
+            else:
+                st.info("No hay datos de ventas para mostrar")
+        
+        with tab2:
+            st.subheader("Análisis Detallado")
+            
+            col1, col2 = st.columns(2)
+            
+            with col1:
+                # Top productos/clientes (ajusta según tus columnas)
+                if 'producto_id' in datos_semana.columns:
+                    top_productos = datos_semana['producto_id'].value_counts().head(10)
+                    st.write("**Top 10 Productos:**")
+                    st.dataframe(top_productos)
+            
+            with col2:
+                if 'cliente_id' in datos_semana.columns:
+                    top_clientes = datos_semana.groupby('cliente_id')['ventas'].sum().nlargest(5)
+                    st.write("**Top 5 Clientes por Ventas:**")
+                    st.dataframe(top_clientes)
+        
+        with tab3:
+            st.subheader("Datos de la Semana")
+            st.dataframe(
+                datos_semana,
+                use_container_width=True,
+                height=400
+            )
+            
+            # Estadísticas adicionales
+            st.subheader("Estadísticas Adicionales")
+            col1, col2 = st.columns(2)
+            
+            with col1:
+                st.write(f"**Primera transacción:** {datos_semana['fecha'].min().strftime('%d/%m/%Y %H:%M')}")
+                st.write(f"**Última transacción:** {datos_semana['fecha'].max().strftime('%d/%m/%Y %H:%M')}")
+            
+            with col2:
+                st.write(f"**Total de registros:** {len(datos_semana):,}")
+                st.write(f"**Días con actividad:** {datos_semana['fecha'].dt.date.nunique()}")
     
-    with tab3:
-        st.subheader("Datos de la Semana")
-        st.dataframe(
-            datos_semana,
-            use_container_width=True,
-            height=400
-        )
-        
-        # Estadísticas adicionales
-        st.subheader("Estadísticas Adicionales")
-        col1, col2 = st.columns(2)
-        
-        with col1:
-            st.write(f"**Primera transacción:** {datos_semana['fecha'].min().strftime('%d/%m/%Y %H:%M')}")
-            st.write(f"**Última transacción:** {datos_semana['fecha'].max().strftime('%d/%m/%Y %H:%M')}")
-        
-        with col2:
-            st.write(f"**Total de registros:** {len(datos_semana):,}")
-            st.write(f"**Días con actividad:** {datos_semana['fecha'].dt.date.nunique()}")
-
-def cargar_datos():
-    """
-    Función para cargar tus datos - AJUSTA ESTO
-    """
-    # Ejemplo - reemplaza con tu carga real
-    try:
-        # return pd.read_excel('tu_archivo.xlsx')
-        return df_filtrado  # Tu DataFrame existente
-    except:
-        return None
-
-if __name__ == "__main__":
-    main()
+    def cargar_datos():
+        """
+        Función para cargar tus datos - AJUSTA ESTO
+        """
+        # Ejemplo - reemplaza con tu carga real
+        try:
+            # return pd.read_excel('tu_archivo.xlsx')
+            return df_filtrado  # Tu DataFrame existente
+        except:
+            return None
+    
+    if __name__ == "__main__":
+        main()
 
 
