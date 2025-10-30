@@ -279,12 +279,12 @@ if eleccion == "Principal":
             st.plotly_chart(fig, use_container_width=True)
 
     def formatear_numero(x):
-    if pd.isna(x):
-        return ""
-    try:
-        return f"{float(x):,.0f}".replace(",", ".")
-    except (ValueError, TypeError):
-        return x
+        if pd.isna(x):
+            return ""
+        try:
+            return f"{float(x):,.0f}".replace(",", ".")
+        except (ValueError, TypeError):
+            return x
     
     st.subheader("📋 Vista general de expedientes")
     df_mostrar = df_filtrado.copy()
