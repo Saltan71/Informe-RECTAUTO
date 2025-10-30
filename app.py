@@ -100,29 +100,6 @@ def dataframe_to_pdf_bytes(df, title):
     # --- EXPORTAR COMO BYTES ---
     pdf_output = pdf.output(dest='B')
     return pdf_output
-    
-def crear_timeline_semanal(fecha_inicio, fecha_max, frecuencia):
-    """
-    Crea el DataFrame con el timeline semanal
-    """
-    semanas = pd.date_range(
-        start=fecha_inicio,
-        end=fecha_max,
-        freq=frecuencia
-    )
-    
-    df_timeline = pd.DataFrame({
-        'semana': semanas,
-        'año_semana': semanas.strftime('%Y-%U'),
-        'año_mes': semanas.strftime('%Y-%m'),
-        'semana_numero': semanas.isocalendar().week,
-        'año': semanas.year,
-        'mes': semanas.strftime('%B'),
-        'trimestre': semanas.quarter
-    })
-    
-    return df_timeline
-
 
 # CSS para ambos fondos
 st.markdown("""
@@ -371,5 +348,5 @@ elif eleccion == "Indicadores clave (KPI)":
     columna_fecha = df.columns[10]
     df[columna_fecha] = pd.to_datetime(df[columna_fecha], errors='coerce')
     fecha_max = df[columna_fecha].max()
-    crear_timeline_semanal(FECHA_REFERENCIA, fecha_max, 7)
+    st.write(fecha_max)
 
