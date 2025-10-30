@@ -287,7 +287,9 @@ if eleccion == "Principal":
     st.dataframe(df_mostrar, use_container_width=True)
     
     # Mostrar contador de registros
-    st.write(f"Mostrando {len(df_mostrar)} de {len(df)} registros")
+    registros_mostrados = f"{len(df_mostrar):,}".replace(",", ".")
+    registros_totales = f"{len(df):,}".replace(",", ".")
+    st.write(f"Mostrando {registros_mostrados} de {registros_totales} registros")
 
 
     st.markdown("---")
