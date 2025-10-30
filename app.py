@@ -106,8 +106,8 @@ def crear_timeline_semanal(fecha_inicio, fecha_max, frecuencia):
     Crea el DataFrame con el timeline semanal
     """
     semanas = pd.date_range(
-        start=pd.to_datetime(fecha_inicio),
-        end=pd.to_datetime(fecha_max),
+        start=fecha_inicio,
+        end=fecha_max,
         freq=frecuencia
     )
     
