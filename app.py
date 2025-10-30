@@ -397,13 +397,18 @@ elif eleccion == "Indicadores clave (KPI)":
         # Filtrar datos de la semana
         mascara_semana = (df['FECHA APERTURA'] >= inicio_semana) & (df['FECHA APERTURA'] <= fin_semana)
         datos_semana = df[mascara_semana]
-        mascara_semana_tramites = (df['FECHA ÚLTIMO TRAM.'] >= inicio_semana) & (df['FECHA ÚLTIMO TRAM.'] <= fin_semana)
-        datos_semana_tramites = df[mascara_semana_tramites]
+        
+        if 'ESTADO' in df.columns:
+            expedientes_cerrados_semana = df[
+                (df['FECHA ÚLTIMO TRAM'] >= inicio_semana) & 
+                (df['FECHA ÚLTIMO TRAM'] <= fin_semana)
+            ].shape[0]
+        
         
         # Calcular KPIs (AJUSTA SEGÚN TUS COLUMNAS)
         kpis = {
             'Nuevos expedientes': len(datos_semana['FECHA APERTURA']),
-            'Expedientes cerrados': len(datos_semana_tramites['ESTADO']),
+            'Expedientes cerrados': expedientes_cerrados_semana,
             #'Total abiertos': len(df['ESTADO']) == 'Abierto',
         }
         
