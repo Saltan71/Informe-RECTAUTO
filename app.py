@@ -384,29 +384,6 @@ elif eleccion == "Indicadores clave (KPI)":
             
         st.markdown("---")
         st.info(f"**Semana seleccionada:** {semana_seleccionada.strftime('%d/%m/%Y')} ({num_semana_seleccionada})")
-        
-        # Navegación rápida - CORREGIDO
-        if len(semanas_disponibles) > 1:
-            st.subheader("Navegación Rápida")
-            col1, col2 = st.columns(2)
-            
-            with col1:
-                if st.button("⬅️ Semana Anterior", use_container_width=True):
-                    idx = list(semanas_disponibles).index(st.session_state.semana_seleccionada)
-                    if idx > 0:
-                        st.session_state.semana_seleccionada = semanas_disponibles[idx - 1]
-                        st.rerun()  # Forzar actualización
-            
-            with col2:
-                if st.button("Semana Siguiente ➡️", use_container_width=True):
-                    idx = list(semanas_disponibles).index(st.session_state.semana_seleccionada)
-                    if idx < len(semanas_disponibles) - 1:
-                        st.session_state.semana_seleccionada = semanas_disponibles[idx + 1]
-                        st.rerun()  # Forzar actualización
-
-            # Mostrar información de navegación
-            idx_actual = list(semanas_disponibles).index(st.session_state.semana_seleccionada)
-            st.caption(f"Semana {idx_actual + 1} de {len(semanas_disponibles)}")
 
 
     def calcular_kpis_semana(df, semana_seleccionada):
