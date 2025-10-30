@@ -350,7 +350,7 @@ elif eleccion == "Indicadores clave (KPI)":
     fecha_max = df[columna_fecha].max()
 
     semanas = pd.date_range(
-        start=pd.to_datetime(fecha_inicio),
+        start=pd.to_datetime(FECHA_REFERENCIA),
         end=pd.to_datetime(fecha_max),
         freq=frecuencia
     )
