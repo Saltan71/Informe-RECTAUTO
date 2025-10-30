@@ -337,7 +337,7 @@ if eleccion == "Principal":
                 key='pdf_download_button'
             )
     else:
-        st.info("Por favor, sube un archivo Excel para comenzar. 2")
+        # st.info("Por favor, sube un archivo Excel para comenzar. 2")
 elif eleccion == "Envío de correos":
     st.subheader("Envío de correos")
 
