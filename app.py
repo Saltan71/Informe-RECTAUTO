@@ -279,6 +279,7 @@ if eleccion == "Principal":
 
     st.subheader("📋 Vista general de expedientes")
     df_mostrar = df_filtrado.copy()
+    del df_mostrar.index.name
     for col in df_mostrar.select_dtypes(include='number').columns:
         df_mostrar[col] = df_mostrar[col].apply(lambda x: f"{int(x):,}" if pd.notna(x) else "")
     for col in df_mostrar.select_dtypes(include='datetime').columns:
@@ -333,7 +334,7 @@ if eleccion == "Principal":
                 data=zip_buffer.read(),
                 file_name=zip_file_name,
                 mime="application/zip",
-                help="Descarga todos los informes PDF listos para subirlos a SharePoint.",
+                help="Descarga todos los informes PDF listos.",
                 key='pdf_download_button'
             )
     
