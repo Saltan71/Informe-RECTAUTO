@@ -101,6 +101,42 @@ def dataframe_to_pdf_bytes(df, title):
     return pdf_output
     
 
+    # CSS para ambos fondos
+    st.markdown("""
+    <style>
+        /* Barra lateral - Verde oscuro */
+        [data-testid="stSidebar"] {
+            background-color: #007933 !important;
+        }
+    
+        /* Área principal - Verde claro */
+        .main .block-container {
+            background-color: #C4DDCA !important;
+            padding: 2rem;
+            border-radius: 10px;
+        }
+    
+        /* Fondo general de la página */
+        .stApp {
+            background-color: #92C88F !important;
+        }
+    
+        /* Texto en barra lateral */
+        [data-testid="stSidebar"] * {
+            color: white !important;
+        }
+    
+        /* Mejorar contraste en área principal */
+        .main .stMarkdown, .main h1, .main h2, .main h3 {
+            color: #333333 !important;
+        }
+    </style>
+    """, unsafe_allow_html=True)
+    
+    # Logo que funciona como enlace
+    st.sidebar.image("Logo Atrian.png", width=260)
+
+
 archivo = st.file_uploader("📁 Sube el archivo Excel (rectauto*.xlsx)", type=["xlsx", "xls"])
 
 if archivo:
@@ -160,40 +196,6 @@ if archivo:
         #if usuario_sel != "Todos":
         #    df_filtrado = df_filtrado[df_filtrado["USUARIO"] == usuario_sel]
     
-    # CSS para ambos fondos
-    st.markdown("""
-    <style>
-        /* Barra lateral - Verde oscuro */
-        [data-testid="stSidebar"] {
-            background-color: #007933 !important;
-        }
-    
-        /* Área principal - Verde claro */
-        .main .block-container {
-            background-color: #C4DDCA !important;
-            padding: 2rem;
-            border-radius: 10px;
-        }
-    
-        /* Fondo general de la página */
-        .stApp {
-            background-color: #92C88F !important;
-        }
-    
-        /* Texto en barra lateral */
-        [data-testid="stSidebar"] * {
-            color: white !important;
-        }
-    
-        /* Mejorar contraste en área principal */
-        .main .stMarkdown, .main h1, .main h2, .main h3 {
-            color: #333333 !important;
-        }
-    </style>
-    """, unsafe_allow_html=True)
-    
-    # Logo que funciona como enlace
-    st.sidebar.image("Logo Atrian.png", width=260)
     
     #Sidebar para filtros
     st.sidebar.header("Filtros")
