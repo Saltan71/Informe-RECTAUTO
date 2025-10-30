@@ -372,7 +372,7 @@ elif eleccion == "Indicadores clave (KPI)":
             format_func=lambda x: x.strftime("%d/%m/%Y")
         )
 
-        num_semana_seleccionada = ((fecha_max - FECHA_REFERENCIA).days) // 7 + 1
+        num_semana_seleccionada = ((num_semana_seleccionada - FECHA_REFERENCIA).days) // 7 + 1
             
         st.markdown("---")
         st.info(f"**Semana seleccionada:** {semana_seleccionada.strftime('%d/%m/%Y')} ({num_semana_seleccionada})")
