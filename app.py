@@ -101,6 +101,28 @@ def dataframe_to_pdf_bytes(df, title):
     pdf_output = pdf.output(dest='B')
     return pdf_output
     
+def crear_timeline_semanal(fecha_inicio, fecha_max, frecuencia):
+    """
+    Crea el DataFrame con el timeline semanal
+    """
+    semanas = pd.date_range(
+        start=pd.to_datetime(fecha_inicio),
+        end=pd.to_datetime(fecha_max),
+        freq=frecuencia
+    )
+    
+    df_timeline = pd.DataFrame({
+        'semana': semanas,
+        'año_semana': semanas.strftime('%Y-%U'),
+        'año_mes': semanas.strftime('%Y-%m'),
+        'semana_numero': semanas.isocalendar().week,
+        'año': semanas.year,
+        'mes': semanas.strftime('%B'),
+        'trimestre': semanas.quarter
+    })
+    
+    return df_timeline
+
 
 # CSS para ambos fondos
 st.markdown("""
@@ -339,10 +361,12 @@ if eleccion == "Principal":
                 help="Descarga todos los informes PDF listos.",
                 key='pdf_download_button'
             )
-    print("prueba-1")
+    
 elif eleccion == "Envío de correos":
     st.subheader("Envío de correos")
-    print("prueba1")
+    
+    
 elif eleccion == "Indicadores clave (KPI)":
     st.subheader("Indicadores clave (KPI)")
-    display("prueba2")
+    crear_timeline_semanal(FECHA_REFERENCIA, fecha_max, 7)
+
