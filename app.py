@@ -136,8 +136,6 @@ st.markdown("""
 # Logo que funciona como enlace
 st.sidebar.image("Logo Atrian.png", width=260)
 
-st.sidebar.selectbox("Menú", menu)
-
 menu = ["Principal", "Envío de correos"]
 eleccion = st.sidebar.selectbox("Menú", menu)
 if eleccion == "Principal":
