@@ -359,7 +359,11 @@ elif eleccion == "Indicadores clave (KPI)":
         end=fecha_max,
         freq='W-FRI'
     )
-    
+
+    # Inicializar session_state si no existe
+    if 'semana_seleccionada' not in st.session_state:
+        st.session_state.semana_seleccionada = semanas_disponibles[-1] if len(semanas_disponibles) > 0 else fecha_inicio
+
     # Sidebar para selección
     with st.sidebar:
         st.header("🗓️ Selector de Semana")
@@ -368,10 +372,14 @@ elif eleccion == "Indicadores clave (KPI)":
         semana_seleccionada = st.select_slider(
             "Selecciona la semana:",
             options=semanas_disponibles,
-            value=semanas_disponibles[-1],  # Última semana por defecto
-            format_func=lambda x: x.strftime("%d/%m/%Y")
+            value=st.session_state.semana_seleccionada,  # Usar session_state
+            format_func=lambda x: x.strftime("%d/%m/%Y"),
+            key="slider_semana"  # Clave única para el slider
         )
 
+        # Actualizar session_state con el valor del slider
+        st.session_state.semana_seleccionada = semana_seleccionada
+        
         num_semana_seleccionada = ((semana_seleccionada - FECHA_REFERENCIA).days) // 7 + 1
             
         st.markdown("---")
