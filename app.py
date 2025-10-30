@@ -348,6 +348,7 @@ elif eleccion == "Indicadores clave (KPI)":
     columna_fecha = df.columns[10]
     df[columna_fecha] = pd.to_datetime(df[columna_fecha], errors='coerce')
     fecha_max = df[columna_fecha].max()
+    print(fecha_max.date)
     
     # Crear rango de semanas
     semanas = pd.date_range(
@@ -361,6 +362,5 @@ elif eleccion == "Indicadores clave (KPI)":
         'semana': semanas,
         'año_semana': semanas.strftime('%Y-%W')  # Formato año-semana
     })
-    print(FECHA_REFERENCIA.date)
-    print(fecha_max.date)
+    print(df_timeline)
     print(f"Timeline creado: {len(df_timeline)} semanas desde {FECHA_REFERENCIA.date()} hasta {fecha_max.date()}")
