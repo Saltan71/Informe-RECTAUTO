@@ -348,7 +348,7 @@ elif eleccion == "Indicadores clave (KPI)":
     columna_fecha = df.columns[10]
     df[columna_fecha] = pd.to_datetime(df[columna_fecha], errors='coerce')
     fecha_max = df[columna_fecha].max()
-    st.write(fecha_max.dt.strftime("%d/%m/%Y"))
+    st.write(fecha_max).dt.strftime("%d/%m/%Y")
 
 
 
