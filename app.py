@@ -336,8 +336,7 @@ if eleccion == "Principal":
                 help="Descarga todos los informes PDF listos para subirlos a SharePoint.",
                 key='pdf_download_button'
             )
-    else:
-        # st.info("Por favor, sube un archivo Excel para comenzar. 2")
+    
 elif eleccion == "Envío de correos":
     st.subheader("Envío de correos")
 
