@@ -385,11 +385,13 @@ elif eleccion == "Indicadores clave (KPI)":
                 idx = list(semanas_disponibles).index(semana_seleccionada)
                 if idx > 0:
                     semana_seleccionada = semanas_disponibles[idx - 1]
+                    num_semana_seleccionada = num_semana_seleccionada - 1
         with col2:
             if st.button("Semana Siguiente ➡️"):
                 idx = list(semanas_disponibles).index(semana_seleccionada)
                 if idx < len(semanas_disponibles) - 1:
                     semana_seleccionada = semanas_disponibles[idx + 1]
+                    num_semana_seleccionada = num_semana_seleccionada + 1
     
 
 
