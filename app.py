@@ -422,7 +422,7 @@ elif eleccion == "Indicadores clave (KPI)":
         with col1:
             st.metric(
                 label="💰 Nuevos Expedientes",
-                value=f"${kpis['Nuevos expedientes']:,.0f}",
+                value=f"{kpis['Nuevos expedientes']:,.0f}",
                 delta=None
             )
         
@@ -569,8 +569,3 @@ elif eleccion == "Indicadores clave (KPI)":
     # Mostrar dashboard principal
     mostrar_kpis_principales(kpis_semana, semana_seleccionada)
     #mostrar_detalles_semana(df, semana_seleccionada)
-    
-    if __name__ == "__main__":
-        main()
-
-
