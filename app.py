@@ -344,19 +344,5 @@ elif eleccion == "Envío de correos":
     st.subheader("Envío de correos")
 elif eleccion == "Indicadores clave (KPI)":
     st.subheader("Indicadores clave (KPI)")
-    
-    columna_fecha = df.columns[10]
-    fecha_max = df[columna_fecha].max()
-    
-    # Crear rango de semanas
-    semanas = pd.date_range(
-        start=FECHA_REFERENCIA,
-        end=fecha_max,
-        freq='W-FRI'  # Semanas que terminan en viernes (o cambia por 'W' para domingo)
-    )
-    # Crear DataFrame base
-    df_timeline = pd.DataFrame({
-        'semana': semanas,
-        'año_semana': semanas.strftime('%Y-%W')  # Formato año-semana
-    })
-    print(f"Timeline creado: {len(df_timeline)} semanas desde {FECHA_REFERENCIA.date()} hasta {fecha_max.date()}")
+    Print(eleccion)
+   
