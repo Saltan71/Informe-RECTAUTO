@@ -344,4 +344,4 @@ elif eleccion == "Envío de correos":
     st.subheader("Envío de correos")
 elif eleccion == "Indicadores clave (KPI)":
     st.subheader("Indicadores clave (KPI)")
-        print("Ya")
+    display("Ya")
