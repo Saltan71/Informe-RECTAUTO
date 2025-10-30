@@ -391,7 +391,7 @@ elif eleccion == "Indicadores clave (KPI)":
         Calcula KPIs específicos para la semana seleccionada
         """
         # Definir rango de la semana (de viernes a jueves)
-        inicio_semana = semana_seleccionada - timedelta(days=3)  # Viernes
+        inicio_semana = semana_seleccionada - timedelta(days=6)  # Viernes
         fin_semana = semana_seleccionada  # Jueves
         
         # Filtrar datos de la semana
