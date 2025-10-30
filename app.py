@@ -427,61 +427,61 @@ def mostrar_kpis_principales(kpis, semana_seleccionada):
     with col1:
         st.metric(
             label="💰 Nuevos Expedientes",
-            value=f"${kpis['ventas_totales']:,.0f}",
+            value=f"${kpis['Nuevos expedientes']:,.0f}",
             delta=None
         )
     
-    with col2:
-        st.metric(
-            label="🛒 Transacciones",
-            value=f"{kpis['transacciones']:,}",
-            delta=None
-        )
+    #with col2:
+    #    st.metric(
+    #        label="🛒 Transacciones",
+    #        value=f"{kpis['transacciones']:,}",
+    #        delta=None
+    #    )
     
-    with col3:
-        st.metric(
-            label="👥 Clientes Únicos",
-            value=f"{kpis['clientes_unicos']:,}",
-            delta=None
-        )
+    #with col3:
+    #    st.metric(
+    #        label="👥 Clientes Únicos",
+    #        value=f"{kpis['clientes_unicos']:,}",
+    #        delta=None
+    #    )
     
-    with col4:
-        st.metric(
-            label="🎫 Ticket Promedio",
-            value=f"${kpis['ticket_promedio']:,.2f}",
-            delta=None
-        )
+    #with col4:
+    #    st.metric(
+    #        label="🎫 Ticket Promedio",
+    #        value=f"${kpis['ticket_promedio']:,.2f}",
+    #        delta=None
+    #    )
     
     # Segunda fila de KPIs
-    col5, col6, col7, col8 = st.columns(4)
+    #col5, col6, col7, col8 = st.columns(4)
     
-    with col5:
-        st.metric(
-            label="📦 Productos Vendidos",
-            value=f"{kpis['productos_vendidos']:,}",
-            delta=None
-        )
+    #with col5:
+    #    st.metric(
+    #        label="📦 Productos Vendidos",
+    #        value=f"{kpis['productos_vendidos']:,}",
+    #        delta=None
+    #    )
     
-    with col6:
-        st.metric(
-            label="📅 Días Activos",
-            value=f"{kpis['dias_activos']}",
-            delta=None
-        )
+    #with col6:
+    #    st.metric(
+    #        label="📅 Días Activos",
+    #        value=f"{kpis['dias_activos']}",
+    #        delta=None
+    #    )
     
-    with col7:
-        st.metric(
-            label="📈 Venta Máxima",
-            value=f"${kpis['venta_maxima']:,.0f}",
-            delta=None
-        )
+    #with col7:
+    #    st.metric(
+    #        label="📈 Venta Máxima",
+    #        value=f"${kpis['venta_maxima']:,.0f}",
+    #        delta=None
+    #    )
     
-    with col8:
-        st.metric(
-            label="📉 Venta Mínima",
-            value=f"${kpis['venta_minima']:,.0f}",
-            delta=None
-        )
+    #with col8:
+    #    st.metric(
+    #        label="📉 Venta Mínima",
+    #        value=f"${kpis['venta_minima']:,.0f}",
+    #        delta=None
+    #    )
     
     st.markdown("---")
 
