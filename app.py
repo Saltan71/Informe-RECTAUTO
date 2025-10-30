@@ -348,8 +348,6 @@ elif eleccion == "Indicadores clave (KPI)":
     columna_fecha = df.columns[10]
     df[columna_fecha] = pd.to_datetime(df[columna_fecha], errors='coerce')
     fecha_max = df[columna_fecha].max()
-    dias_transcurridos = (fecha_max - FECHA_REFERENCIA).days
-    num_semana = dias_transcurridos // 7 + 1
     
     if not fecha_max:
         st.error("No se pudo encontrar la fecha máxima")
@@ -373,9 +371,11 @@ elif eleccion == "Indicadores clave (KPI)":
             value=semanas_disponibles[-1],  # Última semana por defecto
             format_func=lambda x: x.strftime("%d/%m/%Y")
         )
-        
+
+        num_semana_seleccionada = ((fecha_max - FECHA_REFERENCIA).days) // 7 + 1
+            
         st.markdown("---")
-        st.info(f"**Semana seleccionada:** {semana_seleccionada.strftime('%d/%m/%Y')} ({num_semana})")
+        st.info(f"**Semana seleccionada:** {semana_seleccionada.strftime('%d/%m/%Y')} ({num_semana_seleccionada})")
         
         # Navegación rápida
         st.subheader("Navegación Rápida")
@@ -416,7 +416,7 @@ elif eleccion == "Indicadores clave (KPI)":
         """
         Muestra los KPIs principales en tarjetas estilo dashboard
         """
-        st.header(f"📊 KPIs de la Semana: {semana_seleccionada.strftime('%d/%m/%Y')} ({num_semana})")
+        st.header(f"📊 KPIs de la Semana: {semana_seleccionada.strftime('%d/%m/%Y')} ({num_semana_seleccionada})")
         
         # KPIs principales (primera fila)
         col1, col2, col3, col4 = st.columns(4)
