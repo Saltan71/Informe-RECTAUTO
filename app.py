@@ -339,7 +339,7 @@ if eleccion == "Principal":
                 help="Descarga todos los informes PDF listos.",
                 key='pdf_download_button'
             )
-    
+    print("prueba-1")
 elif eleccion == "Envío de correos":
     st.subheader("Envío de correos")
     print("prueba1")
