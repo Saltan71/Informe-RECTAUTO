@@ -349,6 +349,14 @@ elif eleccion == "Indicadores clave (KPI)":
     df[columna_fecha] = pd.to_datetime(df[columna_fecha], errors='coerce')
     fecha_max = df[columna_fecha].max()
 
+    # Seleccionar frecuencia
+    frecuencia = st.selectbox(
+        "Frecuencia del timeline",
+        options=["W-MON", "W-TUE", "W-WED", "W-THU", "W-FRI", "W-SAT", "W-SUN"],
+        index=4,  # W-FRI por defecto
+        help="Día de la semana para terminar cada período"
+    )
+    
     semanas = pd.date_range(
         start=pd.to_datetime(FECHA_REFERENCIA),
         end=pd.to_datetime(fecha_max),
