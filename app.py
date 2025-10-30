@@ -400,8 +400,8 @@ elif eleccion == "Indicadores clave (KPI)":
         
         if 'ESTADO' in df.columns:
             expedientes_cerrados_semana = df[
-                (df['FECHA ÚLTIMO TRAM'] >= inicio_semana) & 
-                (df['FECHA ÚLTIMO TRAM'] <= fin_semana)
+                (df['FECHA ÚLTIMO TRAM.'] >= inicio_semana) & 
+                (df['FECHA ÚLTIMO TRAM.'] <= fin_semana)
             ].shape[0]
         
         
