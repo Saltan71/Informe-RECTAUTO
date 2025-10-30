@@ -351,7 +351,6 @@ elif eleccion == "Indicadores clave (KPI)":
     
     if not fecha_max:
         st.error("No se pudo encontrar la fecha máxima")
-        return
     
     # Crear rango de semanas disponibles
     fecha_inicio = pd.to_datetime("2022-11-04")
