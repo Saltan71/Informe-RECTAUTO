@@ -405,7 +405,7 @@ elif eleccion == "Indicadores clave (KPI)":
         
         # Calcular KPIs (AJUSTA SEGÚN TUS COLUMNAS)
         kpis = {
-            'Nuevos expedientes': len(datos_semana['FECHA APERTURA']) if datos_semana['FECHA APERTURA'] in df.columns else 0
+            'Nuevos expedientes': len(datos_semana['FECHA APERTURA'])
         }
         
         return kpis
