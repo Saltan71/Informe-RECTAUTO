@@ -2,7 +2,7 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 import plotly.express as px
-from datetime import datetime
+from datetime import datetime, timedelta
 import io
 import zipfile
 from fpdf import FPDF
@@ -158,7 +158,7 @@ if archivo:
     columnas = [0, 1, 2, 3, 12, 14, 15, 16, 17, 18, 20, 21, 23, 26, 27]
     df = df.iloc[:, columnas]
 
-menu = ["Principal", "Envío de correos"]
+menu = ["Principal", "Indicadores clave (KPI)", "Envío de correos"]
 eleccion = st.sidebar.selectbox("Menú", menu)
 if eleccion == "Principal":
     columna_fecha = df.columns[10]
@@ -342,4 +342,20 @@ if eleccion == "Principal":
     
 elif eleccion == "Envío de correos":
     st.subheader("Envío de correos")
+elif eleccion == "Indicadores clave (KPI)":
+    st.subheader("Indicadores clave (KPI)")
 
+    # Crear rango de semanas
+    semanas = pd.date_range(
+        start=FECHA_REFERENCIA,
+        end=fecha_max,
+        freq='W-FRI'  # Semanas que terminan en viernes (o cambia por 'W' para domingo)
+    )
+
+    # Crear DataFrame base
+    df_timeline = pd.DataFrame({
+        'semana': semanas,
+        'año_semana': semanas.strftime('%Y-%W')  # Formato año-semana
+    })
+
+    print(f"Timeline creado: {len(df_timeline)} semanas desde {FECHA_REFERENCIA.date()} hasta {fecha_max.date()}")
