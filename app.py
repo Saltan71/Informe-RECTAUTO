@@ -361,6 +361,6 @@ elif eleccion == "Indicadores clave (KPI)":
         'semana': semanas,
         'año_semana': semanas.strftime('%Y-%W')  # Formato año-semana
     })
-    print(FECHA_REFERENCIA.value)
-    print(fecha_max.value)
+    print(FECHA_REFERENCIA.date)
+    print(fecha_max.date)
     print(f"Timeline creado: {len(df_timeline)} semanas desde {FECHA_REFERENCIA.date()} hasta {fecha_max.date()}")
