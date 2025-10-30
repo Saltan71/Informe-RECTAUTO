@@ -397,34 +397,34 @@ elif eleccion == "Indicadores clave (KPI)":
     mostrar_detalles_semana(df_filtrado, semana_seleccionada)
 
 def calcular_kpis_semana(df, semana_seleccionada):
-"""
-Calcula KPIs específicos para la semana seleccionada
-"""
-# Definir rango de la semana (de viernes a jueves)
-inicio_semana = semana_seleccionada - timedelta(days=4)  # Viernes
-fin_semana = semana_seleccionada  # Jueves
+    """
+    Calcula KPIs específicos para la semana seleccionada
+    """
+    # Definir rango de la semana (de viernes a jueves)
+    inicio_semana = semana_seleccionada - timedelta(days=4)  # Viernes
+    fin_semana = semana_seleccionada  # Jueves
     
-# Filtrar datos de la semana
-mascara_semana = (df['fecha'] >= inicio_semana) & (df['fecha'] <= fin_semana)
-datos_semana = df[mascara_semana]
+    # Filtrar datos de la semana
+    mascara_semana = (df['fecha'] >= inicio_semana) & (df['fecha'] <= fin_semana)
+    datos_semana = df[mascara_semana]
     
-# Calcular KPIs (AJUSTA SEGÚN TUS COLUMNAS)
-kpis = {
-    'ventas_totales': datos_semana['ventas'].sum() if 'ventas' in df.columns else 0,
-    'transacciones': len(datos_semana),
-    'clientes_unicos': datos_semana['cliente_id'].nunique() if 'cliente_id' in df.columns else 0,
-    'ticket_promedio': datos_semana['ventas'].mean() if 'ventas' in df.columns else 0,
-    'productos_vendidos': datos_semana['producto_id'].nunique() if 'producto_id' in df.columns else 0,
-    'dias_activos': datos_semana['fecha'].nunique(),
-    'venta_maxima': datos_semana['ventas'].max() if 'ventas' in df.columns else 0,
-    'venta_minima': datos_semana['ventas'].min() if 'ventas' in df.columns else 0,
-    'empleados_activos': datos_semana['empleado_id'].nunique() if 'empleado_id' in df.columns else 0,
-    'eficiencia_ventas': datos_semana['ventas'].sum() / len(datos_semana) if len(datos_semana) > 0 else 0,
-    'tasa_conversion': "N/A",  # Ajusta según tu métrica
-    'satisfaccion_promedio': datos_semana['satisfaccion'].mean() if 'satisfaccion' in df.columns else 0
-}
+    # Calcular KPIs (AJUSTA SEGÚN TUS COLUMNAS)
+    kpis = {
+        'ventas_totales': datos_semana['ventas'].sum() if 'ventas' in df.columns else 0,
+        'transacciones': len(datos_semana),
+        'clientes_unicos': datos_semana['cliente_id'].nunique() if 'cliente_id' in df.columns else 0,
+        'ticket_promedio': datos_semana['ventas'].mean() if 'ventas' in df.columns else 0,
+        'productos_vendidos': datos_semana['producto_id'].nunique() if 'producto_id' in df.columns else 0,
+        'dias_activos': datos_semana['fecha'].nunique(),
+        'venta_maxima': datos_semana['ventas'].max() if 'ventas' in df.columns else 0,
+        'venta_minima': datos_semana['ventas'].min() if 'ventas' in df.columns else 0,
+        'empleados_activos': datos_semana['empleado_id'].nunique() if 'empleado_id' in df.columns else 0,
+        'eficiencia_ventas': datos_semana['ventas'].sum() / len(datos_semana) if len(datos_semana) > 0 else 0,
+        'tasa_conversion': "N/A",  # Ajusta según tu métrica
+        'satisfaccion_promedio': datos_semana['satisfaccion'].mean() if 'satisfaccion' in df.columns else 0
+    }
     
-return kpis
+    return kpis
 
 def mostrar_kpis_principales(kpis, semana_seleccionada):
     """
