@@ -187,21 +187,19 @@ else:
 menu = ["Principal", "Indicadores clave (KPI)", "Envío de correos"]
 eleccion = st.sidebar.selectbox("Menú", menu)
 
-# Función cacheada para gráficos
+# Función cacheada para gráficos (SOLO LA FUNCIÓN DE CREACIÓN, NO LOS DATOS)
 @st.cache_data(ttl=CACHE_TTL)
-def crear_grafico(_df, columna, titulo):
-    """Crea gráficos con cache"""
-    if columna not in _df.columns:
+def crear_grafico_base(_conteo, columna, titulo):
+    """Crea el gráfico base con cache, pero usando datos actualizados"""
+    if _conteo.empty:
         return None
-    conteo = _df[columna].value_counts().reset_index()
-    conteo.columns = [columna, "Cantidad"]
-    fig = px.bar(conteo, y=columna, x="Cantidad", title=titulo, text="Cantidad", color=columna, height=400)
+    
+    fig = px.bar(_conteo, y=columna, x="Cantidad", title=titulo, text="Cantidad", 
+                 color=columna, height=400)
     fig.update_traces(texttemplate='%{text:,}', textposition="auto")
     return fig
 
 if eleccion == "Principal":
-    # ... (código de la sección Principal se mantiene similar pero usando funciones cacheadas donde sea posible)
-    
     columna_fecha = df.columns[11]
     df[columna_fecha] = pd.to_datetime(df[columna_fecha], errors='coerce')
     fecha_max = df[columna_fecha].max()
@@ -210,7 +208,7 @@ if eleccion == "Principal":
     fecha_max_str = fecha_max.strftime("%d/%m/%Y") if pd.notna(fecha_max) else "Sin fecha"
     st.subheader(f"📅 Semana {num_semana} a {fecha_max_str}")
 
-    # Sidebar para filtros (se mantiene igual)
+    # Sidebar para filtros
     st.sidebar.header("Filtros")
 
     if 'filtro_estado' not in st.session_state:
@@ -275,19 +273,28 @@ if eleccion == "Principal":
     if usuario_sel:
         st.sidebar.write(f"Usuarios: {len(usuario_sel)} seleccionados")
 
-    # Gráficos usando funciones cacheadas
+    # Gráficos Generales - CORREGIDOS: datos siempre frescos según filtros
     st.subheader("📈 Gráficos Generales")
     columnas_graficos = st.columns(3)
-    graficos = [("EQUIPO", "Expedientes por equipo"), ("USUARIO", "Expedientes por usuario"), ("ESTADO", "Distribución por estado")]
+    graficos = [("EQUIPO", "Expedientes por equipo"), 
+                ("USUARIO", "Expedientes por usuario"), 
+                ("ESTADO", "Distribución por estado")]
 
     for i, (col, titulo) in enumerate(graficos):
         if col in df_filtrado.columns:
-            fig = crear_grafico(df_filtrado, col, titulo)
+            # Calcular el conteo actual (siempre fresco según los filtros)
+            conteo_actual = df_filtrado[col].value_counts().reset_index()
+            conteo_actual.columns = [col, "Cantidad"]
+            
+            # Crear gráfico con datos actualizados
+            fig = crear_grafico_base(conteo_actual, col, titulo)
             if fig:
                 columnas_graficos[i].plotly_chart(fig, use_container_width=True)
 
     if "NOTIFICADO" in df_filtrado.columns:
-        fig = crear_grafico(df_filtrado, "NOTIFICADO", "Expedientes notificados")
+        conteo_notificado = df_filtrado["NOTIFICADO"].value_counts().reset_index()
+        conteo_notificado.columns = ["NOTIFICADO", "Cantidad"]
+        fig = crear_grafico_base(conteo_notificado, "NOTIFICADO", "Expedientes notificados")
         if fig:
             st.plotly_chart(fig, use_container_width=True)
 
@@ -302,7 +309,7 @@ if eleccion == "Principal":
     registros_totales = f"{len(df):,}".replace(",", ".")
     st.write(f"Mostrando {registros_mostrados} de {registros_totales} registros")
 
-    # Descarga de informes (usando función cacheada)
+    # Descarga de informes
     st.markdown("---")
     st.header("Descarga de Informes")
     st.subheader("Generar Informes PDF Pendientes por Usuario")
@@ -509,49 +516,11 @@ elif eleccion == "Indicadores clave (KPI)":
     # Calcular KPIs para todas las semanas (usando cache)
     df_kpis_semanales = calcular_kpis_todas_semanas_optimizado(df, semanas_disponibles, FECHA_REFERENCIA)
 
-    # Función cacheada para gráfico de evolución
+    # Gráfico de evolución - SOLO CACHEAR LOS DATOS, NO EL GRÁFICO COMPLETO
     @st.cache_data(ttl=CACHE_TTL)
-    def crear_grafico_evolucion(_df_kpis, _semana_seleccionada, _fecha_referencia):
-        num_semana_seleccionada = ((_semana_seleccionada - _fecha_referencia).days) // 7 + 1
-        
-        fig = px.line(
-            _df_kpis,
-            x='semana_numero',
-            y=['nuevos_expedientes', 'expedientes_cerrados', 'total_abiertos'],
-            title='Evolución de KPIs a lo largo del tiempo',
-            labels={
-                'semana_numero': 'Número de Semana',
-                'value': 'Cantidad de Expedientes',
-                'variable': 'Tipo de KPI'
-            },
-            color_discrete_map={
-                'nuevos_expedientes': '#1f77b4',
-                'expedientes_cerrados': '#ff7f0e', 
-                'total_abiertos': '#2ca02c'
-            }
-        )
-        
-        fig.update_layout(
-            xaxis_title='Semana',
-            yaxis_title='Cantidad de Expedientes',
-            legend_title='KPIs',
-            hovermode='x unified',
-            height=500
-        )
-        
-        fig.for_each_trace(lambda t: t.update(name='Nuevos Expedientes' if t.name == 'nuevos_expedientes' else 
-                                             'Expedientes Cerrados' if t.name == 'expedientes_cerrados' else 
-                                             'Total Abiertos'))
-        
-        fig.add_vline(
-            x=num_semana_seleccionada, 
-            line_width=2, 
-            line_dash="dash", 
-            line_color="red",
-            annotation_text="Semana Seleccionada"
-        )
-        
-        return fig
+    def obtener_datos_grafico_evolucion(_df_kpis):
+        """Solo cachea los datos necesarios para el gráfico"""
+        return _df_kpis.copy()
 
     def mostrar_kpis_principales(_df_kpis, _semana_seleccionada, _num_semana):
         kpis_semana = _df_kpis[_df_kpis['semana_numero'] == _num_semana].iloc[0]
@@ -600,11 +569,56 @@ elif eleccion == "Indicadores clave (KPI)":
     # Mostrar dashboard principal
     mostrar_kpis_principales(df_kpis_semanales, semana_seleccionada, num_semana_seleccionada)
 
-    # GRÁFICO DE EVOLUCIÓN TEMPORAL (usando cache)
+    # GRÁFICO DE EVOLUCIÓN TEMPORAL (ACTUALIZADO) - CORREGIDO
     st.markdown("---")
     st.subheader("📈 Evolución Temporal de KPIs")
-    
-    fig = crear_grafico_evolucion(df_kpis_semanales, semana_seleccionada, FECHA_REFERENCIA)
+
+    # Obtener datos desde cache
+    datos_grafico = obtener_datos_grafico_evolucion(df_kpis_semanales)
+
+    # Crear gráfico completo con datos actualizados (SIEMPRE FRESCO)
+    fig = px.line(
+        datos_grafico,
+        x='semana_numero',
+        y=['nuevos_expedientes', 'expedientes_cerrados', 'total_abiertos'],
+        title='Evolución de KPIs a lo largo del tiempo',
+        labels={
+            'semana_numero': 'Número de Semana',
+            'value': 'Cantidad de Expedientes',
+            'variable': 'Tipo de KPI'
+        },
+        color_discrete_map={
+            'nuevos_expedientes': '#1f77b4',
+            'expedientes_cerrados': '#ff7f0e', 
+            'total_abiertos': '#2ca02c'
+        }
+    )
+
+    # Personalizar el gráfico
+    fig.update_layout(
+        xaxis_title='Semana',
+        yaxis_title='Cantidad de Expedientes',
+        legend_title='KPIs',
+        hovermode='x unified',
+        height=500
+    )
+
+    # Actualizar nombres de las leyendas
+    fig.for_each_trace(lambda t: t.update(name='Nuevos Expedientes' if t.name == 'nuevos_expedientes' else 
+                                         'Expedientes Cerrados' if t.name == 'expedientes_cerrados' else 
+                                         'Total Abiertos'))
+
+    # Añadir línea vertical para la semana seleccionada (SIEMPRE ACTUALIZADA)
+    num_semana_seleccionada = ((semana_seleccionada - FECHA_REFERENCIA).days) // 7 + 1
+    fig.add_vline(
+        x=num_semana_seleccionada, 
+        line_width=2, 
+        line_dash="dash", 
+        line_color="red",
+        annotation_text="Semana Seleccionada",
+        annotation_position="top left"
+    )
+
     st.plotly_chart(fig, use_container_width=True)
     
     # Mostrar tabla con datos históricos
