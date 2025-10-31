@@ -6,4 +6,10 @@ openpyxl
 jinja2
 fpdf2
 matplotlib
-plotly.express
+datetime
+timedelta
+io
+zipfile
+fpdf
+os
+hashlib
