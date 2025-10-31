@@ -399,7 +399,7 @@ elif eleccion == "Indicadores clave (KPI)":
     for i, fecha in enumerate(semanas_disponibles):
         num_semana = ((fecha - FECHA_REFERENCIA).days) // 7 + 1
         fecha_str_opcion = fecha.strftime('%d/%m/%Y')
-        opciones_slider.append(f"Semana {num_semana} ({fecha_str_opcion})")
+        opciones_slider.append(f" {fecha_str_opcion} (Semana {num_semana})")
     
     # Slider corregido con formato adecuado
     semana_index_slider = st.select_slider(
