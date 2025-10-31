@@ -7,4 +7,3 @@ openpyxl
 jinja2
 fpdf2
 matplotlib
-matplotlib.pyplot
