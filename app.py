@@ -399,11 +399,11 @@ if eleccion == "Principal":
     if usuarios_config is not None:
         # Filtrar usuarios activos
         usuarios_activos = usuarios_config[
-            (usuarios_config['ENVIAR'].str.upper() == 'SI')
+            (usuarios_config['ENVIAR'].str.upper() == 'SÍ')
         ]
         
         if usuarios_activos.empty:
-            st.warning("⚠️ No hay usuarios activos para envío (ENVIAR = 'SI')")
+            st.warning("⚠️ No hay usuarios activos para envío (ENVIAR = 'SÍ')")
         else:
             # Función para generar el cuerpo del mensaje dinámicamente
             def generar_cuerpo_mensaje(mensaje_base):
