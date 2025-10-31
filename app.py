@@ -361,32 +361,14 @@ elif eleccion == "Indicadores clave (KPI)":
         st.error("No hay semanas disponibles para mostrar")
         st.stop()
     
-    # INICIALIZACIÓN COMPLETAMENTE NUEVA - ENFOQUE DEFENSIVO
-    # Reiniciar completamente el estado si hay problemas
-    try:
-        current_index = st.session_state.semana_index
-        # Verificar que sea un entero válido
-        if not isinstance(current_index, int):
-            st.session_state.semana_index = len(semanas_disponibles) - 1
-            current_index = st.session_state.semana_index
-    except (KeyError, AttributeError):
-        # Si no existe o hay error, inicializar
-        st.session_state.semana_index = len(semanas_disponibles) - 1
-        current_index = st.session_state.semana_index
-    
-    # VERIFICACIÓN EXPLÍCITA DE TIPOS Y LÍMITES
-    if not isinstance(current_index, int):
-        st.session_state.semana_index = len(semanas_disponibles) - 1
-        current_index = st.session_state.semana_index
-    
-    # Ajustar índice si está fuera de los límites
-    if current_index < 0:
-        st.session_state.semana_index = 0
-    elif current_index >= len(semanas_disponibles):
-        st.session_state.semana_index = len(semanas_disponibles) - 1
+    # CORRECCIÓN: Inicializar siempre con la última semana
+    # Usamos una clave específica para KPI para no interferir con otras secciones
+    if 'kpi_semana_index' not in st.session_state:
+        # Establecer en la última semana disponible
+        st.session_state.kpi_semana_index = len(semanas_disponibles) - 1
     
     # Obtener la semana seleccionada actual
-    semana_seleccionada = semanas_disponibles[st.session_state.semana_index]
+    semana_seleccionada = semanas_disponibles[st.session_state.kpi_semana_index]
     num_semana_seleccionada = ((semana_seleccionada - FECHA_REFERENCIA).days) // 7 + 1
     fecha_str = semana_seleccionada.strftime('%d/%m/%Y')
     
@@ -399,23 +381,23 @@ elif eleccion == "Indicadores clave (KPI)":
     for i, fecha in enumerate(semanas_disponibles):
         num_semana = ((fecha - FECHA_REFERENCIA).days) // 7 + 1
         fecha_str_opcion = fecha.strftime('%d/%m/%Y')
-        opciones_slider.append(f" {fecha_str_opcion} (Semana {num_semana})")
+        opciones_slider.append(f"Semana {num_semana} ({fecha_str_opcion})")
     
     # Slider corregido con formato adecuado
     semana_index_slider = st.select_slider(
         "Selecciona la semana:",
         options=list(range(len(semanas_disponibles))),
-        value=st.session_state.semana_index,
+        value=st.session_state.kpi_semana_index,
         format_func=lambda x: opciones_slider[x]
     )
     
     # Actualizar el índice si el slider cambió
-    if semana_index_slider != st.session_state.semana_index:
-        st.session_state.semana_index = semana_index_slider
+    if semana_index_slider != st.session_state.kpi_semana_index:
+        st.session_state.kpi_semana_index = semana_index_slider
         st.rerun()
     
     # RECALCULAR después de posibles cambios del slider
-    semana_seleccionada = semanas_disponibles[st.session_state.semana_index]
+    semana_seleccionada = semanas_disponibles[st.session_state.kpi_semana_index]
     num_semana_seleccionada = ((semana_seleccionada - FECHA_REFERENCIA).days) // 7 + 1
     fecha_str = semana_seleccionada.strftime('%d/%m/%Y')
     
@@ -437,28 +419,28 @@ elif eleccion == "Indicadores clave (KPI)":
         col1, col2 = st.columns(2)
         
         with col1:
-            if st.button("◀️ Anterior", use_container_width=True, key="btn_anterior"):
-                nuevo_indice = st.session_state.semana_index - 1
+            if st.button("◀️ Anterior", use_container_width=True, key="btn_anterior_kpi"):
+                nuevo_indice = st.session_state.kpi_semana_index - 1
                 if nuevo_indice >= 0:
-                    st.session_state.semana_index = nuevo_indice
+                    st.session_state.kpi_semana_index = nuevo_indice
                     st.rerun()
         
         with col2:
-            if st.button("Siguiente ▶️", use_container_width=True, key="btn_siguiente"):
-                nuevo_indice = st.session_state.semana_index + 1
+            if st.button("Siguiente ▶️", use_container_width=True, key="btn_siguiente_kpi"):
+                nuevo_indice = st.session_state.kpi_semana_index + 1
                 if nuevo_indice < len(semanas_disponibles):
-                    st.session_state.semana_index = nuevo_indice
+                    st.session_state.kpi_semana_index = nuevo_indice
                     st.rerun()
         
         # Indicador de posición
-        st.write(f"**Posición:** {st.session_state.semana_index + 1} de {len(semanas_disponibles)}")
+        st.write(f"**Posición:** {st.session_state.kpi_semana_index + 1} de {len(semanas_disponibles)}")
         
         # Botón para ir a la semana más reciente
-        if st.button("📅 Ir a semana actual", use_container_width=True, key="btn_actual"):
-            st.session_state.semana_index = len(semanas_disponibles) - 1
+        if st.button("📅 Ir a semana actual", use_container_width=True, key="btn_actual_kpi"):
+            st.session_state.kpi_semana_index = len(semanas_disponibles) - 1
             st.rerun()
 
-    # El resto del código permanece igual...
+    # El resto del código permanece igual pero usando kpi_semana_index
     def calcular_kpis_para_semana(df, semana_fin):
         """
         Calcula KPIs específicos para una semana dada
