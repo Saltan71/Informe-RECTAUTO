@@ -171,17 +171,7 @@ if eleccion == "Principal":
     # Copiamos el DataFrame original para no modificar el cargado
     df_enriquecido = df.copy()
 
-    # Ejemplo de creación de 12 columnas
-    #df_enriquecido["EQUIPO"] = df_enriquecido["EQUIPO"]
-    #df_enriquecido["DIAS_HASTA_MAX"] = (fecha_max - df_enriquecido[columna_fecha]).dt.days
-    #df_enriquecido["SEMANA_EXPEDIENTE"] = ((df_enriquecido[columna_fecha] - FECHA_REFERENCIA).dt.days // 7 + 1)
-
-    # Mostrar las tres primeras columnas nuevas
-    #st.subheader("📊 Vista previa de las nuevas columnas")
-    #columnas_preview = ["EQUIPO"]
-    #st.dataframe(df[columnas_preview].head(10), use_container_width=True)
-    
-    #Sidebar para filtros
+    # Sidebar para filtros
     st.sidebar.header("Filtros")
 
     # Inicializar session_state para los filtros si no existen
@@ -364,27 +354,66 @@ elif eleccion == "Indicadores clave (KPI)":
     if 'semana_seleccionada' not in st.session_state:
         st.session_state.semana_seleccionada = semanas_disponibles[-1] if len(semanas_disponibles) > 0 else fecha_inicio
 
-    # Sidebar para selección
+    # Mover el selector de semana al área principal
+    st.markdown("---")
+    st.header("🗓️ Selector de Semana")
+    
+    # Selector de fecha en el área principal
+    semana_seleccionada = st.select_slider(
+        "Selecciona la semana:",
+        options=semanas_disponibles,
+        value=st.session_state.semana_seleccionada,
+        format_func=lambda x: x.strftime("%d/%m/%Y"),
+        key="slider_semana_principal"
+    )
+
+    # Actualizar session_state con el valor del slider
+    st.session_state.semana_seleccionada = semana_seleccionada
+    
+    num_semana_seleccionada = ((semana_seleccionada - FECHA_REFERENCIA).days) // 7 + 1
+    
+    # Mostrar información de la semana seleccionada
+    st.info(f"**Semana seleccionada:** {semana_seleccionada.strftime('%d/%m/%Y')} (Semana {num_semana_seleccionada})")
+    
+    # Sidebar con botones de navegación
     with st.sidebar:
-        st.header("🗓️ Selector de Semana")
+        st.header("🗓️ Navegación por Semanas")
         
-        # Selector de fecha con slider
-        semana_seleccionada = st.select_slider(
-            "Selecciona la semana:",
-            options=semanas_disponibles,
-            value=st.session_state.semana_seleccionada,  # Usar session_state
-            format_func=lambda x: x.strftime("%d/%m/%Y"),
-            key="slider_semana"  # Clave única para el slider
-        )
-
-        # Actualizar session_state con el valor del slider
-        st.session_state.semana_seleccionada = semana_seleccionada
+        # Mostrar semana actual en sidebar
+        st.write(f"**Semana actual:**")
+        st.write(f"{semana_seleccionada.strftime('%d/%m/%Y')}")
+        st.write(f"(Semana {num_semana_seleccionada})")
         
-        num_semana_seleccionada = ((semana_seleccionada - FECHA_REFERENCIA).days) // 7 + 1
-            
         st.markdown("---")
-        st.info(f"**Semana seleccionada:** {semana_seleccionada.strftime('%d/%m/%Y')} ({num_semana_seleccionada})")
-
+        
+        # Botones de navegación
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            if st.button("◀️ Anterior", use_container_width=True):
+                # Encontrar índice actual
+                idx_actual = list(semanas_disponibles).index(semana_seleccionada)
+                if idx_actual > 0:
+                    st.session_state.semana_seleccionada = semanas_disponibles[idx_actual - 1]
+                    st.rerun()
+        
+        with col2:
+            if st.button("Siguiente ▶️", use_container_width=True):
+                # Encontrar índice actual
+                idx_actual = list(semanas_disponibles).index(semana_seleccionada)
+                if idx_actual < len(semanas_disponibles) - 1:
+                    st.session_state.semana_seleccionada = semanas_disponibles[idx_actual + 1]
+                    st.rerun()
+        
+        # Indicador de posición
+        idx_actual = list(semanas_disponibles).index(semana_seleccionada)
+        total_semanas = len(semanas_disponibles)
+        st.write(f"**Posición:** {idx_actual + 1} de {total_semanas}")
+        
+        # Botón para ir a la semana más reciente
+        if st.button("📅 Ir a semana actual", use_container_width=True):
+            st.session_state.semana_seleccionada = semanas_disponibles[-1]
+            st.rerun()
 
     def calcular_kpis_semana(df, semana_seleccionada):
         """
@@ -432,10 +461,12 @@ elif eleccion == "Indicadores clave (KPI)":
         """
         Muestra los KPIs principales en tarjetas estilo dashboard
         """
+        num_semana_seleccionada = ((semana_seleccionada - FECHA_REFERENCIA).days) // 7 + 1
+        
         st.header(f"📊 KPIs de la Semana: {semana_seleccionada.strftime('%d/%m/%Y')} ({num_semana_seleccionada})")
         
         # KPIs principales (primera fila)
-        col1, col2, col3, col4 = st.columns(4)
+        col1, col2, col3 = st.columns(3)
         
         with col1:
             st.metric(
@@ -457,44 +488,6 @@ elif eleccion == "Indicadores clave (KPI)":
                 value=f"{kpis['Total expedientes abiertos']:,.0f}".replace(",", "."),
                 delta=None
             )
-        
-        #with col4:
-        #    st.metric(
-        #        label="🎫 Ticket Promedio",
-        #        value=f"${kpis['ticket_promedio']:,.2f}",
-        #        delta=None
-        #    )
-        
-        # Segunda fila de KPIs
-        #col5, col6, col7, col8 = st.columns(4)
-        
-        #with col5:
-        #    st.metric(
-        #        label="📦 Productos Vendidos",
-        #        value=f"{kpis['productos_vendidos']:,}",
-        #        delta=None
-        #    )
-        
-        #with col6:
-        #    st.metric(
-        #        label="📅 Días Activos",
-        #        value=f"{kpis['dias_activos']}",
-        #        delta=None
-        #    )
-        
-        #with col7:
-        #    st.metric(
-        #        label="📈 Venta Máxima",
-        #        value=f"${kpis['venta_maxima']:,.0f}",
-        #        delta=None
-        #    )
-        
-        #with col8:
-        #    st.metric(
-        #        label="📉 Venta Mínima",
-        #        value=f"${kpis['venta_minima']:,.0f}",
-        #        delta=None
-        #    )
         
         st.markdown("---")
     
@@ -569,21 +562,9 @@ elif eleccion == "Indicadores clave (KPI)":
             with col2:
                 st.write(f"**Total de registros:** {len(datos_semana):,}")
                 st.write(f"**Días con actividad:** {datos_semana['fecha'].dt.date.nunique()}")
-    
-    def cargar_datos():
-        """
-        Función para cargar tus datos - AJUSTA ESTO
-        """
-        # Ejemplo - reemplaza con tu carga real
-        try:
-            # return pd.read_excel('tu_archivo.xlsx')
-            return df_filtrado  # Tu DataFrame existente
-        except:
-            return None
-            
+
     # Calcular KPIs para la semana seleccionada
     kpis_semana = calcular_kpis_semana(df, semana_seleccionada)
 
     # Mostrar dashboard principal
     mostrar_kpis_principales(kpis_semana, semana_seleccionada)
-    #mostrar_detalles_semana(df, semana_seleccionada)
