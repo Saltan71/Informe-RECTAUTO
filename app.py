@@ -361,21 +361,31 @@ elif eleccion == "Indicadores clave (KPI)":
         st.error("No hay semanas disponibles para mostrar")
         st.stop()
     
-    # INICIALIZACIÓN SEGURA DEL ESTADO - ENFOQUE SIMPLIFICADO
-    if 'semana_index' not in st.session_state:
+    # INICIALIZACIÓN COMPLETAMENTE NUEVA - ENFOQUE DEFENSIVO
+    # Reiniciar completamente el estado si hay problemas
+    try:
+        current_index = st.session_state.semana_index
+        # Verificar que sea un entero válido
+        if not isinstance(current_index, int):
+            st.session_state.semana_index = len(semanas_disponibles) - 1
+            current_index = st.session_state.semana_index
+    except (KeyError, AttributeError):
+        # Si no existe o hay error, inicializar
         st.session_state.semana_index = len(semanas_disponibles) - 1
+        current_index = st.session_state.semana_index
     
-    # GARANTIZAR QUE EL ÍNDICE ESTÉ DENTRO DE LOS LÍMITES - ENFOQUE PASO A PASO
-    max_index = len(semanas_disponibles) - 1
-    current_index = st.session_state.semana_index
+    # VERIFICACIÓN EXPLÍCITA DE TIPOS Y LÍMITES
+    if not isinstance(current_index, int):
+        st.session_state.semana_index = len(semanas_disponibles) - 1
+        current_index = st.session_state.semana_index
     
     # Ajustar índice si está fuera de los límites
     if current_index < 0:
         st.session_state.semana_index = 0
-    elif current_index > max_index:
-        st.session_state.semana_index = max_index
+    elif current_index >= len(semanas_disponibles):
+        st.session_state.semana_index = len(semanas_disponibles) - 1
     
-    # Obtener la semana seleccionada actual (DESPUÉS de asegurar los límites)
+    # Obtener la semana seleccionada actual
     semana_seleccionada = semanas_disponibles[st.session_state.semana_index]
     num_semana_seleccionada = ((semana_seleccionada - FECHA_REFERENCIA).days) // 7 + 1
     fecha_str = semana_seleccionada.strftime('%d/%m/%Y')
@@ -448,6 +458,7 @@ elif eleccion == "Indicadores clave (KPI)":
             st.session_state.semana_index = len(semanas_disponibles) - 1
             st.rerun()
 
+    # El resto del código permanece igual...
     def calcular_kpis_para_semana(df, semana_fin):
         """
         Calcula KPIs específicos para una semana dada
