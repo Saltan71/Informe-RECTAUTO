@@ -2,7 +2,7 @@ streamlit
 pandas
 numpy
 plotly
-pywin32
+plotly.express
 openpyxl
 jinja2
 fpdf2
