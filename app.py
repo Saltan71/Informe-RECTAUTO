@@ -356,11 +356,16 @@ elif eleccion == "Indicadores clave (KPI)":
         freq='W-FRI'
     ).tolist()
     
+    # Verificar que hay semanas disponibles
+    if not semanas_disponibles:
+        st.error("No hay semanas disponibles para mostrar")
+        st.stop()
+    
     # Inicializar estado si no existe
     if 'semana_index' not in st.session_state:
         st.session_state.semana_index = len(semanas_disponibles) - 1
     
-    # Asegurar que el índice esté dentro de los límites
+    # CORRECCIÓN: Asegurar que el índice esté dentro de los límites
     if st.session_state.semana_index >= len(semanas_disponibles):
         st.session_state.semana_index = len(semanas_disponibles) - 1
     if st.session_state.semana_index < 0:
@@ -370,7 +375,7 @@ elif eleccion == "Indicadores clave (KPI)":
     semana_seleccionada = semanas_disponibles[st.session_state.semana_index]
     num_semana_seleccionada = ((semana_seleccionada - FECHA_REFERENCIA).days) // 7 + 1
     
-    # Selector de semana en el área principal - CORREGIDO
+    # Selector de semana en el área principal
     st.markdown("---")
     st.header("🗓️ Selector de Semana")
     
@@ -402,7 +407,7 @@ elif eleccion == "Indicadores clave (KPI)":
     # Mostrar información de la semana seleccionada
     st.info(f"**Semana seleccionada:** {fecha_str} (Semana {num_semana_seleccionada})")
     
-    # Sidebar con botones de navegación (se mantiene igual)
+    # Sidebar con botones de navegación
     with st.sidebar:
         st.header("🗓️ Navegación por Semanas")
         
@@ -422,8 +427,10 @@ elif eleccion == "Indicadores clave (KPI)":
                         use_container_width=True, 
                         disabled=disabled_anterior,
                         key="btn_anterior"):
-                st.session_state.semana_index -= 1
-                st.rerun()
+                # CORRECCIÓN: Verificar límites antes de actualizar
+                if st.session_state.semana_index > 0:
+                    st.session_state.semana_index -= 1
+                    st.rerun()
         
         with col2:
             disabled_siguiente = st.session_state.semana_index >= len(semanas_disponibles) - 1
@@ -431,8 +438,10 @@ elif eleccion == "Indicadores clave (KPI)":
                         use_container_width=True, 
                         disabled=disabled_siguiente,
                         key="btn_siguiente"):
-                st.session_state.semana_index += 1
-                st.rerun()
+                # CORRECCIÓN: Verificar límites antes de actualizar
+                if st.session_state.semana_index < len(semanas_disponibles) - 1:
+                    st.session_state.semana_index += 1
+                    st.rerun()
         
         # Indicador de posición
         st.write(f"**Posición:** {st.session_state.semana_index + 1} de {len(semanas_disponibles)}")
@@ -444,57 +453,82 @@ elif eleccion == "Indicadores clave (KPI)":
             st.session_state.semana_index = len(semanas_disponibles) - 1
             st.rerun()
 
-    def calcular_kpis_semana(df, semana_seleccionada):
+    def calcular_kpis_para_semana(df, semana_fin):
         """
-        Calcula KPIs específicos para la semana seleccionada
+        Calcula KPIs específicos para una semana dada
         """
-        # Definir rango de la semana (de viernes a jueves)
-        inicio_semana = semana_seleccionada - timedelta(days=6)  # Lunes de la semana
-        fin_semana = semana_seleccionada  # Domingo de la semana
+        # Definir rango de la semana (de lunes a domingo)
+        inicio_semana = semana_fin - timedelta(days=6)
         
-        # Filtrar datos de la semana - NUEVOS EXPEDIENTES
+        # NUEVOS EXPEDIENTES (aperturas en la semana)
         if 'FECHA APERTURA' in df.columns:
-            mascara_semana = (df['FECHA APERTURA'] >= inicio_semana) & (df['FECHA APERTURA'] <= fin_semana)
-            datos_semana = df[mascara_semana]
-            nuevos_expedientes = len(datos_semana)
+            nuevos_expedientes = df[
+                (df['FECHA APERTURA'] >= inicio_semana) & 
+                (df['FECHA APERTURA'] <= semana_fin)
+            ].shape[0]
         else:
             nuevos_expedientes = 0
         
         # EXPEDIENTES CERRADOS EN LA SEMANA
         if 'ESTADO' in df.columns and 'FECHA ÚLTIMO TRAM.' in df.columns:
-            expedientes_cerrados_semana = df[
+            expedientes_cerrados = df[
                 (df['ESTADO'] == 'Cerrado') & 
                 (df['FECHA ÚLTIMO TRAM.'] >= inicio_semana) & 
-                (df['FECHA ÚLTIMO TRAM.'] <= fin_semana)
+                (df['FECHA ÚLTIMO TRAM.'] <= semana_fin)
             ].shape[0]
         else:
-            expedientes_cerrados_semana = 0
+            expedientes_cerrados = 0
 
-        # TOTAL EXPEDIENTES ABIERTOS HASTA ESA SEMANA
+        # TOTAL EXPEDIENTES ABIERTOS AL FINAL DE LA SEMANA
         if 'FECHA CIERRE' in df.columns and 'FECHA APERTURA' in df.columns:
-            # Expedientes abiertos antes del fin de semana y no cerrados antes del fin de semana
-            total_expedientes_abiertos = df[
-                (df['FECHA APERTURA'] <= fin_semana) & 
-                ((df['FECHA CIERRE'] > fin_semana) | (df['FECHA CIERRE'].isna()))
+            total_abiertos = df[
+                (df['FECHA APERTURA'] <= semana_fin) & 
+                ((df['FECHA CIERRE'] > semana_fin) | (df['FECHA CIERRE'].isna()))
             ].shape[0]
         else:
-            total_expedientes_abiertos = 0
+            total_abiertos = 0
         
-        # Calcular KPIs
-        kpis = {
-            'Nuevos expedientes': nuevos_expedientes,
-            'Expedientes cerrados': expedientes_cerrados_semana,
-            'Total expedientes abiertos': total_expedientes_abiertos,
+        return {
+            'nuevos_expedientes': nuevos_expedientes,
+            'expedientes_cerrados': expedientes_cerrados,
+            'total_abiertos': total_abiertos
         }
-        
-        return kpis
 
-    def mostrar_kpis_principales(kpis, semana_seleccionada, num_semana):
+    # CALCULAR KPIs PARA TODAS LAS SEMANAS (una sola vez)
+    @st.cache_data
+    def calcular_kpis_todas_semanas(_df, semanas):
+        """
+        Calcula KPIs para todas las semanas y retorna un DataFrame
+        """
+        datos_semanales = []
+        
+        for semana in semanas:
+            kpis = calcular_kpis_para_semana(_df, semana)
+            num_semana = ((semana - FECHA_REFERENCIA).days) // 7 + 1
+            
+            datos_semanales.append({
+                'semana_numero': num_semana,
+                'semana_fin': semana,
+                'semana_str': semana.strftime('%d/%m/%Y'),
+                'nuevos_expedientes': kpis['nuevos_expedientes'],
+                'expedientes_cerrados': kpis['expedientes_cerrados'],
+                'total_abiertos': kpis['total_abiertos']
+            })
+        
+        return pd.DataFrame(datos_semanales)
+
+    # Calcular KPIs para todas las semanas
+    df_kpis_semanales = calcular_kpis_todas_semanas(df, semanas_disponibles)
+
+    def mostrar_kpis_principales(_df_kpis, _semana_seleccionada, _num_semana):
         """
         Muestra los KPIs principales en tarjetas estilo dashboard
         """
-        fecha_str = semana_seleccionada.strftime('%d/%m/%Y')
-        st.header(f"📊 KPIs de la Semana: {fecha_str} (Semana {num_semana})")
+        # Obtener KPIs para la semana seleccionada
+        kpis_semana = _df_kpis[_df_kpis['semana_numero'] == _num_semana].iloc[0]
+        
+        fecha_str = _semana_seleccionada.strftime('%d/%m/%Y')
+        st.header(f"📊 KPIs de la Semana: {fecha_str} (Semana {_num_semana})")
         
         # KPIs principales
         col1, col2, col3 = st.columns(3)
@@ -502,21 +536,21 @@ elif eleccion == "Indicadores clave (KPI)":
         with col1:
             st.metric(
                 label="💰 Nuevos Expedientes",
-                value=kpis['Nuevos expedientes'],
+                value=int(kpis_semana['nuevos_expedientes']),
                 delta=None
             )
         
         with col2:
             st.metric(
                 label="🛒 Expedientes cerrados",
-                value=kpis['Expedientes cerrados'],
+                value=int(kpis_semana['expedientes_cerrados']),
                 delta=None
             )
         
         with col3:
             st.metric(
                 label="👥 Total expedientes abiertos",
-                value=kpis['Total expedientes abiertos'],
+                value=int(kpis_semana['total_abiertos']),
                 delta=None
             )
         
@@ -527,46 +561,38 @@ elif eleccion == "Indicadores clave (KPI)":
         col1, col2 = st.columns(2)
         
         with col1:
-            st.write(f"**Período:** {(semana_seleccionada - timedelta(days=6)).strftime('%d/%m/%Y')} a {semana_seleccionada.strftime('%d/%m/%Y')}")
+            periodo_inicio = (_semana_seleccionada - timedelta(days=6)).strftime('%d/%m/%Y')
+            periodo_fin = _semana_seleccionada.strftime('%d/%m/%Y')
+            st.write(f"**Período:** {periodo_inicio} a {periodo_fin}")
         
         with col2:
-            if kpis['Nuevos expedientes'] > 0 and kpis['Expedientes cerrados'] > 0:
-                ratio_cierre = kpis['Expedientes cerrados'] / kpis['Nuevos expedientes']
+            if kpis_semana['nuevos_expedientes'] > 0 and kpis_semana['expedientes_cerrados'] > 0:
+                ratio_cierre = kpis_semana['expedientes_cerrados'] / kpis_semana['nuevos_expedientes']
                 st.write(f"**Ratio de cierre:** {ratio_cierre:.2%}")
 
-    # Calcular KPIs para la semana seleccionada
-    kpis_semana = calcular_kpis_semana(df, semana_seleccionada)
-
     # Mostrar dashboard principal
-    mostrar_kpis_principales(kpis_semana, semana_seleccionada, num_semana_seleccionada)
+    mostrar_kpis_principales(df_kpis_semanales, semana_seleccionada, num_semana_seleccionada)
 
-    # --- NUEVA SECCIÓN: GRÁFICO DE EVOLUCIÓN TEMPORAL ---
+    # GRÁFICO DE EVOLUCIÓN TEMPORAL
     st.markdown("---")
     st.subheader("📈 Evolución Temporal de KPIs")
-
-    # Construir DataFrame con los KPIs para todas las semanas
-    datos_evolucion = []
-    for semana in semanas_disponibles:
-        kpis_sem = calcular_kpis_semana(df, semana)
-        num_sem = ((semana - FECHA_REFERENCIA).days) // 7 + 1
-        datos_evolucion.append({
-            'Semana': num_sem,
-            'Fecha': semana.strftime('%d/%m/%Y'),
-            'Nuevos expedientes': kpis_sem['Nuevos expedientes'],
-            'Expedientes cerrados': kpis_sem['Expedientes cerrados'],
-            'Total expedientes abiertos': kpis_sem['Total expedientes abiertos']
-        })
     
-    df_evolucion = pd.DataFrame(datos_evolucion)
-
     # Crear gráfico de líneas
     fig = px.line(
-        df_evolucion, 
-        x='Semana', 
-        y=['Nuevos expedientes', 'Expedientes cerrados', 'Total expedientes abiertos'],
+        df_kpis_semanales,
+        x='semana_numero',
+        y=['nuevos_expedientes', 'expedientes_cerrados', 'total_abiertos'],
         title='Evolución de KPIs a lo largo del tiempo',
-        labels={'value': 'Cantidad', 'variable': 'KPI'},
-        markers=True
+        labels={
+            'semana_numero': 'Número de Semana',
+            'value': 'Cantidad de Expedientes',
+            'variable': 'Tipo de KPI'
+        },
+        color_discrete_map={
+            'nuevos_expedientes': '#1f77b4',
+            'expedientes_cerrados': '#ff7f0e', 
+            'total_abiertos': '#2ca02c'
+        }
     )
     
     # Personalizar el gráfico
@@ -574,11 +600,35 @@ elif eleccion == "Indicadores clave (KPI)":
         xaxis_title='Semana',
         yaxis_title='Cantidad de Expedientes',
         legend_title='KPIs',
-        hovermode='x unified'
+        hovermode='x unified',
+        height=500
+    )
+    
+    # Actualizar nombres de las leyendas
+    fig.for_each_trace(lambda t: t.update(name='Nuevos Expedientes' if t.name == 'nuevos_expedientes' else 
+                                         'Expedientes Cerrados' if t.name == 'expedientes_cerrados' else 
+                                         'Total Abiertos'))
+    
+    # Añadir línea vertical para la semana seleccionada
+    fig.add_vline(
+        x=num_semana_seleccionada, 
+        line_width=2, 
+        line_dash="dash", 
+        line_color="red",
+        annotation_text="Semana Seleccionada"
     )
     
     st.plotly_chart(fig, use_container_width=True)
-
-    # Opcional: Mostrar tabla con los datos de evolución
-    with st.expander("Ver datos de evolución en tabla"):
-        st.dataframe(df_evolucion, use_container_width=True)
+    
+    # Mostrar tabla con datos históricos (opcional)
+    with st.expander("📋 Ver datos históricos completos"):
+        st.dataframe(
+            df_kpis_semanales.rename(columns={
+                'semana_numero': 'Semana',
+                'semana_str': 'Fecha Fin Semana',
+                'nuevos_expedientes': 'Nuevos Expedientes',
+                'expedientes_cerrados': 'Expedientes Cerrados',
+                'total_abiertos': 'Total Abiertos'
+            }),
+            use_container_width=True
+        )
