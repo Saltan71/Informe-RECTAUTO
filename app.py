@@ -187,10 +187,9 @@ else:
 menu = ["Principal", "Indicadores clave (KPI)", "Envío de correos"]
 eleccion = st.sidebar.selectbox("Menú", menu)
 
-# Función cacheada para gráficos (SOLO LA FUNCIÓN DE CREACIÓN, NO LOS DATOS)
-@st.cache_data(ttl=CACHE_TTL)
-def crear_grafico_base(_conteo, columna, titulo):
-    """Crea el gráfico base con cache, pero usando datos actualizados"""
+# Función para gráficos dinámicos (SIN CACHE)
+def crear_grafico_dinamico(_conteo, columna, titulo):
+    """Crea gráficos dinámicos que responden a los filtros"""
     if _conteo.empty:
         return None
     
@@ -286,15 +285,15 @@ if eleccion == "Principal":
             conteo_actual = df_filtrado[col].value_counts().reset_index()
             conteo_actual.columns = [col, "Cantidad"]
             
-            # Crear gráfico con datos actualizados
-            fig = crear_grafico_base(conteo_actual, col, titulo)
+            # Crear gráfico con datos actualizados (SIN CACHE)
+            fig = crear_grafico_dinamico(conteo_actual, col, titulo)
             if fig:
                 columnas_graficos[i].plotly_chart(fig, use_container_width=True)
 
     if "NOTIFICADO" in df_filtrado.columns:
         conteo_notificado = df_filtrado["NOTIFICADO"].value_counts().reset_index()
         conteo_notificado.columns = ["NOTIFICADO", "Cantidad"]
-        fig = crear_grafico_base(conteo_notificado, "NOTIFICADO", "Expedientes notificados")
+        fig = crear_grafico_dinamico(conteo_notificado, "NOTIFICADO", "Expedientes notificados")
         if fig:
             st.plotly_chart(fig, use_container_width=True)
 
