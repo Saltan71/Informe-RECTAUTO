@@ -361,12 +361,19 @@ elif eleccion == "Indicadores clave (KPI)":
         st.error("No hay semanas disponibles para mostrar")
         st.stop()
     
-    # INICIALIZACIÓN SEGURA DEL ESTADO
+    # INICIALIZACIÓN SEGURA DEL ESTADO - ENFOQUE SIMPLIFICADO
     if 'semana_index' not in st.session_state:
         st.session_state.semana_index = len(semanas_disponibles) - 1
     
-    # GARANTIZAR QUE EL ÍNDICE ESTÉ DENTRO DE LOS LÍMITES
-    st.session_state.semana_index = max(0, min(st.session_state.semana_index, len(semanas_disponibles) - 1))
+    # GARANTIZAR QUE EL ÍNDICE ESTÉ DENTRO DE LOS LÍMITES - ENFOQUE PASO A PASO
+    max_index = len(semanas_disponibles) - 1
+    current_index = st.session_state.semana_index
+    
+    # Ajustar índice si está fuera de los límites
+    if current_index < 0:
+        st.session_state.semana_index = 0
+    elif current_index > max_index:
+        st.session_state.semana_index = max_index
     
     # Obtener la semana seleccionada actual (DESPUÉS de asegurar los límites)
     semana_seleccionada = semanas_disponibles[st.session_state.semana_index]
