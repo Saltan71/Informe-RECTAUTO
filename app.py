@@ -139,7 +139,7 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # Logo
-st.sidebar.image("Logo Atrian.png", width=260)
+st.sidebar.image("Logo Atrian.png", width=280)
 
 # Botón para limpiar cache
 with st.sidebar:
@@ -300,7 +300,7 @@ if eleccion == "Principal":
     st.subheader("📋 Vista general de expedientes")
     df_mostrar = df_filtrado.copy()
     for col in df_mostrar.select_dtypes(include='datetime').columns:
-        df_mostrar[col] = df_mostrar[col].dt.strftime("%d/%m/%y")
+        df_mostrar[col] = df_mostrar[col].dt.strftime("%d/%m/%Y")
     st.dataframe(df_mostrar, use_container_width=True)
     
     registros_mostrados = f"{len(df_mostrar):,}".replace(",", ".")
@@ -337,7 +337,7 @@ if eleccion == "Principal":
 
                     df_pdf = df_user[NOMBRES_COLUMNAS_PDF].copy()
                     for col in df_pdf.select_dtypes(include='datetime').columns:
-                        df_pdf[col] = df_pdf[col].dt.strftime("%d/%m/%y")
+                        df_pdf[col] = df_pdf[col].dt.strftime("%d/%m/%Y")
 
                     num_expedientes = len(df_pdf)
                     file_name = f"{num_semana}{usuario}.pdf"
@@ -501,7 +501,7 @@ if eleccion == "Principal":
                 
                 df_pdf = df_user[NOMBRES_COLUMNAS_PDF].copy()
                 for col in df_pdf.select_dtypes(include='datetime').columns:
-                    df_pdf[col] = df_pdf[col].dt.strftime("%d/%m/%y")
+                    df_pdf[col] = df_pdf[col].dt.strftime("%d/%m/%Y")
                 
                 num_expedientes = len(df_pdf)
                 titulo_pdf = f"{usuario} - Semana {num_semana} a {fecha_max_str} - Expedientes Pendientes ({num_expedientes})"
@@ -846,21 +846,21 @@ elif eleccion == "Indicadores clave (KPI)":
         with col1:
             st.metric(
                 label="💰 Nuevos Expedientes",
-                value=int(kpis_semana['nuevos_expedientes']),
+                value=f"{int(kpis_semana['nuevos_expedientes']):,}".replace(",", "."),
                 delta=None
             )
         
         with col2:
             st.metric(
                 label="🛒 Expedientes cerrados",
-                value=int(kpis_semana['expedientes_cerrados']),
+                value=f"{int(kpis_semana['expedientes_cerrados']):,}".replace(",", "."),
                 delta=None
             )
         
         with col3:
             st.metric(
                 label="👥 Total expedientes abiertos",
-                value=int(kpis_semana['total_abiertos']),
+                value=f"{int(kpis_semana['total_abiertos']):,}".replace(",", "."),
                 delta=None
             )
         
