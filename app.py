@@ -329,11 +329,11 @@ if eleccion == "Principal":
             with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zip_file:
                 for usuario in usuarios_pendientes:
                     df_user = df_pendientes[df_pendientes["USUARIO"] == usuario].copy()
-                    indice_columna_a_redondear = 4
+                    indice_columna_a_redondear = 5
                     nombre_columna_a_redondear = df_user.columns[indice_columna_a_redondear]
 
-                    #if nombre_columna_a_redondear in df_user.columns:
-                    #    df_user[nombre_columna_a_redondear] = pd.to_numeric(df_user[nombre_columna_a_redondear], errors='coerce').fillna(0).round(0).astype(int)
+                    if nombre_columna_a_redondear in df_user.columns:
+                        df_user[nombre_columna_a_redondear] = pd.to_numeric(df_user[nombre_columna_a_redondear], errors='coerce').fillna(0).round(0).astype(int)
 
                     df_pdf = df_user[NOMBRES_COLUMNAS_PDF].copy()
                     for col in df_pdf.select_dtypes(include='datetime').columns:
