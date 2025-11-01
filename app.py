@@ -846,21 +846,21 @@ elif eleccion == "Indicadores clave (KPI)":
         with col1:
             st.metric(
                 label="💰 Nuevos Expedientes",
-                value=f"{int(kpis_semana['nuevos_expedientes']):,}".replace(",", ".")
+                value={int(kpis_semana['nuevos_expedientes']):,}.replace(",", ".")
                 delta=None
             )
         
         with col2:
             st.metric(
                 label="🛒 Expedientes cerrados",
-                value=f"{int(kpis_semana['expedientes_cerrados']):,}".replace(",", ".")
+                value={int(kpis_semana['expedientes_cerrados']):,}.replace(",", ".")
                 delta=None
             )
         
         with col3:
             st.metric(
                 label="👥 Total expedientes abiertos",
-                value=f"{int(kpis_semana['total_abiertos']):,}".replace(",", ".")
+                value={int(kpis_semana['total_abiertos']):,}.replace(",", ".")
                 delta=None
             )
         
