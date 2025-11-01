@@ -1097,4 +1097,98 @@ elif eleccion == "Indicadores clave (KPI)":
             )
         
         with col2:
-           
+            st.metric(
+                label="✅ Expedientes Cerrados",
+                value=f"{int(kpis_semana['expedientes_cerrados']):,}".replace(",", "."),
+                delta=None
+            )
+        
+        with col3:
+            st.metric(
+                label="📂 Total Abiertos",
+                value=f"{int(kpis_semana['total_abiertos']):,}".replace(",", "."),
+                delta=None
+            )
+        
+        st.markdown("---")
+        
+        st.markdown("<h3 style='font-size: 16px;'>Detalles de la Semana</h3>", unsafe_allow_html=True)
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            periodo_inicio = (_semana_seleccionada - timedelta(days=6)).strftime('%d/%m/%Y')
+            periodo_fin = _semana_seleccionada.strftime('%d/%m/%Y')
+            st.write(f"**Período:** {periodo_inicio} a {periodo_fin}")
+        
+        with col2:
+            if kpis_semana['nuevos_expedientes'] > 0 and kpis_semana['expedientes_cerrados'] > 0:
+                ratio_cierre = kpis_semana['expedientes_cerrados'] / kpis_semana['nuevos_expedientes']
+                st.write(f"**Ratio de cierre:** {ratio_cierre:.2%}")
+
+    # Mostrar dashboard principal
+    mostrar_kpis_principales(df_kpis_semanales, semana_seleccionada, num_semana_seleccionada)
+
+    # GRÁFICO DE EVOLUCIÓN TEMPORAL (ACTUALIZADO) - CORREGIDO
+    st.markdown("---")
+    st.markdown("<h2 style='font-size: 18px;'>📈 Evolución Temporal de KPIs</h2>", unsafe_allow_html=True)
+
+    # Obtener datos desde cache
+    datos_grafico = obtener_datos_grafico_evolucion(df_kpis_semanales)
+
+    # Crear gráfico completo con datos actualizados (SIEMPRE FRESCO)
+    fig = px.line(
+        datos_grafico,
+        x='semana_numero',
+        y=['nuevos_expedientes', 'expedientes_cerrados', 'total_abiertos'],
+        title='Evolución de KPIs a lo largo del tiempo',
+        labels={
+            'semana_numero': 'Número de Semana',
+            'value': 'Cantidad de Expedientes',
+            'variable': 'Tipo de KPI'
+        },
+        color_discrete_map={
+            'nuevos_expedientes': '#1f77b4',
+            'expedientes_cerrados': '#ff7f0e', 
+            'total_abiertos': '#2ca02c'
+        }
+    )
+
+    # Personalizar el gráfico
+    fig.update_layout(
+        xaxis_title='Semana',
+        yaxis_title='Cantidad de Expedientes',
+        legend_title='KPIs',
+        hovermode='x unified',
+        height=500
+    )
+
+    # Actualizar nombres de las leyendas
+    fig.for_each_trace(lambda t: t.update(name='Nuevos Expedientes' if t.name == 'nuevos_expedientes' else 
+                                         'Expedientes Cerrados' if t.name == 'expedientes_cerrados' else 
+                                         'Total Abiertos'))
+
+    # Añadir línea vertical para la semana seleccionada (SIEMPRE ACTUALIZADA)
+    num_semana_seleccionada = ((semana_seleccionada - FECHA_REFERENCIA).days) // 7 + 1
+    fig.add_vline(
+        x=num_semana_seleccionada, 
+        line_width=2, 
+        line_dash="dash", 
+        line_color="red",
+        annotation_text="Semana Seleccionada",
+        annotation_position="top left"
+    )
+
+    st.plotly_chart(fig, use_container_width=True)
+    
+    # Mostrar tabla con datos históricos
+    with st.expander("📋 Ver datos históricos completos"):
+        st.dataframe(
+            df_kpis_semanales.rename(columns={
+                'semana_numero': 'Semana',
+                'semana_str': 'Fecha Fin Semana',
+                'nuevos_expedientes': 'Nuevos Expedientes',
+                'expedientes_cerrados': 'Expedientes Cerrados',
+                'total_abiertos': 'Total Abiertos'
+            }),
+            use_container_width=True
+        )
