@@ -787,15 +787,15 @@ elif eleccion == "Indicadores clave (KPI)":
             expedientes_cerrados = _df[
                 (_df['ESTADO'] == 'Cerrado') & 
                 (_df['FECHA ÚLTIMO TRAM.'] >= inicio_semana) & 
-                (_df['FECHA ÚLTIMO TRAM.'] <= fin_semana)
+                (_df['FECHA ÚLTIMO TRAM.'] <= semana_fin)
             ].shape[0]
         else:
             expedientes_cerrados = 0
 
         if 'FECHA CIERRE' in _df.columns and 'FECHA APERTURA' in _df.columns:
             total_abiertos = _df[
-                (_df['FECHA APERTURA'] <= fin_semana) & 
-                ((_df['FECHA CIERRE'] > fin_semana) | (_df['FECHA CIERRE'].isna()))
+                (_df['FECHA APERTURA'] <= semana_fin) & 
+                ((_df['FECHA CIERRE'] > semana_fin) | (_df['FECHA CIERRE'].isna()))
             ].shape[0]
         else:
             total_abiertos = 0
