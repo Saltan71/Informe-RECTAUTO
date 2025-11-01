@@ -57,7 +57,7 @@ def dataframe_to_pdf_bytes(df, title):
     pdf.cell(0, 5, title, 0, 1, 'C')
     pdf.ln(5)
 
-    col_widths = [35, 12, 12, 8, 14, 14, 24, 24, 14, 40, 24, 14, 26]
+    col_widths = [32, 12, 12, 12, 20, 12, 12, 20, 12, 40, 20, 8, 20]
     df_mostrar_pdf = df.iloc[:, :len(col_widths)]
     ALTURA_ENCABEZADO = 11
 
@@ -486,7 +486,7 @@ if eleccion == "Principal":
                 
                 # Procesar datos para PDF
                 indices_a_incluir = list(range(df_user.shape[1]))
-                indices_a_excluir = {1, 6, 11}
+                indices_a_excluir = {1, 4, 11}
                 indices_finales = [i for i in indices_a_incluir if i not in indices_a_excluir]
                 NOMBRES_COLUMNAS_PDF = df_user.columns[indices_finales].tolist()
                 
