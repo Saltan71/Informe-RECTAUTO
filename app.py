@@ -44,7 +44,7 @@ def cargar_y_procesar_datos(archivo):
         engine="openpyxl" if archivo.name.endswith("xlsx") else "xlrd"
     )
     df.columns = [col.upper() for col in df.columns]
-    columnas = [0, 1, 2, 3, 12, 14, 15, 16, 17, 18, 20, 21, 23, 26, 27]
+    columnas = [0, 1, 2, 3, 6, 12, 14, 15, 16, 17, 18, 20, 21, 23, 26, 27]
     df = df.iloc[:, columnas]
     return df
 
@@ -57,7 +57,7 @@ def dataframe_to_pdf_bytes(df, title):
     pdf.cell(0, 10, title, 0, 1, 'C')
     pdf.ln(5)
 
-    col_widths = [43, 14, 14, 8, 24, 14, 14, 24, 14, 40, 24, 14, 26]
+    col_widths = [35, 12, 12, 8, 20, 14, 14, 20, 12, 35, 20, 12, 20]
     df_mostrar_pdf = df.iloc[:, :len(col_widths)]
     ALTURA_ENCABEZADO = 11
 
@@ -300,7 +300,7 @@ if eleccion == "Principal":
     st.subheader("📋 Vista general de expedientes")
     df_mostrar = df_filtrado.copy()
     for col in df_mostrar.select_dtypes(include='datetime').columns:
-        df_mostrar[col] = df_mostrar[col].dt.strftime("%d/%m/%y")
+        df_mostrar[col] = df_mostrar[col].dt.strftime("%d/%m/%Y")
     st.dataframe(df_mostrar, use_container_width=True)
     
     registros_mostrados = f"{len(df_mostrar):,}".replace(",", ".")
@@ -322,7 +322,7 @@ if eleccion == "Principal":
             with st.spinner('Generando PDFs y comprimiendo...'):
                 zip_buffer = io.BytesIO()
                 indices_a_incluir = list(range(df_pendientes.shape[1]))
-                indices_a_excluir = {1, 6, 11}
+                indices_a_excluir = {1, 4, 10}
                 indices_finales = [i for i in indices_a_incluir if i not in indices_a_excluir]
                 NOMBRES_COLUMNAS_PDF = df_pendientes.columns[indices_finales].tolist()
 
@@ -337,7 +337,7 @@ if eleccion == "Principal":
 
                     df_pdf = df_user[NOMBRES_COLUMNAS_PDF].copy()
                     for col in df_pdf.select_dtypes(include='datetime').columns:
-                        df_pdf[col] = df_pdf[col].dt.strftime("%d/%m/%y")
+                        df_pdf[col] = df_pdf[col].dt.strftime("%d/%m/%Y")
 
                     num_expedientes = len(df_pdf)
                     file_name = f"{num_semana}{usuario}.pdf"
@@ -501,7 +501,7 @@ if eleccion == "Principal":
                 
                 df_pdf = df_user[NOMBRES_COLUMNAS_PDF].copy()
                 for col in df_pdf.select_dtypes(include='datetime').columns:
-                    df_pdf[col] = df_pdf[col].dt.strftime("%d/%m/%y")
+                    df_pdf[col] = df_pdf[col].dt.strftime("%d/%m/%Y")
                 
                 num_expedientes = len(df_pdf)
                 titulo_pdf = f"{usuario} - Semana {num_semana} a {fecha_max_str} - Expedientes Pendientes ({num_expedientes})"
