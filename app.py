@@ -90,7 +90,7 @@ def dataframe_to_pdf_bytes(df, title):
 
     imprimir_encabezados()
 
-    pdf.set_font("Arial", "", 7)
+    pdf.set_font("Arial", "", 6)
     for _, row in df_mostrar_pdf.iterrows():
         if pdf.get_y() + 6 > 190:
             pdf.add_page()
