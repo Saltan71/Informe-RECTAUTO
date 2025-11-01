@@ -329,7 +329,7 @@ if eleccion == "Principal":
             with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zip_file:
                 for usuario in usuarios_pendientes:
                     df_user = df_pendientes[df_pendientes["USUARIO"] == usuario].copy()
-                    indice_columna_a_redondear = 3
+                    indice_columna_a_redondear = 4
                     nombre_columna_a_redondear = df_user.columns[indice_columna_a_redondear]
 
                     if nombre_columna_a_redondear in df_user.columns:
@@ -486,7 +486,7 @@ if eleccion == "Principal":
                 
                 # Procesar datos para PDF
                 indices_a_incluir = list(range(df_user.shape[1]))
-                indices_a_excluir = {1, 3, 11}
+                indices_a_excluir = {1, 4, 10}
                 indices_finales = [i for i in indices_a_incluir if i not in indices_a_excluir]
                 NOMBRES_COLUMNAS_PDF = df_user.columns[indices_finales].tolist()
                 
