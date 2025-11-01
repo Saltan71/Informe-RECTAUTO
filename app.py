@@ -62,7 +62,7 @@ def dataframe_to_pdf_bytes(df, title):
     ALTURA_ENCABEZADO = 11
 
     def imprimir_encabezados():
-        pdf.set_font("Arial", "B", 5)
+        pdf.set_font("Arial", "", 6)
         pdf.set_fill_color(200, 220, 255)
         y_inicio = pdf.get_y()
         
@@ -486,7 +486,7 @@ if eleccion == "Principal":
                 
                 # Procesar datos para PDF
                 indices_a_incluir = list(range(df_user.shape[1]))
-                indices_a_excluir = {1, 6, 11}
+                indices_a_excluir = {1, 3, 11}
                 indices_finales = [i for i in indices_a_incluir if i not in indices_a_excluir]
                 NOMBRES_COLUMNAS_PDF = df_user.columns[indices_finales].tolist()
                 
