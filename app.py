@@ -32,7 +32,7 @@ class PDF(FPDF):
         self.cell(0, 10, f'Página {self.page_no()}', 0, 0, 'C')
 
 # Funciones optimizadas con cache
-@st.cache_data(ttl=CACHE_TTL, show_spinner="Procesando archivo Excel...")
+@st.cache_data(ttl=CACHE_TTL)
 def cargar_y_procesar_datos(archivo):
     """Carga y procesa el archivo Excel con cache de 2 horas"""
     df = pd.read_excel(
