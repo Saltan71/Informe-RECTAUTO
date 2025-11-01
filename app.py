@@ -44,7 +44,7 @@ def cargar_y_procesar_datos(archivo):
         engine="openpyxl" if archivo.name.endswith("xlsx") else "xlrd"
     )
     df.columns = [col.upper() for col in df.columns]
-    columnas = [0, 1, 2, 3, 6, 12, 14, 15, 16, 17, 18, 20, 21, 23, 26, 27]
+    columnas = [0, 1, 2, 3, 12, 14, 15, 16, 17, 18, 20, 21, 23, 26, 27]
     df = df.iloc[:, columnas]
     return df
 
