@@ -54,7 +54,7 @@ def dataframe_to_pdf_bytes(df, title):
     pdf = PDF('L', 'mm', 'A4')
     pdf.add_page()
     pdf.set_font("Arial", "", 5)
-    pdf.cell(0, 10, title, 0, 1, 'C')
+    pdf.cell(0, 5, title, 0, 1, 'C')
     pdf.ln(5)
 
     col_widths = [43, 14, 14, 8, 24, 14, 14, 24, 14, 40, 24, 14, 26]
@@ -62,7 +62,7 @@ def dataframe_to_pdf_bytes(df, title):
     ALTURA_ENCABEZADO = 11
 
     def imprimir_encabezados():
-        pdf.set_font("Arial", "B", 5)
+        pdf.set_font("Arial", "", 5)
         pdf.set_fill_color(200, 220, 255)
         y_inicio = pdf.get_y()
         
