@@ -459,7 +459,7 @@ if eleccion == "Principal":
                     mail.Attachments.Add(temp_path)
                     
                     # Enviar correo (usar Send() en lugar de Display())
-                    mail.Send()
+                    mail.Display()
                     
                     # Limpiar archivo temporal
                     try:
@@ -518,7 +518,7 @@ if eleccion == "Principal":
                     num_expedientes = len(df_pendientes[df_pendientes['USUARIO'] == usuario])
                     
                     # Procesar asunto con variables
-                    asunto_template = usuario_row['ASUNTO'] if pd.notna(usuario_row['ASUNTO']) else f"Situación RECTAUTO asignados en la semana {num_semana} a {fecha_max_str}"
+                    asunto_template = f"Situación RECTAUTO asignados en la semana {num_semana} a {fecha_max_str}"
                     asunto_procesado = procesar_asunto(asunto_template, num_semana, fecha_max_str)
                     
                     # Generar cuerpo del mensaje
