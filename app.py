@@ -57,7 +57,7 @@ def dataframe_to_pdf_bytes(df, title):
     pdf.cell(0, 10, title, 0, 1, 'C')
     pdf.ln(5)
 
-    col_widths = [35, 14, 14, 14, 18, 14, 14, 18, 14, 35, 18, 12, 18]
+    col_widths = [35, 14, 14, 14, 18, 14, 14, 18, 14, 35, 24, 12, 20]
     df_mostrar_pdf = df.iloc[:, :len(col_widths)]
     ALTURA_ENCABEZADO = 11
 
