@@ -32,7 +32,7 @@ class PDF(FPDF):
         self.cell(0, 10, f'Página {self.page_no()}', 0, 0, 'C')
 
 # Funciones optimizadas con cache
-@st.cache_data(ttl=CACHE_TTL)
+@st.cache_data(ttl=CACHE_TTL, show_spinner="Procesando archivo Excel...")
 def cargar_y_procesar_datos(archivo):
     """Carga y procesa el archivo Excel con cache de 2 horas"""
     df = pd.read_excel(
@@ -787,15 +787,15 @@ elif eleccion == "Indicadores clave (KPI)":
             expedientes_cerrados = _df[
                 (_df['ESTADO'] == 'Cerrado') & 
                 (_df['FECHA ÚLTIMO TRAM.'] >= inicio_semana) & 
-                (_df['FECHA ÚLTIMO TRAM.'] <= semana_fin)
+                (_df['FECHA ÚLTIMO TRAM.'] <= fin_semana)
             ].shape[0]
         else:
             expedientes_cerrados = 0
 
         if 'FECHA CIERRE' in _df.columns and 'FECHA APERTURA' in _df.columns:
             total_abiertos = _df[
-                (_df['FECHA APERTURA'] <= semana_fin) & 
-                ((_df['FECHA CIERRE'] > semana_fin) | (_df['FECHA CIERRE'].isna()))
+                (_df['FECHA APERTURA'] <= fin_semana) & 
+                ((_df['FECHA CIERRE'] > fin_semana) | (_df['FECHA CIERRE'].isna()))
             ].shape[0]
         else:
             total_abiertos = 0
