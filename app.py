@@ -332,8 +332,8 @@ if eleccion == "Principal":
                     indice_columna_a_redondear = 4
                     nombre_columna_a_redondear = df_user.columns[indice_columna_a_redondear]
 
-                    if nombre_columna_a_redondear in df_user.columns:
-                        df_user[nombre_columna_a_redondear] = pd.to_numeric(df_user[nombre_columna_a_redondear], errors='coerce').fillna(0).round(0).astype(int)
+                    #if nombre_columna_a_redondear in df_user.columns:
+                    #    df_user[nombre_columna_a_redondear] = pd.to_numeric(df_user[nombre_columna_a_redondear], errors='coerce').fillna(0).round(0).astype(int)
 
                     df_pdf = df_user[NOMBRES_COLUMNAS_PDF].copy()
                     for col in df_pdf.select_dtypes(include='datetime').columns:
