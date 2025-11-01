@@ -22,14 +22,14 @@ st.title("📊 Seguimiento Equipo Regional RECTAUTO")
 # Clase PDF (se mantiene igual)
 class PDF(FPDF):
     def header(self):
-        self.set_font('Arial', 'I', 5)
-        self.cell(0, 5, 'Informe de Expedientes Pendientes', 0, 1, 'C')
+        self.set_font('Arial', 'B', 8)
+        self.cell(0, 10, 'Informe de Expedientes Pendientes', 0, 1, 'C')
         self.ln(5)
 
     def footer(self):
         self.set_y(-15)
-        self.set_font('Arial', 'I', 5)
-        self.cell(0, 5, f'Página {self.page_no()}', 0, 0, 'C')
+        self.set_font('Arial', 'I', 6)
+        self.cell(0, 10, f'Página {self.page_no()}', 0, 0, 'C')
 
 # Funciones optimizadas con cache
 @st.cache_data(ttl=CACHE_TTL, show_spinner="Procesando archivo Excel...")
@@ -44,7 +44,7 @@ def cargar_y_procesar_datos(archivo):
         engine="openpyxl" if archivo.name.endswith("xlsx") else "xlrd"
     )
     df.columns = [col.upper() for col in df.columns]
-    columnas = [0, 1, 2, 3, 12, 14, 15, 16, 17, 18, 20, 21, 23, 26, 27]
+    columnas = [0, 1, 2, 3, 6, 12, 14, 15, 16, 17, 18, 20, 21, 23, 26, 27]
     df = df.iloc[:, columnas]
     return df
 
@@ -53,16 +53,16 @@ def dataframe_to_pdf_bytes(df, title):
     """Genera un PDF desde un DataFrame con cache"""
     pdf = PDF('L', 'mm', 'A4')
     pdf.add_page()
-    pdf.set_font("Arial", "", 5)
-    pdf.cell(0, 5, title, 0, 1, 'C')
+    pdf.set_font("Arial", "B", 8)
+    pdf.cell(0, 10, title, 0, 1, 'C')
     pdf.ln(5)
 
-    col_widths = [32, 12, 12, 12, 20, 12, 12, 20, 12, 40, 20, 8, 20]
+    col_widths = [43, 14, 14, 8, 24, 14, 14, 24, 14, 40, 24, 14, 26]
     df_mostrar_pdf = df.iloc[:, :len(col_widths)]
     ALTURA_ENCABEZADO = 11
 
     def imprimir_encabezados():
-        pdf.set_font("Arial", "", 5)
+        pdf.set_font("Arial", "B", 5)
         pdf.set_fill_color(200, 220, 255)
         y_inicio = pdf.get_y()
         
@@ -90,7 +90,7 @@ def dataframe_to_pdf_bytes(df, title):
 
     imprimir_encabezados()
 
-    pdf.set_font("Arial", "", 5)
+    pdf.set_font("Arial", "", 7)
     for _, row in df_mostrar_pdf.iterrows():
         if pdf.get_y() + 6 > 190:
             pdf.add_page()
@@ -139,7 +139,7 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # Logo
-st.sidebar.image("Logo Atrian.png", width=280)
+st.sidebar.image("Logo Atrian.png", width=260)
 
 # Botón para limpiar cache
 with st.sidebar:
@@ -300,7 +300,7 @@ if eleccion == "Principal":
     st.subheader("📋 Vista general de expedientes")
     df_mostrar = df_filtrado.copy()
     for col in df_mostrar.select_dtypes(include='datetime').columns:
-        df_mostrar[col] = df_mostrar[col].dt.strftime("%d/%m/%Y")
+        df_mostrar[col] = df_mostrar[col].dt.strftime("%d/%m/%y")
     st.dataframe(df_mostrar, use_container_width=True)
     
     registros_mostrados = f"{len(df_mostrar):,}".replace(",", ".")
@@ -337,7 +337,7 @@ if eleccion == "Principal":
 
                     df_pdf = df_user[NOMBRES_COLUMNAS_PDF].copy()
                     for col in df_pdf.select_dtypes(include='datetime').columns:
-                        df_pdf[col] = df_pdf[col].dt.strftime("%d/%m/%Y")
+                        df_pdf[col] = df_pdf[col].dt.strftime("%d/%m/%y")
 
                     num_expedientes = len(df_pdf)
                     file_name = f"{num_semana}{usuario}.pdf"
@@ -459,7 +459,7 @@ if eleccion == "Principal":
                     mail.Attachments.Add(temp_path)
                     
                     # Enviar correo (usar Send() en lugar de Display())
-                    mail.Display()
+                    mail.Send()
                     
                     # Limpiar archivo temporal
                     try:
@@ -486,7 +486,7 @@ if eleccion == "Principal":
                 
                 # Procesar datos para PDF
                 indices_a_incluir = list(range(df_user.shape[1]))
-                indices_a_excluir = {1, 4, 11}
+                indices_a_excluir = {1, 6, 11}
                 indices_finales = [i for i in indices_a_incluir if i not in indices_a_excluir]
                 NOMBRES_COLUMNAS_PDF = df_user.columns[indices_finales].tolist()
                 
@@ -501,7 +501,7 @@ if eleccion == "Principal":
                 
                 df_pdf = df_user[NOMBRES_COLUMNAS_PDF].copy()
                 for col in df_pdf.select_dtypes(include='datetime').columns:
-                    df_pdf[col] = df_pdf[col].dt.strftime("%d/%m/%Y")
+                    df_pdf[col] = df_pdf[col].dt.strftime("%d/%m/%y")
                 
                 num_expedientes = len(df_pdf)
                 titulo_pdf = f"{usuario} - Semana {num_semana} a {fecha_max_str} - Expedientes Pendientes ({num_expedientes})"
@@ -518,7 +518,7 @@ if eleccion == "Principal":
                     num_expedientes = len(df_pendientes[df_pendientes['USUARIO'] == usuario])
                     
                     # Procesar asunto con variables
-                    asunto_template = f"Situación RECTAUTO asignados en la semana {num_semana} a {fecha_max_str}"
+                    asunto_template = usuario_row['ASUNTO'] if pd.notna(usuario_row['ASUNTO']) else f"Situación RECTAUTO asignados en la semana {num_semana} a {fecha_max_str}"
                     asunto_procesado = procesar_asunto(asunto_template, num_semana, fecha_max_str)
                     
                     # Generar cuerpo del mensaje
@@ -787,15 +787,15 @@ elif eleccion == "Indicadores clave (KPI)":
             expedientes_cerrados = _df[
                 (_df['ESTADO'] == 'Cerrado') & 
                 (_df['FECHA ÚLTIMO TRAM.'] >= inicio_semana) & 
-                (_df['FECHA ÚLTIMO TRAM.'] <= semana_fin)
+                (_df['FECHA ÚLTIMO TRAM.'] <= fin_semana)
             ].shape[0]
         else:
             expedientes_cerrados = 0
 
         if 'FECHA CIERRE' in _df.columns and 'FECHA APERTURA' in _df.columns:
             total_abiertos = _df[
-                (_df['FECHA APERTURA'] <= semana_fin) & 
-                ((_df['FECHA CIERRE'] > semana_fin) | (_df['FECHA CIERRE'].isna()))
+                (_df['FECHA APERTURA'] <= fin_semana) & 
+                ((_df['FECHA CIERRE'] > fin_semana) | (_df['FECHA CIERRE'].isna()))
             ].shape[0]
         else:
             total_abiertos = 0
@@ -846,21 +846,21 @@ elif eleccion == "Indicadores clave (KPI)":
         with col1:
             st.metric(
                 label="💰 Nuevos Expedientes",
-                value=f"{int(kpis_semana['nuevos_expedientes']):,}".replace(",", "."),
+                value=int(kpis_semana['nuevos_expedientes']),
                 delta=None
             )
         
         with col2:
             st.metric(
                 label="🛒 Expedientes cerrados",
-                value=f"{int(kpis_semana['expedientes_cerrados']):,}".replace(",", "."),
+                value=int(kpis_semana['expedientes_cerrados']),
                 delta=None
             )
         
         with col3:
             st.metric(
                 label="👥 Total expedientes abiertos",
-                value=f"{int(kpis_semana['total_abiertos']):,}".replace(",", "."),
+                value=int(kpis_semana['total_abiertos']),
                 delta=None
             )
         
