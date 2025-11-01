@@ -22,13 +22,13 @@ st.title("📊 Seguimiento Equipo Regional RECTAUTO")
 # Clase PDF (se mantiene igual)
 class PDF(FPDF):
     def header(self):
-        self.set_font('Arial', 'B', 6)
+        self.set_font('Arial', 'B', 5)
         self.cell(0, 10, 'Informe de Expedientes Pendientes', 0, 1, 'C')
         self.ln(5)
 
     def footer(self):
         self.set_y(-15)
-        self.set_font('Arial', 'I', 6)
+        self.set_font('Arial', 'I', 5)
         self.cell(0, 10, f'Página {self.page_no()}', 0, 0, 'C')
 
 # Funciones optimizadas con cache
@@ -53,7 +53,7 @@ def dataframe_to_pdf_bytes(df, title):
     """Genera un PDF desde un DataFrame con cache"""
     pdf = PDF('L', 'mm', 'A4')
     pdf.add_page()
-    pdf.set_font("Arial", "B", 6)
+    pdf.set_font("Arial", "", 6)
     pdf.cell(0, 10, title, 0, 1, 'C')
     pdf.ln(5)
 
@@ -62,7 +62,7 @@ def dataframe_to_pdf_bytes(df, title):
     ALTURA_ENCABEZADO = 11
 
     def imprimir_encabezados():
-        pdf.set_font("Arial", "B", 6)
+        pdf.set_font("Arial", "B", 5)
         pdf.set_fill_color(200, 220, 255)
         y_inicio = pdf.get_y()
         
