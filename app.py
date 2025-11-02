@@ -91,7 +91,7 @@ def cargar_y_procesar_triaje(archivo):
             )
             
             # Mantener solo columnas relevantes
-            columnas_a_mantener = ['RUE', 'USUARIO-CSV', 'CALIFICACIÓN', 'OBSERVACIONES', 'FECHA ASIG']
+            columnas_a_mantener = ['USUARIO-CSV', 'CALIFICACIÓN', 'OBSERVACIONES', 'FECHA ASIG']
             # Normalizar también los nombres de las columnas a mantener
             columnas_a_mantener = [col.upper().strip() for col in columnas_a_mantener]
             columnas_existentes = [col for col in columnas_a_mantener if col in df.columns]
