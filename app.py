@@ -248,18 +248,19 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# CSS para cambiar solo la etiqueta del slider seleccionado
+# CSS más específico para el slider de semanas
 st.markdown("""
 <style>
-    /* Cambia solo el color del texto de la etiqueta seleccionada en el slider */
-    div[data-testid="stSelectSlider"] [data-testid="stWidgetLabel"] p {
+    /* Para la etiqueta "Selecciona la semana:" */
+    div[data-testid="stSelectSlider"] label {
         color: #007933 !important;
         font-weight: bold !important;
     }
-    
-    /* Opcional: Cambiar el color del valor seleccionado en el slider */
-    div[data-testid="stSelectSlider"] [data-baseweb="slider"] ~ div {
+        
+    /* Para el valor de la semana seleccionada que se muestra */
+    div[data-testid="stSelectSlider"] div:has(> div[role="slider"]) ~ div {
         color: #007933 !important;
+        font-weight: bold !important;
     }
 </style>
 """, unsafe_allow_html=True)
