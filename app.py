@@ -311,7 +311,7 @@ def obtener_hash_archivo(archivo):
     archivo.seek(0)
     return file_hash
 
-# CSS (se mantiene igual)
+# CSS (se actualiza para incluir estilos de botones)
 st.markdown("""
 <style>
     [data-testid="stSidebar"] {
@@ -334,6 +334,57 @@ st.markdown("""
     
     .main .stMarkdown, .main h1, .main h2, .main h3 {
         color: #333333 !important;
+    }
+    
+    /* Estilos específicos para botones en la barra lateral */
+    [data-testid="stSidebar"] button {
+        background-color: #005a25 !important;
+        color: white !important;
+        border: 1px solid white !important;
+        border-radius: 5px !important;
+        padding: 0.5rem 1rem !important;
+        font-weight: bold !important;
+    }
+    
+    [data-testid="stSidebar"] button:hover {
+        background-color: #003d1a !important;
+        color: white !important;
+        border: 1px solid white !important;
+    }
+    
+    [data-testid="stSidebar"] button:focus {
+        background-color: #003d1a !important;
+        color: white !important;
+        border: 2px solid #ffffff !important;
+        box-shadow: 0 0 0 0.2rem rgba(255, 255, 255, 0.25) !important;
+    }
+    
+    [data-testid="stSidebar"] button[kind="primary"] {
+        background-color: #00802b !important;
+        color: white !important;
+        border: 2px solid #ffffff !important;
+    }
+    
+    [data-testid="stSidebar"] button[kind="primary"]:hover {
+        background-color: #006622 !important;
+        color: white !important;
+    }
+    
+    /* Estilos para los botones de navegación de semanas en KPI */
+    [data-testid="stSidebar"] .stButton button {
+        background-color: #005a25 !important;
+        color: white !important;
+        border: 1px solid white !important;
+        border-radius: 5px !important;
+        padding: 0.5rem 1rem !important;
+        font-weight: bold !important;
+        width: 100% !important;
+    }
+    
+    [data-testid="stSidebar"] .stButton button:hover {
+        background-color: #003d1a !important;
+        color: white !important;
+        border: 1px solid white !important;
     }
 </style>
 """, unsafe_allow_html=True)
