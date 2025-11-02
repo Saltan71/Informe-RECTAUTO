@@ -52,7 +52,7 @@ def cargar_y_procesar_rectauto(archivo):
 def cargar_y_procesar_notifica(archivo):
     """Carga y procesa el archivo NOTIFICA"""
     try:
-        df = pd.read_excel(archivo, sheet_name=HOJA)
+        df = pd.read_excel(archivo, sheet_name=Sheet1)
         df.columns = [col.upper() for col in df.columns]
         
         # Ordenar por RUE Origen (ascendente) y Fecha Apertura (descendente)
@@ -62,8 +62,8 @@ def cargar_y_procesar_notifica(archivo):
         
         # Mantener solo columnas relevantes
         columnas_a_mantener = ['RUE Origen', 'Fecha Notificación']
-        #columnas_existentes = [col for col in columnas_a_mantener if col in df.columns]
-        df = df[columnas_a_mantener]
+        columnas_existentes = [col for col in columnas_a_mantener if col in df.columns]
+        df = df[columnas_existentes]
         df
         return df
     except Exception as e:
@@ -92,7 +92,7 @@ def cargar_y_procesar_triaje(archivo):
             
             # Mantener solo columnas relevantes
             columnas_a_mantener = ['RUETriaje', 'Usuario-csv', 'Calificación', 'Observaciones', 'FECHA ASIG']
-            #columnas_existentes = [col for col in columnas_a_mantener if col in df.columns]
+            columnas_existentes = [col for col in columnas_a_mantener if col in df.columns]
             df = df[columnas_a_mantener]
             df
             return df
