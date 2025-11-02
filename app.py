@@ -64,7 +64,7 @@ def cargar_y_procesar_notifica(archivo):
         columnas_a_mantener = ['RUE ORIGEN', 'FECHA NOTIFICACION']
         columnas_existentes = [col for col in columnas_a_mantener if col in df.columns]
         df = df[columnas_existentes]
-        
+        display(df)
         return df
     except Exception as e:
         st.error(f"Error procesando NOTIFICA: {e}")
@@ -110,7 +110,7 @@ def combinar_archivos(rectauto_df, notifica_df=None, triaje_df=None):
     
     # Combinar con NOTIFICA
     if notifica_df is not None and 'RUE Origen' in notifica_df.columns:
-        # Tomar solo la última notificación por RUE ORIGEN (debido al ordenamiento previo)
+        # Tomar solo la última notificación por RUE Origen (debido al ordenamiento previo)
         notifica_ultima = notifica_df.drop_duplicates(subset=['RUE Origen'], keep='first')
         df_combinado = pd.merge(
             df_combinado, 
