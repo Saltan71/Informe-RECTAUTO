@@ -547,10 +547,6 @@ if eleccion == "Principal":
     # Vista de datos
     st.subheader("📋 Vista general de expedientes")
     df_mostrar = df_filtrado.copy()
-
-    st.write(f"Número de columnas en df_mostrar: {len(df_mostrar.columns)}")
-    st.write(f"Columnas en df_mostrar: {list(df_mostrar.columns)}")
-
     for col in df_mostrar.select_dtypes(include='datetime').columns:
         df_mostrar[col] = df_mostrar[col].dt.strftime("%d/%m/%Y")
     st.dataframe(df_mostrar, use_container_width=True)
