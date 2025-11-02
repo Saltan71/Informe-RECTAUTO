@@ -161,7 +161,7 @@ def dataframe_to_pdf_bytes(df, title):
     """Versión con división manual de texto para mejor control"""
     pdf = PDF('L', 'mm', 'A4')
     pdf.add_page()
-    pdf.set_font("Arial", "B", 8)
+    pdf.set_font("Arial", "", 8)
     pdf.cell(0, 10, title, 0, 1, 'C')
     pdf.ln(5)
 
