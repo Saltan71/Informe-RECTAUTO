@@ -166,7 +166,7 @@ def dataframe_to_pdf_bytes(df, title):
     pdf.ln(5)
 
     # Anchos de columna específicos
-    col_widths = [28, 11, 11, 10, 16, 11, 11, 16, 11, 26, 22, 10, 18, 11, 10, 35, 30, 11]
+    col_widths = [28, 11, 11, 10, 16, 11, 11, 16, 11, 26, 22, 10, 18, 11, 10, 22, 20, 10]
     
     # Ajustar anchos si el número de columnas es diferente
     if len(df.columns) < len(col_widths):
@@ -175,12 +175,12 @@ def dataframe_to_pdf_bytes(df, title):
         col_widths.extend([20] * (len(df.columns) - len(col_widths)))
     
     df_mostrar_pdf = df.iloc[:, :len(col_widths)]
-    ALTURA_ENCABEZADO = 11
+    ALTURA_ENCABEZADO = 8
     ALTURA_LINEA = 3  # Altura mínima por línea
     ALTURA_BASE = 4   # Altura base para la primera línea
 
     def imprimir_encabezados():
-        pdf.set_font("Arial", "", 5)
+        pdf.set_font("Arial", "B", 5)
         pdf.set_fill_color(200, 220, 255)
         y_inicio = pdf.get_y()
         
@@ -214,7 +214,7 @@ def dataframe_to_pdf_bytes(df, title):
     pdf.set_font("Arial", "", 5)
     
     for _, row in df_mostrar_pdf.iterrows():
-        # Calcular la altura máxima necesaria para esta fila
+        # Paso 1: Calcular la altura máxima necesaria para esta fila
         max_lineas = 1
         
         for i, col_data in enumerate(row):
@@ -246,47 +246,35 @@ def dataframe_to_pdf_bytes(df, title):
             pdf.add_page()
             imprimir_encabezados()
 
-        # Imprimir la fila
+        # Paso 2: Dibujar los bordes de las celdas para toda la fila
         x_inicio = pdf.get_x()
         y_inicio = pdf.get_y()
         
-        # Primero dibujar todos los bordes
+        # Dibujar rectángulos para cada celda
         for i in range(len(row)):
             pdf.rect(x_inicio + sum(col_widths[:i]), y_inicio, col_widths[i], altura_fila)
-        
-        # Luego imprimir el contenido
+
+        # Paso 3: Imprimir el contenido de cada celda
         for i, col_data in enumerate(row):
             texto = str(col_data) if col_data is not None else ""
-            x_celda = x_inicio + sum(col_widths[:i])
-            y_celda = y_inicio + 1  # Pequeño margen interno
+            x_celda = x_inicio + sum(col_widths[:i]) + 1  # Pequeño margen izquierdo
+            y_celda = y_inicio + 1  # Pequeño margen superior
             
-            # Posicionar en la celda
+            # Establecer la posición para esta celda
             pdf.set_xy(x_celda, y_celda)
             
-            # Para cada celda, calcular cuántas líneas necesita específicamente
-            ancho_disponible = col_widths[i] - 2
-            ancho_texto = pdf.get_string_width(texto)
+            # Imprimir el contenido con multi_cell
+            pdf.multi_cell(col_widths[i] - 2, ALTURA_LINEA, texto, 0, 'L')
             
-            if ancho_texto <= ancho_disponible:
-                # Texto cabe en una línea
-                pdf.cell(col_widths[i], ALTURA_LINEA, texto, 0, 0, 'L')
-            else:
-                # Texto necesita múltiples líneas
-                lineas_esta_celda = max(1, int(ancho_texto / ancho_disponible) + 1)
-                lineas_esta_celda += texto.count('\n')
-                
-                # Altura específica para esta celda
-                altura_esta_celda = ALTURA_BASE + ((lineas_esta_celda - 1) * ALTURA_LINEA)
-                
-                # Usar multi_cell para texto que ocupa múltiples líneas
-                pdf.multi_cell(col_widths[i], ALTURA_LINEA, texto, 0, 'L')
+            # Restaurar la posición Y a la inicial de la fila para la siguiente celda
+            pdf.set_xy(x_celda + col_widths[i], y_inicio)
         
-        # Mover a la siguiente fila
+        # Paso 4: Mover el puntero a la siguiente fila
         pdf.set_xy(pdf.l_margin, y_inicio + altura_fila)
 
     pdf_output = pdf.output(dest='B')
     return pdf_output
-
+    
 def obtener_hash_archivo(archivo):
     """Genera un hash único del archivo para detectar cambios"""
     if archivo is None:
