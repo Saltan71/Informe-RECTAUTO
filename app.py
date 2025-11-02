@@ -63,7 +63,7 @@ def cargar_y_procesar_notifica(archivo):
         columnas_a_mantener = ['RUE ORIGEN', 'FECHA NOTIFICACIÓN']
         columnas_existentes = [col for col in columnas_a_mantener if col in df.columns]
         df = df[columnas_existentes]
-        df
+        
         return df
     except Exception as e:
         st.error(f"Error procesando NOTIFICA: {e}")
@@ -74,7 +74,6 @@ def cargar_y_procesar_triaje(archivo):
     """Carga y procesa el archivo TRIAJE"""
     try:
         df = pd.read_excel(archivo, sheet_name='Triaje')
-        df
         df.columns = [col.upper().strip() for col in df.columns]
         
         # Crear RUE a partir de las primeras 4 columnas
