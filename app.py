@@ -54,17 +54,16 @@ def cargar_y_procesar_notifica(archivo):
     try:
         df = pd.read_excel(archivo, sheet_name=HOJA)
         df.columns = [col.upper().strip() for col in df.columns]
-        df
         # Ordenar por RUE ORIGEN (ascendente) y FECHA APERTURA (descendente)
         if 'RUE ORIGEN' in df.columns and 'FECHA APERTURA' in df.columns:
             df['FECHA APERTURA'] = pd.to_datetime(df['FECHA APERTURA'], errors='coerce')
             df = df.sort_values(['RUE ORIGEN', 'FECHA APERTURA'], ascending=[True, False])
         
         # Mantener solo columnas relevantes
-        columnas_a_mantener = ['RUE ORIGEN', 'FECHA NOTIFICACION']
+        columnas_a_mantener = ['RUE ORIGEN', 'FECHA NOTIFICACIÓN']
         columnas_existentes = [col for col in columnas_a_mantener if col in df.columns]
         df = df[columnas_existentes]
-        
+        df
         return df
     except Exception as e:
         st.error(f"Error procesando NOTIFICA: {e}")
@@ -75,6 +74,7 @@ def cargar_y_procesar_triaje(archivo):
     """Carga y procesa el archivo TRIAJE"""
     try:
         df = pd.read_excel(archivo, sheet_name="TRIAJE")
+        df
         df.columns = [col.upper().strip() for col in df.columns]
         
         # Crear RUE a partir de las primeras 4 columnas
