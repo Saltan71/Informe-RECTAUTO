@@ -165,7 +165,7 @@ def dataframe_to_pdf_bytes(df, title):
     pdf.cell(0, 10, title, 0, 1, 'C')
     pdf.ln(5)
 
-    col_widths = [35, 14, 14, 14, 18, 14, 14, 18, 14, 35, 24, 12, 20]
+    col_widths = [33, 11, 11, 10, 18, 11, 10, 18, 11, 33, 22, 11, 18]
     # Ajustar anchos si el número de columnas es diferente
     if len(df.columns) < len(col_widths):
         col_widths = col_widths[:len(df.columns)]
