@@ -248,6 +248,22 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
+# CSS para cambiar solo la etiqueta del slider seleccionado
+st.markdown("""
+<style>
+    /* Cambia solo el color del texto de la etiqueta seleccionada en el slider */
+    div[data-testid="stSelectSlider"] [data-testid="stWidgetLabel"] p {
+        color: #007933 !important;
+        font-weight: bold !important;
+    }
+    
+    /* Opcional: Cambiar el color del valor seleccionado en el slider */
+    div[data-testid="stSelectSlider"] [data-baseweb="slider"] ~ div {
+        color: #007933 !important;
+    }
+</style>
+""", unsafe_allow_html=True)
+
 # Logo
 st.sidebar.image("Logo Atrian.png", width=260)
 
