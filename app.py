@@ -199,7 +199,7 @@ def dataframe_to_pdf_bytes(df, title):
         return lineas
 
     def imprimir_encabezados():
-        pdf.set_font("Arial", "B", 5)
+        pdf.set_font("Arial", "", 5)
         pdf.set_fill_color(200, 220, 255)
         y_inicio = pdf.get_y()
         
