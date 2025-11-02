@@ -413,7 +413,6 @@ if archivo_rectauto:
                 st.info(f"📊 Dataset final: {len(df_combinado)} registros, {len(df_combinado.columns)} columnas")
                 if df_usuarios is not None:
                     st.info(f"👥 Usuarios cargados: {len(df_usuarios)} registros")
-                    df_usuarios
                 
             except Exception as e:
                 st.error(f"❌ Error combinando archivos: {e}")
