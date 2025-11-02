@@ -43,7 +43,7 @@ def cargar_y_procesar_rectauto(archivo):
         decimal=',', 
         engine="openpyxl" if archivo.name.endswith("xlsx") else "xlrd"
     )
-    df.columns = [col.upper() for col in df.columns]
+    df.columns = [col.upper().strip() for col in df.columns]
     columnas = [0, 1, 2, 3, 6, 12, 14, 15, 16, 17, 18, 20, 21, 23, 26, 27]
     df = df.iloc[:, columnas]
     return df
@@ -53,18 +53,18 @@ def cargar_y_procesar_notifica(archivo):
     """Carga y procesa el archivo NOTIFICA"""
     try:
         df = pd.read_excel(archivo, sheet_name=HOJA)
-        df.columns = [col.upper() for col in df.columns]
+        df.columns = [col.upper().strip() for col in df.columns]
         
-        # Ordenar por RUE Origen (ascendente) y Fecha Apertura (descendente)
-        if 'RUE Origen' in df.columns and 'Fecha Apertura' in df.columns:
-            df['Fecha Apertura'] = pd.to_datetime(df['Fecha Apertura'], errors='coerce')
-            df = df.sort_values(['RUE Origen', 'Fecha Apertura'], ascending=[True, False])
+        # Ordenar por RUE ORIGEN (ascendente) y FECHA APERTURA (descendente)
+        if 'RUE ORIGEN' in df.columns and 'FECHA APERTURA' in df.columns:
+            df['FECHA APERTURA'] = pd.to_datetime(df['FECHA APERTURA'], errors='coerce')
+            df = df.sort_values(['RUE ORIGEN', 'FECHA APERTURA'], ascending=[True, False])
         
         # Mantener solo columnas relevantes
-        columnas_a_mantener = ['RUE Origen', 'Fecha Notificación']
+        columnas_a_mantener = ['RUE ORIGEN', 'FECHA NOTIFICACION']
         columnas_existentes = [col for col in columnas_a_mantener if col in df.columns]
         df = df[columnas_existentes]
-        df
+        
         return df
     except Exception as e:
         st.error(f"Error procesando NOTIFICA: {e}")
@@ -74,8 +74,8 @@ def cargar_y_procesar_notifica(archivo):
 def cargar_y_procesar_triaje(archivo):
     """Carga y procesa el archivo TRIAJE"""
     try:
-        df = pd.read_excel(archivo, sheet_name="Triaje")
-        df.columns = [col.upper() for col in df.columns]
+        df = pd.read_excel(archivo, sheet_name="TRIAJE")
+        df.columns = [col.upper().strip() for col in df.columns]
         
         # Crear RUE a partir de las primeras 4 columnas
         if df.shape[1] >= 4:
@@ -83,7 +83,7 @@ def cargar_y_procesar_triaje(archivo):
             df['RUE_TEMP'] = df.iloc[:, 3].astype(str).str.zfill(6)
             
             # Concatenar las cuatro primeras columnas
-            df['RUETriaje'] = (
+            df['RUE'] = (
                 df.iloc[:, 0].astype(str) + 
                 df.iloc[:, 1].astype(str) + 
                 df.iloc[:, 2].astype(str) + 
@@ -91,10 +91,12 @@ def cargar_y_procesar_triaje(archivo):
             )
             
             # Mantener solo columnas relevantes
-            columnas_a_mantener = ['RUETriaje', 'Usuario-csv', 'Calificación', 'Observaciones', 'FECHA ASIG']
+            columnas_a_mantener = ['RUE', 'USUARIO-CSV', 'CALIFICACIÓN', 'OBSERVACIONES', 'FECHA ASIG']
+            # Normalizar también los nombres de las columnas a mantener
+            columnas_a_mantener = [col.upper().strip() for col in columnas_a_mantener]
             columnas_existentes = [col for col in columnas_a_mantener if col in df.columns]
-            df = df[columnas_existentes]
-            df
+            df = df[['RUE'] + columnas_existentes]
+            
             return df
         else:
             st.warning("TRIAJE no tiene al menos 4 columnas")
@@ -109,16 +111,19 @@ def combinar_archivos(rectauto_df, notifica_df=None, triaje_df=None):
     df_combinado = rectauto_df.copy()
     
     # Combinar con NOTIFICA
-    if notifica_df is not None and 'RUE Origen' in notifica_df.columns:
-        # Tomar solo la última notificación por RUE Origen (debido al ordenamiento previo)
-        notifica_ultima = notifica_df.drop_duplicates(subset=['RUE Origen'], keep='first')
+    if notifica_df is not None and 'RUE ORIGEN' in notifica_df.columns:
+        # Tomar solo la última notificación por RUE ORIGEN (debido al ordenamiento previo)
+        notifica_ultima = notifica_df.drop_duplicates(subset=['RUE ORIGEN'], keep='first')
         df_combinado = pd.merge(
             df_combinado, 
             notifica_ultima, 
             left_on='RUE', 
-            right_on='RUE Origen', 
+            right_on='RUE ORIGEN', 
             how='left'
         )
+        # Eliminar la columna RUE ORIGEN ya que ya tenemos RUE
+        if 'RUE ORIGEN' in df_combinado.columns:
+            df_combinado.drop('RUE ORIGEN', axis=1, inplace=True)
         st.sidebar.info(f"✅ NOTIFICA combinado: {len(notifica_ultima)} registros")
     
     # Combinar con TRIAJE
@@ -126,8 +131,7 @@ def combinar_archivos(rectauto_df, notifica_df=None, triaje_df=None):
         df_combinado = pd.merge(
             df_combinado, 
             triaje_df, 
-            left_on='RUE', 
-            right_on='RUETriaje', 
+            on='RUE', 
             how='left'
         )
         st.sidebar.info(f"✅ TRIAJE combinado: {len(triaje_df)} registros")
@@ -409,7 +413,7 @@ with st.expander("📊 Información del Dataset Combinado"):
     st.write("**Columnas disponibles:**")
     columnas_grupos = {}
     for col in df_combinado.columns:
-        if col in ['FECHA NOTIFICACION']:
+        if col == 'FECHA NOTIFICACION':
             grupo = 'NOTIFICA'
         elif col in ['USUARIO-CSV', 'CALIFICACIÓN', 'OBSERVACIONES', 'FECHA ASIG']:
             grupo = 'TRIAJE'
