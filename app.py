@@ -91,7 +91,7 @@ def cargar_y_procesar_triaje(archivo):
             )
             
             # Mantener solo columnas relevantes
-            columnas_a_mantener = ['RUE', 'USUARIO-CSV', 'CALIFICACIÓN', 'OBSERVACIONES', 'FECHA ASIG']
+            columnas_a_mantener = ['RUE', 'Usuario-csv', 'Calificación', 'Observaciones', 'FECHA ASIG']
             columnas_existentes = [col for col in columnas_a_mantener if col in df.columns]
             df = df[['RUE'] + columnas_existentes]
             
@@ -109,14 +109,14 @@ def combinar_archivos(rectauto_df, notifica_df=None, triaje_df=None):
     df_combinado = rectauto_df.copy()
     
     # Combinar con NOTIFICA
-    if notifica_df is not None and 'RUE ORIGEN' in notifica_df.columns:
+    if notifica_df is not None and 'RUE Origen' in notifica_df.columns:
         # Tomar solo la última notificación por RUE ORIGEN (debido al ordenamiento previo)
-        notifica_ultima = notifica_df.drop_duplicates(subset=['RUE ORIGEN'], keep='first')
+        notifica_ultima = notifica_df.drop_duplicates(subset=['RUE Origen'], keep='first')
         df_combinado = pd.merge(
             df_combinado, 
             notifica_ultima, 
             left_on='RUE', 
-            right_on='RUE ORIGEN', 
+            right_on='RUE Origen', 
             how='left'
         )
         st.sidebar.info(f"✅ NOTIFICA combinado: {len(notifica_ultima)} registros")
