@@ -248,6 +248,33 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
+    # CSS específico para el slider de semanas
+    st.markdown("""
+    <style>
+    div[data-testid="stSlider"] * {
+        color: #333333 !important;
+    }
+    
+    div[data-testid="stSlider"] [role="slider"] {
+        background-color: #333333 !important;
+        border: 2px solid #333333 !important;
+    }
+    
+    div[data-testid="stSlider"] [role="slider"]:hover {
+        background-color: #2a2a2a !important;
+        border: 2px solid #2a2a2a !important;
+    }
+    
+    div[data-testid="stSlider"] > div > div > div {
+        background-color: #333333 !important;
+    }
+    
+    div[data-testid="stSlider"] [data-baseweb="slider"] ~ div {
+        color: #333333 !important;
+    }
+    </style>
+    """, unsafe_allow_html=True)
+
 # Logo
 st.sidebar.image("Logo Atrian.png", width=260)
 
