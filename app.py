@@ -176,7 +176,7 @@ def dataframe_to_pdf_bytes(df, title):
     
     df_mostrar_pdf = df.iloc[:, :len(col_widths)]
     ALTURA_ENCABEZADO = 11
-    ALTURA_LINEA = 3  # Altura mínima por línea
+    ALTURA_LINEA = 2  # Altura mínima por línea
     ALTURA_BASE = 4   # Altura base para la primera línea
 
     def imprimir_encabezados():
