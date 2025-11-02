@@ -138,6 +138,14 @@ def combinar_archivos(rectauto_df, notifica_df=None, triaje_df=None):
     return df_combinado
 
 @st.cache_data(ttl=CACHE_TTL)
+def convertir_fechas(df):
+    """Convierte columnas con 'FECHA' en el nombre a datetime"""
+    for col in df.columns:
+        if 'FECHA' in col:
+            df[col] = pd.to_datetime(df[col], errors='coerce')
+    return df
+
+@st.cache_data(ttl=CACHE_TTL)
 def dataframe_to_pdf_bytes(df, title):
     """Genera un PDF desde un DataFrame con cache"""
     pdf = PDF('L', 'mm', 'A4')
@@ -355,7 +363,8 @@ if archivo_rectauto:
                 
                 # Combinar todos los archivos
                 df_combinado = combinar_archivos(df_rectauto, df_notifica, df_triaje)
-                
+                # Convertir columnas de fecha
+                df_combinado = convertir_fechas(df_combinado)
                 # Guardar en session_state
                 st.session_state["df_combinado"] = df_combinado
                 st.session_state["archivos_hash"] = archivos_actuales
@@ -547,9 +556,13 @@ if eleccion == "Principal":
     # Vista de datos
     st.subheader("📋 Vista general de expedientes")
     df_mostrar = df_filtrado.copy()
+    # Formatear fechas
     for col in df_mostrar.select_dtypes(include='datetime').columns:
         df_mostrar[col] = df_mostrar[col].dt.strftime("%d/%m/%Y")
     st.dataframe(df_mostrar, use_container_width=True)
+    # Formatear números con separadores de miles
+    #for col in df_mostrar.select_dtypes(include=['int64', 'float64']).columns:
+    #    df_mostrar[col] = df_mostrar[col].apply(lambda x: f"{x:,.0f}".replace(",", ".") if pd.notnull(x) else x)
 
     registros_mostrados = f"{len(df_mostrar):,}".replace(",", ".")
     registros_totales = f"{len(df):,}".replace(",", ".")
