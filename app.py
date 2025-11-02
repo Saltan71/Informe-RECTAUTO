@@ -221,7 +221,7 @@ def obtener_hash_archivo(archivo):
     archivo.seek(0)
     return file_hash
 
-# CSS actualizado con estilos para el slider
+# CSS (se mantiene igual)
 st.markdown("""
 <style>
     [data-testid="stSidebar"] {
@@ -243,59 +243,6 @@ st.markdown("""
     }
     
     .main .stMarkdown, .main h1, .main h2, .main h3 {
-        color: #333333 !important;
-    }
-    
-    /* Estilos para el slider */
-    .stSelectSlider {
-        color: #333333 !important;
-    }
-    
-    .stSelectSlider div {
-        color: #333333 !important;
-    }
-    
-    .stSelectSlider label {
-        color: #333333 !important;
-    }
-    
-    /* Estilo específico para el track del slider */
-    .stSelectSlider [data-baseweb="slider"] [role="slider"] {
-        background-color: #333333 !important;
-        border-color: #333333 !important;
-    }
-    
-    .stSelectSlider [data-baseweb="slider"] [role="slider"]:hover {
-        background-color: #2a2a2a !important;
-        border-color: #2a2a2a !important;
-    }
-    
-    /* Estilo para la barra del slider */
-    .stSelectSlider [data-baseweb="slider"] > div > div {
-        background-color: #333333 !important;
-    }
-    
-    /* Estilo para las etiquetas del slider */
-    .stSelectSlider [data-baseweb="slider"] ~ div {
-        color: #333333 !important;
-    }
-    
-    /* Estilo para el texto del slider seleccionado */
-    .stSelectSlider [data-testid="stWidgetLabel"] {
-        color: #333333 !important;
-    }
-    
-    /* Estilo general para todos los sliders de Streamlit */
-    div[data-testid="stSlider"] > div > div > div {
-        background-color: #333333 !important;
-    }
-    
-    div[data-testid="stSlider"] > div > div > div > div {
-        background-color: #333333 !important;
-        border-color: #333333 !important;
-    }
-    
-    div[data-testid="stSlider"] [data-baseweb="slider"] {
         color: #333333 !important;
     }
 </style>
