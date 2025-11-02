@@ -62,8 +62,8 @@ def cargar_y_procesar_notifica(archivo):
         
         # Mantener solo columnas relevantes
         columnas_a_mantener = ['RUE Origen', 'Fecha Notificación']
-        columnas_existentes = [col for col in columnas_a_mantener if col in df.columns]
-        df = df[columnas_existentes]
+        #columnas_existentes = [col for col in columnas_a_mantener if col in df.columns]
+        df = df[columnas_a_mantener]
         df
         return df
     except Exception as e:
@@ -92,8 +92,8 @@ def cargar_y_procesar_triaje(archivo):
             
             # Mantener solo columnas relevantes
             columnas_a_mantener = ['RUETriaje', 'Usuario-csv', 'Calificación', 'Observaciones', 'FECHA ASIG']
-            columnas_existentes = [col for col in columnas_a_mantener if col in df.columns]
-            df = df[columnas_existentes]
+            #columnas_existentes = [col for col in columnas_a_mantener if col in df.columns]
+            df = df[columnas_a_mantener]
             df
             return df
         else:
