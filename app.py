@@ -52,7 +52,7 @@ def cargar_y_procesar_rectauto(archivo):
 def cargar_y_procesar_notifica(archivo):
     """Carga y procesa el archivo NOTIFICA"""
     try:
-        df = pd.read_excel(archivo, sheet_name=Sheet1)
+        df = pd.read_excel(archivo, sheet_name="Sheet1")
         df.columns = [col.upper() for col in df.columns]
         
         # Ordenar por RUE Origen (ascendente) y Fecha Apertura (descendente)
