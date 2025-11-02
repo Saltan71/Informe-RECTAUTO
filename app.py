@@ -110,7 +110,6 @@ def cargar_y_procesar_usuarios(archivo):
     try:
         df = pd.read_excel(archivo, sheet_name=HOJA)
         df.columns = [col.upper().strip() for col in df.columns]
-        df
         return df
     except Exception as e:
         st.error(f"Error procesando USUARIOS: {e}")
@@ -414,6 +413,7 @@ if archivo_rectauto:
                 st.info(f"📊 Dataset final: {len(df_combinado)} registros, {len(df_combinado.columns)} columnas")
                 if df_usuarios is not None:
                     st.info(f"👥 Usuarios cargados: {len(df_usuarios)} registros")
+                    df_usuarios
                 
             except Exception as e:
                 st.error(f"❌ Error combinando archivos: {e}")
