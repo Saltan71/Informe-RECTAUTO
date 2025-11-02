@@ -110,11 +110,11 @@ def cargar_y_procesar_usuarios(archivo):
     try:
         df = pd.read_excel(archivo, sheet_name=HOJA)
         df.columns = [col.upper().strip() for col in df.columns]
+        df
         return df
     except Exception as e:
         st.error(f"Error procesando USUARIOS: {e}")
         return None
-    df
 
 @st.cache_data(ttl=CACHE_TTL)
 def combinar_archivos(rectauto_df, notifica_df=None, triaje_df=None):
