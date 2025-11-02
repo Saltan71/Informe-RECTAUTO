@@ -23,13 +23,13 @@ st.title("📊 Seguimiento Equipo Regional RECTAUTO")
 class PDF(FPDF):
     def header(self):
         self.set_font('Arial', 'B', 8)
-        self.cell(0, 5, 'Informe de Expedientes Pendientes', 0, 1, 'C')
+        self.cell(0, 10, 'Informe de Expedientes Pendientes', 0, 1, 'C')
         self.ln(5)
 
     def footer(self):
-        self.set_y(-5)
+        self.set_y(-15)
         self.set_font('Arial', 'I', 6)
-        self.cell(0, 5, f'Página {self.page_no()}', 0, 0, 'C')
+        self.cell(0, 10, f'Página {self.page_no()}', 0, 0, 'C')
 
 # Funciones optimizadas con cache
 @st.cache_data(ttl=CACHE_TTL, show_spinner="Procesando archivo Excel...")
@@ -165,12 +165,12 @@ def dataframe_to_pdf_bytes(df, title):
     pdf.cell(0, 10, title, 0, 1, 'C')
     pdf.ln(5)
 
-    col_widths = [26, 10, 10, 8, 14, 10, 8, 14, 10, 24, 22, 8, 18, 10, 8, 26, 26, 10]
+    col_widths = [28, 11, 11, 8, 14, 11, 8, 14, 11, 24, 22, 8, 18, 11, 8, 26, 26, 11]
     df_mostrar_pdf = df.iloc[:, :len(col_widths)]
     ALTURA_ENCABEZADO = 11
 
     def imprimir_encabezados():
-        pdf.set_font("Arial", "", 4)
+        pdf.set_font("Arial", "B", 4)
         pdf.set_fill_color(200, 220, 255)
         y_inicio = pdf.get_y()
         
