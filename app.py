@@ -56,12 +56,12 @@ def cargar_y_procesar_notifica(archivo):
         df.columns = [col.upper() for col in df.columns]
         
         # Ordenar por RUE ORIGEN (ascendente) y FECHA APERTURA (descendente)
-        if 'RUE ORIGEN' in df.columns and 'FECHA APERTURA' in df.columns:
-            df['FECHA APERTURA'] = pd.to_datetime(df['FECHA APERTURA'], errors='coerce')
-            df = df.sort_values(['RUE ORIGEN', 'FECHA APERTURA'], ascending=[True, False])
+        if 'RUE Origen' in df.columns and 'Fecha Apertura' in df.columns:
+            df['Fecha Apertura'] = pd.to_datetime(df['Fecha Apertura'], errors='coerce')
+            df = df.sort_values(['RUE Origen', 'Fecha Apertura'], ascending=[True, False])
         
         # Mantener solo columnas relevantes
-        columnas_a_mantener = ['RUE ORIGEN', 'FECHA NOTIFICACION']
+        columnas_a_mantener = ['RUE Origen', 'Fecha Notificación']
         columnas_existentes = [col for col in columnas_a_mantener if col in df.columns]
         df = df[columnas_existentes]
         df
