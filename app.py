@@ -19,7 +19,7 @@ CACHE_TTL = 7200  # 2 horas en segundos
 st.set_page_config(page_title="Informe Rectauto", layout="wide")
 st.title("📊 Seguimiento Equipo Regional RECTAUTO")
 
-# Clase PDF (modificada para incluir formatos condicionales)
+# Clase PDF (mejorada para el formato condicional)
 class PDF(FPDF):
     def header(self):
         self.set_font('Arial', 'B', 8)
@@ -30,36 +30,44 @@ class PDF(FPDF):
         self.set_y(-15)
         self.set_font('Arial', 'I', 6)
         self.cell(0, 10, f'Página {self.page_no()}', 0, 0, 'C')
-
-    def aplicar_formato_condicional_celda(self, df, idx, col_name, valor, col_width, altura_linea, x, y):
-        """Aplica formato condicional a celdas específicas"""
+    
+    def aplicar_formato_condicional_pdf(self, df_original, idx, col_name, col_data, col_width, altura_fila, x, y):
+        """Aplica formato condicional a celdas específicas en el PDF usando el DataFrame original"""
         try:
-            # Condición 1: USUARIO vs USUARIO-CSV
-            if col_name == 'USUARIO-CSV' and 'USUARIO' in df.columns:
-                usuario_principal = df.iloc[idx]['USUARIO'] if 'USUARIO' in df.columns else ''
-                if str(usuario_principal) != str(valor):
-                    # Fondo rojo cuando USUARIO es distinto de USUARIO-CSV
-                    self.set_fill_color(255, 0, 0)
-                    self.rect(x, y, col_width, altura_linea, 'F')
-                    self.set_fill_color(255, 255, 255)  # Restaurar color
-            
-            # Condición 2: RUE con condición específica
-            elif col_name == 'RUE':
-                etiq_penultimo = df.iloc[idx]['ETIQ. PENÚLTIMO TRAM.'] if 'ETIQ. PENÚLTIMO TRAM.' in df.columns else ''
-                fecha_notif = df.iloc[idx]['FECHA NOTIFICACIÓN'] if 'FECHA NOTIFICACIÓN' in df.columns else None
+            # Obtener la fila correspondiente del DataFrame original
+            if idx < len(df_original):
+                fila_original = df_original.iloc[idx]
                 
-                if str(etiq_penultimo) == "80 PROPRES" and pd.notna(fecha_notif):
-                    try:
-                        fecha_limite = fecha_notif + timedelta(days=23)
-                        if datetime.now() > fecha_limite:
-                            # Fondo amarillo cuando se cumple la condición
-                            self.set_fill_color(255, 255, 0)
-                            self.rect(x, y, col_width, altura_linea, 'F')
-                            self.set_fill_color(255, 255, 255)  # Restaurar color
-                    except (TypeError, ValueError):
-                        pass  # Ignorar errores de fecha
-        except Exception:
-            pass  # Ignorar errores en el formato condicional
+                # Condición 1: USUARIO vs USUARIO-CSV
+                if col_name == 'USUARIO-CSV' and 'USUARIO' in df_original.columns:
+                    usuario_principal = fila_original['USUARIO'] if 'USUARIO' in df_original.columns else ''
+                    usuario_csv = fila_original['USUARIO-CSV'] if 'USUARIO-CSV' in df_original.columns else ''
+                    
+                    if str(usuario_principal) != str(usuario_csv):
+                        # Fondo rojo cuando USUARIO es distinto de USUARIO-CSV
+                        self.set_fill_color(255, 0, 0)
+                        self.rect(x, y, col_width, altura_fila, 'F')
+                        self.set_fill_color(255, 255, 255)  # Restaurar color
+                
+                # Condición 2: RUE con condición específica
+                elif col_name == 'RUE':
+                    etiq_penultimo = fila_original['ETIQ. PENÚLTIMO TRAM.'] if 'ETIQ. PENÚLTIMO TRAM.' in df_original.columns else ''
+                    fecha_notif = fila_original['FECHA NOTIFICACIÓN'] if 'FECHA NOTIFICACIÓN' in df_original.columns else None
+                    
+                    if str(etiq_penultimo) == "80 PROPRES" and pd.notna(fecha_notif):
+                        try:
+                            # Asegurarse de que la fecha es un objeto datetime
+                            if isinstance(fecha_notif, (pd.Timestamp, datetime)):
+                                fecha_limite = fecha_notif + timedelta(days=23)
+                                if datetime.now() > fecha_limite:
+                                    # Fondo amarillo cuando se cumple la condición
+                                    self.set_fill_color(255, 255, 0)
+                                    self.rect(x, y, col_width, altura_fila, 'F')
+                                    self.set_fill_color(255, 255, 255)  # Restaurar color
+                        except (TypeError, ValueError) as e:
+                            print(f"Error en condición de fecha: {e}")
+        except Exception as e:
+            print(f"Error en formato condicional PDF: {e}")
 
 # Funciones optimizadas con cache
 @st.cache_data(ttl=CACHE_TTL, show_spinner="Procesando archivo Excel...")
@@ -187,7 +195,7 @@ def convertir_fechas(df):
     return df
 
 @st.cache_data(ttl=CACHE_TTL)
-def dataframe_to_pdf_bytes(df, title):
+def dataframe_to_pdf_bytes(df, title, df_original=None):
     """Genera un PDF desde un DataFrame con cache y altura de filas autoajustable"""
     pdf = PDF('L', 'mm', 'A4')
     pdf.add_page()
@@ -288,7 +296,10 @@ def dataframe_to_pdf_bytes(df, title):
             
             # Aplicar formato condicional antes de imprimir
             col_name = df_mostrar_pdf.columns[i]
-            pdf.aplicar_formato_condicional_celda(df_mostrar_pdf, idx, col_name, col_data, col_widths[i], altura_fila, x_celda, y_celda)
+            
+            # Usar df_original si está disponible, de lo contrario usar df_mostrar_pdf
+            df_para_formato = df_original if df_original is not None else df_mostrar_pdf
+            pdf.aplicar_formato_condicional_pdf(df_para_formato, idx, col_name, col_data, col_widths[i], altura_fila, x_celda, y_celda)
             
             # Posicionar en la celda actual
             pdf.set_xy(x_celda, y_celda)
@@ -490,6 +501,42 @@ with st.sidebar:
                 del st.session_state[key]
         st.success("Cache limpiada correctamente")
         st.rerun()
+
+
+# Función para generar PDF de usuario (modificada para pasar el DataFrame original)
+def generar_pdf_usuario(usuario, df_pendientes, num_semana, fecha_max_str):
+    """Genera el PDF para un usuario específico"""
+    df_user = df_pendientes[df_pendientes["USUARIO"] == usuario].copy()
+    
+    if df_user.empty:
+        return None
+    
+    # Procesar datos para PDF
+    indices_a_incluir = list(range(df_user.shape[1]))
+    indices_a_excluir = {1, 4, 10}
+    indices_finales = [i for i in indices_a_incluir if i not in indices_a_excluir]
+    NOMBRES_COLUMNAS_PDF = df_user.columns[indices_finales].tolist()
+
+    # Redondear columna numérica si existe
+    indice_columna_a_redondear = 5
+    if indice_columna_a_redondear < len(df_user.columns):
+        nombre_columna_a_redondear = df_user.columns[indice_columna_a_redondear]
+        if nombre_columna_a_redondear in df_user.columns:
+            df_user[nombre_columna_a_redondear] = pd.to_numeric(df_user[nombre_columna_a_redondear], errors='coerce').fillna(0).round(0).astype(int)
+
+    df_pdf = df_user[NOMBRES_COLUMNAS_PDF].copy()
+    # Mantener las fechas como datetime para el formato condicional
+    # Solo convertimos a string para mostrar
+    df_pdf_mostrar = df_pdf.copy()
+    for col in df_pdf_mostrar.select_dtypes(include='datetime').columns:
+        df_pdf_mostrar[col] = df_pdf_mostrar[col].dt.strftime("%d/%m/%Y")
+
+    num_expedientes = len(df_pdf)
+    titulo_pdf = f"{usuario} - Semana {num_semana} a {fecha_max_str} - Expedientes Pendientes ({num_expedientes})"
+    
+    # Pasar tanto el DataFrame para mostrar como el original para el formato condicional
+    return dataframe_to_pdf_bytes(df_pdf_mostrar, titulo_pdf, df_original=df_user)
+    
 
 # NUEVA SECCIÓN: CARGA DE CUATRO ARCHIVOS (incluyendo USUARIOS)
 st.markdown("---")
