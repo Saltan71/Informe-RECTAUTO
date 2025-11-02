@@ -177,7 +177,7 @@ def dataframe_to_pdf_bytes(df, title):
     ALTURA_BASE_FILA = 6  # Altura base para una fila con una línea
 
     def imprimir_encabezados():
-        pdf.set_font("Arial", "", 6)
+        pdf.set_font("Arial", "", 5)
         pdf.set_fill_color(200, 220, 255)
         y_inicio = pdf.get_y()
         
@@ -205,7 +205,7 @@ def dataframe_to_pdf_bytes(df, title):
 
     imprimir_encabezados()
 
-    pdf.set_font("Arial", "", 6)
+    pdf.set_font("Arial", "", 5)
     
     for _, row in df_mostrar_pdf.iterrows():
         # Calcular la altura máxima necesaria para esta fila
