@@ -83,7 +83,7 @@ def cargar_y_procesar_triaje(archivo):
             df['RUE_TEMP'] = df.iloc[:, 3].astype(str).str.zfill(6)
             
             # Concatenar las cuatro primeras columnas
-            df['RUE'] = (
+            df['RUETriaje'] = (
                 df.iloc[:, 0].astype(str) + 
                 df.iloc[:, 1].astype(str) + 
                 df.iloc[:, 2].astype(str) + 
@@ -91,9 +91,9 @@ def cargar_y_procesar_triaje(archivo):
             )
             
             # Mantener solo columnas relevantes
-            columnas_a_mantener = ['RUE', 'Usuario-csv', 'Calificación', 'Observaciones', 'FECHA ASIG']
+            columnas_a_mantener = ['RUETriaje', 'Usuario-csv', 'Calificación', 'Observaciones', 'FECHA ASIG']
             columnas_existentes = [col for col in columnas_a_mantener if col in df.columns]
-            df = df[['RUE'] + columnas_existentes]
+            df = df[['RUETriaje'] + columnas_existentes]
             df
             return df
         else:
@@ -126,7 +126,8 @@ def combinar_archivos(rectauto_df, notifica_df=None, triaje_df=None):
         df_combinado = pd.merge(
             df_combinado, 
             triaje_df, 
-            on='RUE', 
+            left_on='RUE', 
+            right_on='RUETriaje', 
             how='left'
         )
         st.sidebar.info(f"✅ TRIAJE combinado: {len(triaje_df)} registros")
