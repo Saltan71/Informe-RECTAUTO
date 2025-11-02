@@ -311,11 +311,11 @@ def obtener_hash_archivo(archivo):
     archivo.seek(0)
     return file_hash
 
-# CSS (se actualiza para incluir estilos de botones)
+# CSS ACTUALIZADO CON ESTILOS PARA BOTONES Y MENÚS DESPLEGABLES
 st.markdown("""
 <style>
     [data-testid="stSidebar"] {
-    background-color: #007933 !important;
+        background-color: #007933 !important;
     }
     
     .main .block-container {
@@ -336,7 +336,7 @@ st.markdown("""
         color: #333333 !important;
     }
     
-    /* Estilos específicos para botones en la barra lateral */
+    /* ESTILOS ESPECÍFICOS PARA BOTONES EN LA BARRA LATERAL */
     [data-testid="stSidebar"] button {
         background-color: #005a25 !important;
         color: white !important;
@@ -385,6 +385,92 @@ st.markdown("""
         background-color: #003d1a !important;
         color: white !important;
         border: 1px solid white !important;
+    }
+    
+    /* ESTILOS PARA MENÚS DESPLEGABLES EN BARRA LATERAL */
+    [data-testid="stSidebar"] .stSelectbox > div > div {
+        background-color: #009945 !important;
+        color: white !important;
+        border: 1px solid white !important;
+        border-radius: 5px !important;
+    }
+    
+    [data-testid="stSidebar"] .stSelectbox > div > div:hover {
+        background-color: #007933 !important;
+        color: white !important;
+        border: 1px solid white !important;
+    }
+    
+    [data-testid="stSidebar"] .stSelectbox input {
+        color: white !important;
+    }
+    
+    [data-testid="stSidebar"] .stMultiSelect > div > div {
+        background-color: #009945 !important;
+        color: white !important;
+        border: 1px solid white !important;
+        border-radius: 5px !important;
+    }
+    
+    [data-testid="stSidebar"] .stMultiSelect > div > div:hover {
+        background-color: #007933 !important;
+        color: white !important;
+        border: 1px solid white !important;
+    }
+    
+    [data-testid="stSidebar"] .stMultiSelect input {
+        color: white !important;
+    }
+    
+    /* Estilos para las opciones del menú desplegable */
+    [data-testid="stSidebar"] .stSelectbox [data-testid="stMarkdownContainer"] p,
+    [data-testid="stSidebar"] .stMultiSelect [data-testid="stMarkdownContainer"] p {
+        color: white !important;
+    }
+    
+    /* Estilos para las opciones seleccionadas en multiselect */
+    [data-testid="stSidebar"] .stMultiSelect [data-baseweb="tag"] {
+        background-color: #005a25 !important;
+        color: white !important;
+        border: 1px solid white !important;
+        border-radius: 12px !important;
+    }
+    
+    [data-testid="stSidebar"] .stMultiSelect [data-baseweb="tag"]:hover {
+        background-color: #003d1a !important;
+        color: white !important;
+    }
+    
+    /* Estilos para el menú desplegable abierto */
+    [data-testid="stSidebar"] div[data-baseweb="popover"] {
+        background-color: #009945 !important;
+        border: 1px solid white !important;
+        border-radius: 5px !important;
+    }
+    
+    [data-testid="stSidebar"] div[data-baseweb="menu"] {
+        background-color: #009945 !important;
+        color: white !important;
+    }
+    
+    [data-testid="stSidebar"] div[data-baseweb="menu"] li {
+        background-color: #009945 !important;
+        color: white !important;
+    }
+    
+    [data-testid="stSidebar"] div[data-baseweb="menu"] li:hover {
+        background-color: #007933 !important;
+        color: white !important;
+    }
+    
+    [data-testid="stSidebar"] div[data-baseweb="menu"] li:focus {
+        background-color: #005a25 !important;
+        color: white !important;
+    }
+    
+    /* Estilos para el texto dentro de los menús desplegables */
+    [data-testid="stSidebar"] div[data-baseweb="popover"] * {
+        color: white !important;
     }
 </style>
 """, unsafe_allow_html=True)
