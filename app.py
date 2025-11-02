@@ -19,7 +19,7 @@ CACHE_TTL = 7200  # 2 horas en segundos
 st.set_page_config(page_title="Informe Rectauto", layout="wide")
 st.title("📊 Seguimiento Equipo Regional RECTAUTO")
 
-# Clase PDF (completamente revisada para formato condicional)
+# Clase PDF (mejorada con ordenamiento)
 class PDF(FPDF):
     def header(self):
         self.set_font('Arial', 'B', 8)
@@ -286,7 +286,7 @@ def dataframe_to_pdf_bytes(df_mostrar, title, df_original):
             x_celda = x_inicio + sum(col_widths[:i])
             y_celda = y_inicio
             
-            # APLICAR FORMATO CONDICIONAL (esto es clave)
+            # APLICAR FORMATO CONDICIONAL
             pdf.aplicar_formato_condicional_pdf(df_original, idx, col_name, col_widths[i], altura_fila, x_celda, y_celda)
             
             # Posicionar y escribir el texto
@@ -663,6 +663,53 @@ else:
     st.info("💡 **Archivos opcionales:** NOTIFICA, TRIAJE y USUARIOS enriquecerán el análisis")
     st.stop()
 
+# Función para identificar filas prioritarias (RUE amarillo)
+def identificar_filas_prioritarias(df):
+    """Identifica filas que deben aparecer primero (RUE amarillo)"""
+    try:
+        # Crear una columna temporal para ordenar
+        df_priorizado = df.copy()
+        
+        # Identificar filas que cumplen la condición de RUE amarillo
+        def es_rue_amarillo(fila):
+            try:
+                etiq_penultimo = fila.get('ETIQ. PENÚLTIMO TRAM.', '')
+                fecha_notif = fila.get('FECHA NOTIFICACIÓN', None)
+                
+                if (str(etiq_penultimo).strip() == "80 PROPRES" and 
+                    pd.notna(fecha_notif) and 
+                    isinstance(fecha_notif, (pd.Timestamp, datetime))):
+                    
+                    fecha_limite = fecha_notif + timedelta(days=23)
+                    return datetime.now() > fecha_limite
+            except:
+                pass
+            return False
+        
+        # Aplicar prioridad
+        df_priorizado['_prioridad'] = df_priorizado.apply(es_rue_amarillo, axis=1).astype(int)
+        
+        return df_priorizado
+    
+    except Exception as e:
+        st.error(f"Error al identificar filas prioritarias: {e}")
+        return df
+
+# Función para ordenar DataFrame (RUE amarillos primero)
+def ordenar_dataframe_por_prioridad(df):
+    """Ordena el DataFrame para que los RUE amarillos aparezcan primero"""
+    try:
+        df_priorizado = identificar_filas_prioritarias(df)
+        # Ordenar por prioridad (True primero, luego False)
+        df_ordenado = df_priorizado.sort_values('_prioridad', ascending=False)
+        df_ordenado = df_ordenado.drop('_prioridad', axis=1)
+        
+        return df_ordenado
+    
+    except Exception as e:
+        st.error(f"Error al ordenar DataFrame: {e}")
+        return df
+
 # Función para aplicar formato condicional al DataFrame mostrado
 def aplicar_formato_condicional_dataframe(df):
     """Aplica formato condicional al DataFrame para Streamlit"""
@@ -756,7 +803,7 @@ def crear_grafico_dinamico(_conteo, columna, titulo):
     fig.update_traces(texttemplate='%{text:,}', textposition="auto")
     return fig
 
-# Función para generar PDF de usuario (REVISADA)
+# Función para generar PDF de usuario (MEJORADA con ordenamiento)
 def generar_pdf_usuario(usuario, df_pendientes, num_semana, fecha_max_str):
     """Genera el PDF para un usuario específico"""
     df_user = df_pendientes[df_pendientes["USUARIO"] == usuario].copy()
@@ -764,30 +811,33 @@ def generar_pdf_usuario(usuario, df_pendientes, num_semana, fecha_max_str):
     if df_user.empty:
         return None
     
+    # ORDENAR el DataFrame: RUE amarillos primero
+    df_user_ordenado = ordenar_dataframe_por_prioridad(df_user)
+    
     # Procesar datos para PDF - mantener las columnas originales para el formato condicional
-    indices_a_incluir = list(range(df_user.shape[1]))
+    indices_a_incluir = list(range(df_user_ordenado.shape[1]))
     indices_a_excluir = {1, 4, 10}
     indices_finales = [i for i in indices_a_incluir if i not in indices_a_excluir]
-    NOMBRES_COLUMNAS_PDF = df_user.columns[indices_finales].tolist()
+    NOMBRES_COLUMNAS_PDF = df_user_ordenado.columns[indices_finales].tolist()
 
     # Redondear columna numérica si existe
     indice_columna_a_redondear = 5
-    if indice_columna_a_redondear < len(df_user.columns):
-        nombre_columna_a_redondear = df_user.columns[indice_columna_a_redondear]
-        if nombre_columna_a_redondear in df_user.columns:
-            df_user[nombre_columna_a_redondear] = pd.to_numeric(df_user[nombre_columna_a_redondear], errors='coerce').fillna(0).round(0).astype(int)
+    if indice_columna_a_redondear < len(df_user_ordenado.columns):
+        nombre_columna_a_redondear = df_user_ordenado.columns[indice_columna_a_redondear]
+        if nombre_columna_a_redondear in df_user_ordenado.columns:
+            df_user_ordenado[nombre_columna_a_redondear] = pd.to_numeric(df_user_ordenado[nombre_columna_a_redondear], errors='coerce').fillna(0).round(0).astype(int)
 
     # Crear DataFrame para mostrar (con fechas formateadas)
-    df_pdf_mostrar = df_user[NOMBRES_COLUMNAS_PDF].copy()
+    df_pdf_mostrar = df_user_ordenado[NOMBRES_COLUMNAS_PDF].copy()
     for col in df_pdf_mostrar.select_dtypes(include='datetime').columns:
         df_pdf_mostrar[col] = df_pdf_mostrar[col].dt.strftime("%d/%m/%Y")
 
     num_expedientes = len(df_pdf_mostrar)
     titulo_pdf = f"{usuario} - Semana {num_semana} a {fecha_max_str} - Expedientes Pendientes ({num_expedientes})"
     
-    # Pasar el DataFrame ORIGINAL (con fechas datetime) para el formato condicional
+    # Pasar el DataFrame ORIGINAL ORDENADO (con fechas datetime) para el formato condicional
     # y el DataFrame para mostrar (con fechas formateadas) para la visualización
-    return dataframe_to_pdf_bytes(df_pdf_mostrar, titulo_pdf, df_original=df_user)
+    return dataframe_to_pdf_bytes(df_pdf_mostrar, titulo_pdf, df_original=df_user_ordenado)
 
 if eleccion == "Principal":
     # Usar df_combinado en lugar de df
@@ -866,6 +916,50 @@ if eleccion == "Principal":
     if usuario_sel:
         st.sidebar.write(f"Usuarios: {len(usuario_sel)} seleccionados")
 
+    # NUEVO: Opciones de ordenamiento y auto-filtros
+    st.sidebar.markdown("---")
+    st.sidebar.subheader("Opciones de Visualización")
+    
+    # Checkbox para ordenar por prioridad
+    ordenar_prioridad = st.sidebar.checkbox("Ordenar por prioridad (RUE amarillo primero)", value=True)
+    
+    # Auto-filtros para mostrar solo filas con formato condicional
+    st.sidebar.markdown("**Auto-filtros:**")
+    mostrar_solo_amarillos = st.sidebar.checkbox("Solo RUE prioritarios", value=False)
+    mostrar_solo_rojos = st.sidebar.checkbox("Solo USUARIO-CSV discrepantes", value=False)
+
+    # Aplicar ordenamiento si está activado
+    if ordenar_prioridad:
+        df_filtrado = ordenar_dataframe_por_prioridad(df_filtrado)
+
+    # Aplicar auto-filtros
+    if mostrar_solo_amarillos or mostrar_solo_rojos:
+        df_filtrado_temp = df_filtrado.copy()
+        
+        if mostrar_solo_amarillos:
+            # Filtrar solo RUE amarillos
+            mask_amarillo = pd.Series(False, index=df_filtrado_temp.index)
+            for idx, row in df_filtrado_temp.iterrows():
+                try:
+                    if (str(row.get('ETIQ. PENÚLTIMO TRAM.', '')) == "80 PROPRES" and 
+                        pd.notna(row.get('FECHA NOTIFICACIÓN', None))):
+                        if isinstance(row['FECHA NOTIFICACIÓN'], (pd.Timestamp, datetime)):
+                            fecha_limite = row['FECHA NOTIFICACIÓN'] + timedelta(days=23)
+                            if datetime.now() > fecha_limite:
+                                mask_amarillo[idx] = True
+                except:
+                    pass
+            
+            df_filtrado_temp = df_filtrado_temp[mask_amarillo]
+        
+        if mostrar_solo_rojos:
+            # Filtrar solo USUARIO-CSV rojos
+            if 'USUARIO' in df_filtrado_temp.columns and 'USUARIO-CSV' in df_filtrado_temp.columns:
+                mask_rojo = df_filtrado_temp['USUARIO'] != df_filtrado_temp['USUARIO-CSV']
+                df_filtrado_temp = df_filtrado_temp[mask_rojo]
+        
+        df_filtrado = df_filtrado_temp
+
     # Gráficos Generales - CORREGIDOS: datos siempre frescos según filtros
     st.subheader("📈 Gráficos Generales")
     columnas_graficos = st.columns(3)
@@ -915,6 +1009,23 @@ if eleccion == "Principal":
         for col in df_mostrar.select_dtypes(include='datetime').columns:
             df_mostrar[col] = df_mostrar[col].dt.strftime("%d/%m/%Y")
         st.dataframe(df_mostrar, use_container_width=True)
+
+    # Mostrar estadísticas de los filtros aplicados
+    st.sidebar.markdown("---")
+    st.sidebar.subheader("Estadísticas")
+    
+    # Contar filas prioritarias
+    df_priorizado = identificar_filas_prioritarias(df_filtrado)
+    filas_amarillas = df_priorizado['_prioridad'].sum()
+    filas_totales = len(df_filtrado)
+    
+    st.sidebar.write(f"Total filas: {filas_totales}")
+    st.sidebar.write(f"RUE prioritarios: {filas_amarillas}")
+    
+    # Contar USUARIO-CSV rojos
+    if 'USUARIO' in df_filtrado.columns and 'USUARIO-CSV' in df_filtrado.columns:
+        filas_rojas = (df_filtrado['USUARIO'] != df_filtrado['USUARIO-CSV']).sum()
+        st.sidebar.write(f"USUARIO-CSV discrepantes: {filas_rojas}")
 
     registros_mostrados = f"{len(df_mostrar):,}".replace(",", ".")
     registros_totales = f"{len(df):,}".replace(",", ".")
@@ -1220,7 +1331,7 @@ if eleccion == "Principal":
         """)
 
 elif eleccion == "Indicadores clave (KPI)":
-    # ... (el código de la sección KPI se mantiene igual, ya que no usa el formato condicional)
+    # ... (el código de la sección KPI se mantiene igual)
     # Usar df_combinado en lugar de df
     df = df_combinado
     
