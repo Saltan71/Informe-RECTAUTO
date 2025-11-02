@@ -165,12 +165,12 @@ def dataframe_to_pdf_bytes(df, title):
     pdf.cell(0, 10, title, 0, 1, 'C')
     pdf.ln(5)
 
-    col_widths = [30, 12, 12, 12, 16, 12, 12, 16, 12, 30, 22, 10, 18, 12, 10, 30, 30, 12]
+    col_widths = [26, 10, 10, 8, 14, 10, 8, 14, 10, 24, 22, 8, 18, 10, 8, 26, 26, 10]
     df_mostrar_pdf = df.iloc[:, :len(col_widths)]
     ALTURA_ENCABEZADO = 11
 
     def imprimir_encabezados():
-        pdf.set_font("Arial", "", 5)
+        pdf.set_font("Arial", "", 4)
         pdf.set_fill_color(200, 220, 255)
         y_inicio = pdf.get_y()
         
