@@ -165,7 +165,7 @@ def dataframe_to_pdf_bytes(df, title):
     pdf.cell(0, 10, title, 0, 1, 'C')
     pdf.ln(5)
 
-    col_widths = [28, 11, 11, 10, 18, 10, 11, 18, 13, 22, 22, 10, 18, 13, 10, 24, 20, 13]
+    col_widths = [28, 11, 11, 10, 18, 11, 11, 18, 13, 22, 22, 10, 18, 13, 10, 24, 20, 13]
     # Ajustar anchos si el número de columnas es diferente
     if len(df.columns) < len(col_widths):
         col_widths = col_widths[:len(df.columns)]
@@ -174,7 +174,7 @@ def dataframe_to_pdf_bytes(df, title):
     
     df_mostrar_pdf = df.iloc[:, :len(col_widths)]
     ALTURA_ENCABEZADO = 11
-    ALTURA_LINEA = 3  # Altura mínima por línea de texto
+    ALTURA_LINEA = 2  # Altura mínima por línea de texto
     ALTURA_BASE_FILA = 5  # Altura base para una fila con una línea
 
     def imprimir_encabezados():
