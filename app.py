@@ -33,8 +33,8 @@ class PDF(FPDF):
 
 # Funciones optimizadas con cache
 @st.cache_data(ttl=CACHE_TTL, show_spinner="Procesando archivo Excel...")
-def cargar_y_procesar_datos(archivo):
-    """Carga y procesa el archivo Excel con cache de 2 horas"""
+def cargar_y_procesar_rectauto(archivo):
+    """Carga y procesa el archivo RECTAUTO con cache de 2 horas"""
     df = pd.read_excel(
         archivo, 
         sheet_name=HOJA, 
@@ -47,6 +47,91 @@ def cargar_y_procesar_datos(archivo):
     columnas = [0, 1, 2, 3, 6, 12, 14, 15, 16, 17, 18, 20, 21, 23, 26, 27]
     df = df.iloc[:, columnas]
     return df
+
+@st.cache_data(ttl=CACHE_TTL)
+def cargar_y_procesar_notifica(archivo):
+    """Carga y procesa el archivo NOTIFICA"""
+    try:
+        df = pd.read_excel(archivo, sheet_name=HOJA)
+        df.columns = [col.upper() for col in df.columns]
+        
+        # Ordenar por RUE ORIGEN (ascendente) y FECHA APERTURA (descendente)
+        if 'RUE ORIGEN' in df.columns and 'FECHA APERTURA' in df.columns:
+            df['FECHA APERTURA'] = pd.to_datetime(df['FECHA APERTURA'], errors='coerce')
+            df = df.sort_values(['RUE ORIGEN', 'FECHA APERTURA'], ascending=[True, False])
+        
+        # Mantener solo columnas relevantes
+        columnas_a_mantener = ['RUE ORIGEN', 'FECHA NOTIFICACION']
+        columnas_existentes = [col for col in columnas_a_mantener if col in df.columns]
+        df = df[columnas_existentes]
+        
+        return df
+    except Exception as e:
+        st.error(f"Error procesando NOTIFICA: {e}")
+        return None
+
+@st.cache_data(ttl=CACHE_TTL)
+def cargar_y_procesar_triaje(archivo):
+    """Carga y procesa el archivo TRIAJE"""
+    try:
+        df = pd.read_excel(archivo, sheet_name="TRIAJE")
+        df.columns = [col.upper() for col in df.columns]
+        
+        # Crear RUE a partir de las primeras 4 columnas
+        if df.shape[1] >= 4:
+            # Formatear la cuarta columna a 6 dígitos
+            df['RUE_TEMP'] = df.iloc[:, 3].astype(str).str.zfill(6)
+            
+            # Concatenar las cuatro primeras columnas
+            df['RUE'] = (
+                df.iloc[:, 0].astype(str) + 
+                df.iloc[:, 1].astype(str) + 
+                df.iloc[:, 2].astype(str) + 
+                df['RUE_TEMP']
+            )
+            
+            # Mantener solo columnas relevantes
+            columnas_a_mantener = ['RUE', 'USUARIO-CSV', 'CALIFICACIÓN', 'OBSERVACIONES', 'FECHA ASIG']
+            columnas_existentes = [col for col in columnas_a_mantener if col in df.columns]
+            df = df[['RUE'] + columnas_existentes]
+            
+            return df
+        else:
+            st.warning("TRIAJE no tiene al menos 4 columnas")
+            return None
+    except Exception as e:
+        st.error(f"Error procesando TRIAJE: {e}")
+        return None
+
+@st.cache_data(ttl=CACHE_TTL)
+def combinar_archivos(rectauto_df, notifica_df=None, triaje_df=None):
+    """Combina los tres archivos en un único DataFrame"""
+    df_combinado = rectauto_df.copy()
+    
+    # Combinar con NOTIFICA
+    if notifica_df is not None and 'RUE ORIGEN' in notifica_df.columns:
+        # Tomar solo la última notificación por RUE ORIGEN (debido al ordenamiento previo)
+        notifica_ultima = notifica_df.drop_duplicates(subset=['RUE ORIGEN'], keep='first')
+        df_combinado = pd.merge(
+            df_combinado, 
+            notifica_ultima, 
+            left_on='RUE', 
+            right_on='RUE ORIGEN', 
+            how='left'
+        )
+        st.sidebar.info(f"✅ NOTIFICA combinado: {len(notifica_ultima)} registros")
+    
+    # Combinar con TRIAJE
+    if triaje_df is not None and 'RUE' in triaje_df.columns:
+        df_combinado = pd.merge(
+            df_combinado, 
+            triaje_df, 
+            on='RUE', 
+            how='left'
+        )
+        st.sidebar.info(f"✅ TRIAJE combinado: {len(triaje_df)} registros")
+    
+    return df_combinado
 
 @st.cache_data(ttl=CACHE_TTL)
 def dataframe_to_pdf_bytes(df, title):
@@ -106,6 +191,8 @@ def dataframe_to_pdf_bytes(df, title):
 
 def obtener_hash_archivo(archivo):
     """Genera un hash único del archivo para detectar cambios"""
+    if archivo is None:
+        return None
     archivo.seek(0)
     file_hash = hashlib.md5(archivo.read()).hexdigest()
     archivo.seek(0)
@@ -147,42 +234,196 @@ with st.sidebar:
     if st.button("🔄 Limpiar cache", help="Limpiar toda la cache y recargar"):
         st.cache_data.clear()
         # Mantener solo los datos esenciales
-        keys_to_keep = ['df', 'archivo_hash', 'filtro_estado', 'filtro_equipo', 'filtro_usuario']
+        keys_to_keep = ['df_combinado', 'archivos_hash', 'filtro_estado', 'filtro_equipo', 'filtro_usuario']
         for key in list(st.session_state.keys()):
             if key not in keys_to_keep:
                 del st.session_state[key]
         st.success("Cache limpiada correctamente")
         st.rerun()
 
-# Carga optimizada de archivos
-archivo = st.file_uploader("📁 Sube el archivo Excel (rectauto*.xlsx)", type=["xlsx", "xls"])
+# NUEVA SECCIÓN: CARGA DE TRES ARCHIVOS
+st.markdown("---")
+st.subheader("📁 Carga de Archivos")
 
-if archivo:
-    archivo_hash = obtener_hash_archivo(archivo)
+# Crear tres columnas para los archivos
+col1, col2, col3 = st.columns(3)
+
+with col1:
+    st.markdown('<div style="text-align: center; background-color: #1f77b4; padding: 10px; border-radius: 5px; margin-bottom: 10px;">'
+                '<h4 style="color: white; margin: 0;">📊 RECTAUTO</h4>'
+                '</div>', unsafe_allow_html=True)
+    archivo_rectauto = st.file_uploader(
+        "Archivo principal de expedientes",
+        type=["xlsx", "xls"],
+        key="rectauto_upload",
+        label_visibility="collapsed",
+        help="Sube el archivo principal RECTAUTO"
+    )
+    if archivo_rectauto:
+        st.success(f"✅ {archivo_rectauto.name}")
+    else:
+        st.info("⏳ Esperando archivo RECTAUTO")
+
+with col2:
+    st.markdown('<div style="text-align: center; background-color: #ff7f0e; padding: 10px; border-radius: 5px; margin-bottom: 10px;">'
+                '<h4 style="color: white; margin: 0;">📨 NOTIFICA</h4>'
+                '</div>', unsafe_allow_html=True)
+    archivo_notifica = st.file_uploader(
+        "Archivo de notificaciones",
+        type=["xlsx", "xls"],
+        key="notifica_upload",
+        label_visibility="collapsed",
+        help="Sube el archivo NOTIFICA"
+    )
+    if archivo_notifica:
+        st.success(f"✅ {archivo_notifica.name}")
+    else:
+        st.info("⏳ Esperando archivo NOTIFICA")
+
+with col3:
+    st.markdown('<div style="text-align: center; background-color: #2ca02c; padding: 10px; border-radius: 5px; margin-bottom: 10px;">'
+                '<h4 style="color: white; margin: 0;">⚡ TRIAJE</h4>'
+                '</div>', unsafe_allow_html=True)
+    archivo_triaje = st.file_uploader(
+        "Archivo de triaje",
+        type=["xlsx", "xls"],
+        key="triaje_upload",
+        label_visibility="collapsed",
+        help="Sube el archivo TRIAJE"
+    )
+    if archivo_triaje:
+        st.success(f"✅ {archivo_triaje.name}")
+    else:
+        st.info("⏳ Esperando archivo TRIAJE")
+
+# Estado de carga
+st.markdown("---")
+st.subheader("📋 Estado de Carga")
+
+# Mostrar estado con métricas
+estado_col1, estado_col2, estado_col3, estado_col4 = st.columns(4)
+
+with estado_col1:
+    rectauto_status = "✅ Cargado" if archivo_rectauto else "❌ Pendiente"
+    st.metric("RECTAUTO", rectauto_status)
+
+with estado_col2:
+    notifica_status = "✅ Cargado" if archivo_notifica else "❌ Pendiente"
+    st.metric("NOTIFICA", notifica_status)
+
+with estado_col3:
+    triaje_status = "✅ Cargado" if archivo_triaje else "❌ Pendiente"
+    st.metric("TRIAJE", triaje_status)
+
+with estado_col4:
+    archivos_cargados = sum([1 for f in [archivo_rectauto, archivo_notifica, archivo_triaje] if f])
+    st.metric("Total Cargados", f"{archivos_cargados}/3")
+
+# Procesar archivos cuando estén listos
+if archivo_rectauto:
+    # Verificar si los archivos han cambiado
+    archivos_actuales = {
+        'rectauto': obtener_hash_archivo(archivo_rectauto),
+        'notifica': obtener_hash_archivo(archivo_notifica) if archivo_notifica else None,
+        'triaje': obtener_hash_archivo(archivo_triaje) if archivo_triaje else None
+    }
     
-    # Verificar si el archivo es nuevo o cambió
-    if ('archivo_hash' not in st.session_state or 
-        st.session_state.archivo_hash != archivo_hash or 
-        "df" not in st.session_state):
+    archivos_guardados = st.session_state.get("archivos_hash", {})
+    
+    # Si los archivos son nuevos o cambiaron, procesar
+    if (archivos_actuales != archivos_guardados or 
+        "df_combinado" not in st.session_state):
         
-        with st.spinner("🔄 Procesando datos (esto puede tomar unos momentos)..."):
-            df = cargar_y_procesar_datos(archivo)
-            st.session_state["df"] = df
-            st.session_state["archivo_hash"] = archivo_hash
-            st.success("✅ Datos procesados y cacheados por 2 horas")
+        with st.spinner("🔄 Combinando archivos por RUE..."):
+            try:
+                # Cargar RECTAUTO
+                df_rectauto = cargar_y_procesar_rectauto(archivo_rectauto)
+                
+                # Cargar NOTIFICA si está disponible
+                df_notifica = None
+                if archivo_notifica:
+                    df_notifica = cargar_y_procesar_notifica(archivo_notifica)
+                
+                # Cargar TRIAJE si está disponible
+                df_triaje = None
+                if archivo_triaje:
+                    df_triaje = cargar_y_procesar_triaje(archivo_triaje)
+                
+                # Combinar todos los archivos
+                df_combinado = combinar_archivos(df_rectauto, df_notifica, df_triaje)
+                
+                # Guardar en session_state
+                st.session_state["df_combinado"] = df_combinado
+                st.session_state["archivos_hash"] = archivos_actuales
+                
+                st.success(f"✅ Archivos combinados correctamente")
+                st.info(f"📊 Dataset final: {len(df_combinado)} registros, {len(df_combinado.columns)} columnas")
+                
+            except Exception as e:
+                st.error(f"❌ Error combinando archivos: {e}")
+                # Fallback: usar solo RECTAUTO
+                with st.spinner("🔄 Cargando solo RECTAUTO..."):
+                    df_rectauto = cargar_y_procesar_rectauto(archivo_rectauto)
+                    st.session_state["df_combinado"] = df_rectauto
+                    st.session_state["archivos_hash"] = archivos_actuales
+                    st.warning("⚠️ Usando solo archivo RECTAUTO debido a errores en combinación")
+    
     else:
         # Usar datos cacheados
-        df = st.session_state["df"]
-        st.sidebar.success("✅ Usando datos cacheados")
-        
-elif "df" in st.session_state:
-    df = st.session_state["df"]
-    st.sidebar.info("📊 Datos cargados desde cache")
+        df_combinado = st.session_state["df_combinado"]
+        st.sidebar.success("✅ Usando datos combinados cacheados")
+
+elif "df_combinado" in st.session_state:
+    # Usar datos previamente cargados
+    df_combinado = st.session_state["df_combinado"]
+    st.sidebar.info("📊 Datos combinados cargados desde cache")
 else:
-    st.info("Por favor, sube un archivo Excel para comenzar.")
+    st.warning("⚠️ **Carga obligatoria:** Sube al menos el archivo RECTAUTO para continuar")
+    st.info("💡 **Archivos opcionales:** NOTIFICA y TRIAJE enriquecerán el análisis")
     st.stop()
 
-# Menú principal (sin "Envío de correos")
+# Mostrar información del dataset combinado
+with st.expander("📊 Información del Dataset Combinado"):
+    col1, col2, col3 = st.columns(3)
+    
+    with col1:
+        st.metric("Total Registros", f"{len(df_combinado):,}".replace(",", "."))
+    
+    with col2:
+        st.metric("Total Columnas", len(df_combinado.columns))
+    
+    with col3:
+        archivos_usados = 1
+        if archivo_notifica and 'FECHA NOTIFICACION' in df_combinado.columns:
+            archivos_usados += 1
+        if archivo_triaje and any(col in df_combinado.columns for col in ['USUARIO-CSV', 'CALIFICACIÓN', 'OBSERVACIONES', 'FECHA ASIG']):
+            archivos_usados += 1
+        st.metric("Archivos Usados", f"{archivos_usados}/3")
+    
+    # Mostrar primeras filas
+    st.write("**Vista previa del dataset combinado:**")
+    st.dataframe(df_combinado.head(3), use_container_width=True)
+    
+    # Mostrar columnas disponibles
+    st.write("**Columnas disponibles:**")
+    columnas_grupos = {}
+    for col in df_combinado.columns:
+        if col in ['FECHA NOTIFICACION']:
+            grupo = 'NOTIFICA'
+        elif col in ['USUARIO-CSV', 'CALIFICACIÓN', 'OBSERVACIONES', 'FECHA ASIG']:
+            grupo = 'TRIAJE'
+        else:
+            grupo = 'RECTAUTO'
+        
+        if grupo not in columnas_grupos:
+            columnas_grupos[grupo] = []
+        columnas_grupos[grupo].append(col)
+    
+    for grupo, columnas in columnas_grupos.items():
+        with st.expander(f"📋 Columnas de {grupo} ({len(columnas)})"):
+            st.write(columnas)
+
+# Menú principal
 menu = ["Principal", "Indicadores clave (KPI)"]
 eleccion = st.sidebar.selectbox("Menú", menu)
 
@@ -198,6 +439,9 @@ def crear_grafico_dinamico(_conteo, columna, titulo):
     return fig
 
 if eleccion == "Principal":
+    # Usar df_combinado en lugar de df
+    df = df_combinado
+    
     columna_fecha = df.columns[11]
     df[columna_fecha] = pd.to_datetime(df[columna_fecha], errors='coerce')
     fecha_max = df[columna_fecha].max()
@@ -356,7 +600,7 @@ if eleccion == "Principal":
                 key='pdf_download_button'
             )
 
-    # NUEVA SECCIÓN: ENVÍO DE CORREOS INTEGRADA
+    # SECCIÓN: ENVÍO DE CORREOS INTEGRADA
     st.markdown("---")
     st.header("📧 Envío de Correos")
     
@@ -491,7 +735,7 @@ if eleccion == "Principal":
                 NOMBRES_COLUMNAS_PDF = df_user.columns[indices_finales].tolist()
                 
                 # Redondear columna numérica si existe
-                indice_columna_a_redondear = 4
+                indice_columna_a_redondear = 5
                 if indice_columna_a_redondear < len(df_user.columns):
                     nombre_columna_a_redondear = df_user.columns[indice_columna_a_redondear]
                     if nombre_columna_a_redondear in df_user.columns:
@@ -674,11 +918,13 @@ if eleccion == "Principal":
         """)
 
 elif eleccion == "Indicadores clave (KPI)":
-    # ... (el código de la sección KPI se mantiene exactamente igual)
+    # Usar df_combinado en lugar de df
+    df = df_combinado
+    
     st.subheader("Indicadores clave (KPI)")
     
     # Obtener fecha de referencia para cálculos
-    columna_fecha = df.columns[10]
+    columna_fecha = df.columns[11]
     df[columna_fecha] = pd.to_datetime(df[columna_fecha], errors='coerce')
     fecha_max = df[columna_fecha].max()
     
