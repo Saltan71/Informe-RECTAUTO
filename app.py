@@ -19,7 +19,7 @@ CACHE_TTL = 7200  # 2 horas en segundos
 st.set_page_config(page_title="Informe Rectauto", layout="wide")
 st.title("📊 Seguimiento Equipo Regional RECTAUTO")
 
-# Clase PDF (mejorada para el formato condicional)
+# Clase PDF (completamente revisada para formato condicional)
 class PDF(FPDF):
     def header(self):
         self.set_font('Arial', 'B', 8)
@@ -31,43 +31,46 @@ class PDF(FPDF):
         self.set_font('Arial', 'I', 6)
         self.cell(0, 10, f'Página {self.page_no()}', 0, 0, 'C')
     
-    def aplicar_formato_condicional_pdf(self, df_original, idx, col_name, col_data, col_width, altura_fila, x, y):
-        """Aplica formato condicional a celdas específicas en el PDF usando el DataFrame original"""
+    def aplicar_formato_condicional_pdf(self, df_original, idx, col_name, col_width, altura_fila, x, y):
+        """Aplica formato condicional a celdas específicas en el PDF"""
         try:
-            # Obtener la fila correspondiente del DataFrame original
-            if idx < len(df_original):
-                fila_original = df_original.iloc[idx]
+            if idx >= len(df_original):
+                return
                 
-                # Condición 1: USUARIO vs USUARIO-CSV
-                if col_name == 'USUARIO-CSV' and 'USUARIO' in df_original.columns:
-                    usuario_principal = fila_original['USUARIO'] if 'USUARIO' in df_original.columns else ''
-                    usuario_csv = fila_original['USUARIO-CSV'] if 'USUARIO-CSV' in df_original.columns else ''
-                    
-                    if str(usuario_principal) != str(usuario_csv):
+            fila = df_original.iloc[idx]
+            
+            # Condición 1: USUARIO vs USUARIO-CSV
+            if col_name == 'USUARIO-CSV':
+                usuario_principal = fila.get('USUARIO', '')
+                usuario_csv = fila.get('USUARIO-CSV', '')
+                
+                # Comparar los valores (manejar NaN y tipos diferentes)
+                if pd.notna(usuario_principal) and pd.notna(usuario_csv):
+                    if str(usuario_principal).strip() != str(usuario_csv).strip():
                         # Fondo rojo cuando USUARIO es distinto de USUARIO-CSV
                         self.set_fill_color(255, 0, 0)
                         self.rect(x, y, col_width, altura_fila, 'F')
-                        self.set_fill_color(255, 255, 255)  # Restaurar color
+                        self.set_fill_color(255, 255, 255)
+            
+            # Condición 2: RUE con condición específica
+            elif col_name == 'RUE':
+                etiq_penultimo = fila.get('ETIQ. PENÚLTIMO TRAM.', '')
+                fecha_notif = fila.get('FECHA NOTIFICACIÓN', None)
                 
-                # Condición 2: RUE con condición específica
-                elif col_name == 'RUE':
-                    etiq_penultimo = fila_original['ETIQ. PENÚLTIMO TRAM.'] if 'ETIQ. PENÚLTIMO TRAM.' in df_original.columns else ''
-                    fecha_notif = fila_original['FECHA NOTIFICACIÓN'] if 'FECHA NOTIFICACIÓN' in df_original.columns else None
+                if (str(etiq_penultimo).strip() == "80 PROPRES" and 
+                    pd.notna(fecha_notif) and 
+                    isinstance(fecha_notif, (pd.Timestamp, datetime))):
                     
-                    if str(etiq_penultimo) == "80 PROPRES" and pd.notna(fecha_notif):
-                        try:
-                            # Asegurarse de que la fecha es un objeto datetime
-                            if isinstance(fecha_notif, (pd.Timestamp, datetime)):
-                                fecha_limite = fecha_notif + timedelta(days=23)
-                                if datetime.now() > fecha_limite:
-                                    # Fondo amarillo cuando se cumple la condición
-                                    self.set_fill_color(255, 255, 0)
-                                    self.rect(x, y, col_width, altura_fila, 'F')
-                                    self.set_fill_color(255, 255, 255)  # Restaurar color
-                        except (TypeError, ValueError) as e:
-                            print(f"Error en condición de fecha: {e}")
+                    fecha_limite = fecha_notif + timedelta(days=23)
+                    if datetime.now() > fecha_limite:
+                        # Fondo amarillo cuando se cumple la condición
+                        self.set_fill_color(255, 255, 0)
+                        self.rect(x, y, col_width, altura_fila, 'F')
+                        self.set_fill_color(255, 255, 255)
+                        
         except Exception as e:
-            print(f"Error en formato condicional PDF: {e}")
+            # Silenciar errores para no interrumpir la generación del PDF
+            pass
 
 # Funciones optimizadas con cache
 @st.cache_data(ttl=CACHE_TTL, show_spinner="Procesando archivo Excel...")
@@ -294,7 +297,7 @@ def dataframe_to_pdf_bytes(df_mostrar, title, df_original):
         pdf.set_xy(pdf.l_margin, y_inicio + altura_fila)
 
     return pdf.output(dest='B')
-    
+
 def obtener_hash_archivo(archivo):
     """Genera un hash único del archivo para detectar cambios"""
     if archivo is None:
@@ -304,7 +307,7 @@ def obtener_hash_archivo(archivo):
     archivo.seek(0)
     return file_hash
 
-# CSS (se mantiene igual)
+# CSS ACTUALIZADO CON ESTILOS PARA BOTONES Y MENÚS DESPLEGABLES
 st.markdown("""
 <style>
     [data-testid="stSidebar"] {
@@ -484,40 +487,6 @@ with st.sidebar:
         st.success("Cache limpiada correctamente")
         st.rerun()
 
-
-# Función para generar PDF de usuario (REVISADA)
-def generar_pdf_usuario(usuario, df_pendientes, num_semana, fecha_max_str):
-    """Genera el PDF para un usuario específico"""
-    df_user = df_pendientes[df_pendientes["USUARIO"] == usuario].copy()
-    
-    if df_user.empty:
-        return None
-    
-    # Procesar datos para PDF - mantener las columnas originales para el formato condicional
-    indices_a_incluir = list(range(df_user.shape[1]))
-    indices_a_excluir = {1, 4, 10}
-    indices_finales = [i for i in indices_a_incluir if i not in indices_a_excluir]
-    NOMBRES_COLUMNAS_PDF = df_user.columns[indices_finales].tolist()
-
-    # Redondear columna numérica si existe
-    indice_columna_a_redondear = 5
-    if indice_columna_a_redondear < len(df_user.columns):
-        nombre_columna_a_redondear = df_user.columns[indice_columna_a_redondear]
-        if nombre_columna_a_redondear in df_user.columns:
-            df_user[nombre_columna_a_redondear] = pd.to_numeric(df_user[nombre_columna_a_redondear], errors='coerce').fillna(0).round(0).astype(int)
-
-    # Crear DataFrame para mostrar (con fechas formateadas)
-    df_pdf_mostrar = df_user[NOMBRES_COLUMNAS_PDF].copy()
-    for col in df_pdf_mostrar.select_dtypes(include='datetime').columns:
-        df_pdf_mostrar[col] = df_pdf_mostrar[col].dt.strftime("%d/%m/%Y")
-
-    num_expedientes = len(df_pdf_mostrar)
-    titulo_pdf = f"{usuario} - Semana {num_semana} a {fecha_max_str} - Expedientes Pendientes ({num_expedientes})"
-    
-    # Pasar el DataFrame ORIGINAL (con fechas datetime) para el formato condicional
-    # y el DataFrame para mostrar (con fechas formateadas) para la visualización
-    return dataframe_to_pdf_bytes(df_pdf_mostrar, titulo_pdf, df_original=df_user)    
-
 # NUEVA SECCIÓN: CARGA DE CUATRO ARCHIVOS (incluyendo USUARIOS)
 st.markdown("---")
 st.subheader("📁 Carga de Archivos")
@@ -694,7 +663,7 @@ else:
     st.info("💡 **Archivos opcionales:** NOTIFICA, TRIAJE y USUARIOS enriquecerán el análisis")
     st.stop()
 
-# Función para aplicar formato condicional al DataFrame mostrado - CORREGIDA
+# Función para aplicar formato condicional al DataFrame mostrado
 def aplicar_formato_condicional_dataframe(df):
     """Aplica formato condicional al DataFrame para Streamlit"""
     styles = pd.DataFrame('', index=df.index, columns=df.columns)
@@ -787,7 +756,7 @@ def crear_grafico_dinamico(_conteo, columna, titulo):
     fig.update_traces(texttemplate='%{text:,}', textposition="auto")
     return fig
 
-# Función para generar PDF de usuario (reutilizable)
+# Función para generar PDF de usuario (REVISADA)
 def generar_pdf_usuario(usuario, df_pendientes, num_semana, fecha_max_str):
     """Genera el PDF para un usuario específico"""
     df_user = df_pendientes[df_pendientes["USUARIO"] == usuario].copy()
@@ -795,7 +764,7 @@ def generar_pdf_usuario(usuario, df_pendientes, num_semana, fecha_max_str):
     if df_user.empty:
         return None
     
-    # Procesar datos para PDF
+    # Procesar datos para PDF - mantener las columnas originales para el formato condicional
     indices_a_incluir = list(range(df_user.shape[1]))
     indices_a_excluir = {1, 4, 10}
     indices_finales = [i for i in indices_a_incluir if i not in indices_a_excluir]
@@ -808,14 +777,17 @@ def generar_pdf_usuario(usuario, df_pendientes, num_semana, fecha_max_str):
         if nombre_columna_a_redondear in df_user.columns:
             df_user[nombre_columna_a_redondear] = pd.to_numeric(df_user[nombre_columna_a_redondear], errors='coerce').fillna(0).round(0).astype(int)
 
-    df_pdf = df_user[NOMBRES_COLUMNAS_PDF].copy()
-    for col in df_pdf.select_dtypes(include='datetime').columns:
-        df_pdf[col] = df_pdf[col].dt.strftime("%d/%m/%Y")
+    # Crear DataFrame para mostrar (con fechas formateadas)
+    df_pdf_mostrar = df_user[NOMBRES_COLUMNAS_PDF].copy()
+    for col in df_pdf_mostrar.select_dtypes(include='datetime').columns:
+        df_pdf_mostrar[col] = df_pdf_mostrar[col].dt.strftime("%d/%m/%Y")
 
-    num_expedientes = len(df_pdf)
+    num_expedientes = len(df_pdf_mostrar)
     titulo_pdf = f"{usuario} - Semana {num_semana} a {fecha_max_str} - Expedientes Pendientes ({num_expedientes})"
     
-    return dataframe_to_pdf_bytes(df_pdf, titulo_pdf)
+    # Pasar el DataFrame ORIGINAL (con fechas datetime) para el formato condicional
+    # y el DataFrame para mostrar (con fechas formateadas) para la visualización
+    return dataframe_to_pdf_bytes(df_pdf_mostrar, titulo_pdf, df_original=df_user)
 
 if eleccion == "Principal":
     # Usar df_combinado en lugar de df
@@ -981,7 +953,6 @@ if eleccion == "Principal":
                 key='pdf_download_button'
             )
 
-    # ... (el resto del código de la sección Principal se mantiene igual)
     # SECCIÓN: ENVÍO DE CORREOS INTEGRADA
     st.markdown("---")
     st.header("📧 Envío de Correos")
