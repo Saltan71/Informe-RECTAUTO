@@ -73,7 +73,7 @@ def cargar_y_procesar_notifica(archivo):
 def cargar_y_procesar_triaje(archivo):
     """Carga y procesa el archivo TRIAJE"""
     try:
-        df = pd.read_excel(archivo, sheet_name="TRIAJE")
+        df = pd.read_excel(archivo, sheet_name=HOJA)
         df
         df.columns = [col.upper().strip() for col in df.columns]
         
