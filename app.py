@@ -105,6 +105,17 @@ def cargar_y_procesar_triaje(archivo):
         return None
 
 @st.cache_data(ttl=CACHE_TTL)
+def cargar_y_procesar_usuarios(archivo):
+    """Carga y procesa el archivo USUARIOS"""
+    try:
+        df = pd.read_excel(archivo, sheet_name=HOJA)
+        df.columns = [col.upper().strip() for col in df.columns]
+        return df
+    except Exception as e:
+        st.error(f"Error procesando USUARIOS: {e}")
+        return None
+
+@st.cache_data(ttl=CACHE_TTL)
 def combinar_archivos(rectauto_df, notifica_df=None, triaje_df=None):
     """Combina los tres archivos en un único DataFrame"""
     df_combinado = rectauto_df.copy()
@@ -246,19 +257,19 @@ with st.sidebar:
     if st.button("🔄 Limpiar cache", help="Limpiar toda la cache y recargar"):
         st.cache_data.clear()
         # Mantener solo los datos esenciales
-        keys_to_keep = ['df_combinado', 'archivos_hash', 'filtro_estado', 'filtro_equipo', 'filtro_usuario']
+        keys_to_keep = ['df_combinado', 'df_usuarios', 'archivos_hash', 'filtro_estado', 'filtro_equipo', 'filtro_usuario']
         for key in list(st.session_state.keys()):
             if key not in keys_to_keep:
                 del st.session_state[key]
         st.success("Cache limpiada correctamente")
         st.rerun()
 
-# NUEVA SECCIÓN: CARGA DE TRES ARCHIVOS
+# NUEVA SECCIÓN: CARGA DE CUATRO ARCHIVOS (incluyendo USUARIOS)
 st.markdown("---")
 st.subheader("📁 Carga de Archivos")
 
-# Crear tres columnas para los archivos
-col1, col2, col3 = st.columns(3)
+# Crear cuatro columnas para los archivos
+col1, col2, col3, col4 = st.columns(4)
 
 with col1:
     st.markdown('<div style="text-align: center; background-color: #1f77b4; padding: 10px; border-radius: 5px; margin-bottom: 10px;">'
@@ -308,12 +319,28 @@ with col3:
     else:
         st.info("⏳ Esperando archivo TRIAJE")
 
+with col4:
+    st.markdown('<div style="text-align: center; background-color: #9467bd; padding: 10px; border-radius: 5px; margin-bottom: 10px;">'
+                '<h4 style="color: white; margin: 0;">👥 USUARIOS</h4>'
+                '</div>', unsafe_allow_html=True)
+    archivo_usuarios = st.file_uploader(
+        "Archivo de configuración de usuarios",
+        type=["xlsx", "xls"],
+        key="usuarios_upload",
+        label_visibility="collapsed",
+        help="Sube el archivo USUARIOS.xlsx"
+    )
+    if archivo_usuarios:
+        st.success(f"✅ {archivo_usuarios.name}")
+    else:
+        st.info("⏳ Esperando archivo USUARIOS")
+
 # Estado de carga
 st.markdown("---")
 st.subheader("📋 Estado de Carga")
 
 # Mostrar estado con métricas
-estado_col1, estado_col2, estado_col3, estado_col4 = st.columns(4)
+estado_col1, estado_col2, estado_col3, estado_col4, estado_col5 = st.columns(5)
 
 with estado_col1:
     rectauto_status = "✅ Cargado" if archivo_rectauto else "❌ Pendiente"
@@ -328,8 +355,12 @@ with estado_col3:
     st.metric("TRIAJE", triaje_status)
 
 with estado_col4:
-    archivos_cargados = sum([1 for f in [archivo_rectauto, archivo_notifica, archivo_triaje] if f])
-    st.metric("Total Cargados", f"{archivos_cargados}/3")
+    usuarios_status = "✅ Cargado" if archivo_usuarios else "❌ Pendiente"
+    st.metric("USUARIOS", usuarios_status)
+
+with estado_col5:
+    archivos_cargados = sum([1 for f in [archivo_rectauto, archivo_notifica, archivo_triaje, archivo_usuarios] if f])
+    st.metric("Total Cargados", f"{archivos_cargados}/4")
 
 # Procesar archivos cuando estén listos
 if archivo_rectauto:
@@ -337,14 +368,16 @@ if archivo_rectauto:
     archivos_actuales = {
         'rectauto': obtener_hash_archivo(archivo_rectauto),
         'notifica': obtener_hash_archivo(archivo_notifica) if archivo_notifica else None,
-        'triaje': obtener_hash_archivo(archivo_triaje) if archivo_triaje else None
+        'triaje': obtener_hash_archivo(archivo_triaje) if archivo_triaje else None,
+        'usuarios': obtener_hash_archivo(archivo_usuarios) if archivo_usuarios else None
     }
     
     archivos_guardados = st.session_state.get("archivos_hash", {})
     
     # Si los archivos son nuevos o cambiaron, procesar
     if (archivos_actuales != archivos_guardados or 
-        "df_combinado" not in st.session_state):
+        "df_combinado" not in st.session_state or
+        "df_usuarios" not in st.session_state):
         
         with st.spinner("🔄 Combinando archivos por RUE..."):
             try:
@@ -365,12 +398,21 @@ if archivo_rectauto:
                 df_combinado = combinar_archivos(df_rectauto, df_notifica, df_triaje)
                 # Convertir columnas de fecha
                 df_combinado = convertir_fechas(df_combinado)
+                
+                # Cargar USUARIOS si está disponible
+                df_usuarios = None
+                if archivo_usuarios:
+                    df_usuarios = cargar_y_procesar_usuarios(archivo_usuarios)
+                
                 # Guardar en session_state
                 st.session_state["df_combinado"] = df_combinado
+                st.session_state["df_usuarios"] = df_usuarios
                 st.session_state["archivos_hash"] = archivos_actuales
                 
                 st.success(f"✅ Archivos combinados correctamente")
                 st.info(f"📊 Dataset final: {len(df_combinado)} registros, {len(df_combinado.columns)} columnas")
+                if df_usuarios is not None:
+                    st.info(f"👥 Usuarios cargados: {len(df_usuarios)} registros")
                 
             except Exception as e:
                 st.error(f"❌ Error combinando archivos: {e}")
@@ -378,26 +420,29 @@ if archivo_rectauto:
                 with st.spinner("🔄 Cargando solo RECTAUTO..."):
                     df_rectauto = cargar_y_procesar_rectauto(archivo_rectauto)
                     st.session_state["df_combinado"] = df_rectauto
+                    st.session_state["df_usuarios"] = None
                     st.session_state["archivos_hash"] = archivos_actuales
                     st.warning("⚠️ Usando solo archivo RECTAUTO debido a errores en combinación")
     
     else:
         # Usar datos cacheados
         df_combinado = st.session_state["df_combinado"]
+        df_usuarios = st.session_state.get("df_usuarios", None)
         st.sidebar.success("✅ Usando datos combinados cacheados")
 
 elif "df_combinado" in st.session_state:
     # Usar datos previamente cargados
     df_combinado = st.session_state["df_combinado"]
+    df_usuarios = st.session_state.get("df_usuarios", None)
     st.sidebar.info("📊 Datos combinados cargados desde cache")
 else:
     st.warning("⚠️ **Carga obligatoria:** Sube al menos el archivo RECTAUTO para continuar")
-    st.info("💡 **Archivos opcionales:** NOTIFICA y TRIAJE enriquecerán el análisis")
+    st.info("💡 **Archivos opcionales:** NOTIFICA, TRIAJE y USUARIOS enriquecerán el análisis")
     st.stop()
 
 # Mostrar información del dataset combinado
 with st.expander("📊 Información del Dataset Combinado"):
-    col1, col2, col3 = st.columns(3)
+    col1, col2, col3, col4 = st.columns(4)
     
     with col1:
         st.metric("Total Registros", f"{len(df_combinado):,}".replace(",", "."))
@@ -413,6 +458,10 @@ with st.expander("📊 Información del Dataset Combinado"):
             archivos_usados += 1
         st.metric("Archivos Usados", f"{archivos_usados}/3")
     
+    with col4:
+        usuarios_status = "✅ Cargado" if df_usuarios is not None else "❌ No cargado"
+        st.metric("USUARIOS", usuarios_status)
+    
     # Mostrar primeras filas
     st.write("**Vista previa del dataset combinado:**")
     st.dataframe(df_combinado.head(3), use_container_width=True)
@@ -421,7 +470,7 @@ with st.expander("📊 Información del Dataset Combinado"):
     st.write("**Columnas disponibles:**")
     columnas_grupos = {}
     for col in df_combinado.columns:
-        if col == 'FECHA NOTIFICACION':
+        if col == 'FECHA NOTIFICACIÓN':
             grupo = 'NOTIFICA'
         elif col in ['USUARIO-CSV', 'CALIFICACIÓN', 'OBSERVACIONES', 'FECHA ASIG']:
             grupo = 'TRIAJE'
@@ -450,6 +499,36 @@ def crear_grafico_dinamico(_conteo, columna, titulo):
                  color=columna, height=400)
     fig.update_traces(texttemplate='%{text:,}', textposition="auto")
     return fig
+
+# Función para generar PDF de usuario (reutilizable)
+def generar_pdf_usuario(usuario, df_pendientes, num_semana, fecha_max_str):
+    """Genera el PDF para un usuario específico"""
+    df_user = df_pendientes[df_pendientes["USUARIO"] == usuario].copy()
+    
+    if df_user.empty:
+        return None
+    
+    # Procesar datos para PDF
+    indices_a_incluir = list(range(df_user.shape[1]))
+    indices_a_excluir = {1, 4, 10}
+    indices_finales = [i for i in indices_a_incluir if i not in indices_a_excluir]
+    NOMBRES_COLUMNAS_PDF = df_user.columns[indices_finales].tolist()
+
+    # Redondear columna numérica si existe
+    indice_columna_a_redondear = 5
+    if indice_columna_a_redondear < len(df_user.columns):
+        nombre_columna_a_redondear = df_user.columns[indice_columna_a_redondear]
+        if nombre_columna_a_redondear in df_user.columns:
+            df_user[nombre_columna_a_redondear] = pd.to_numeric(df_user[nombre_columna_a_redondear], errors='coerce').fillna(0).round(0).astype(int)
+
+    df_pdf = df_user[NOMBRES_COLUMNAS_PDF].copy()
+    for col in df_pdf.select_dtypes(include='datetime').columns:
+        df_pdf[col] = df_pdf[col].dt.strftime("%d/%m/%Y")
+
+    num_expedientes = len(df_pdf)
+    titulo_pdf = f"{usuario} - Semana {num_semana} a {fecha_max_str} - Expedientes Pendientes ({num_expedientes})"
+    
+    return dataframe_to_pdf_bytes(df_pdf, titulo_pdf)
 
 if eleccion == "Principal":
     # Usar df_combinado en lugar de df
@@ -560,9 +639,6 @@ if eleccion == "Principal":
     for col in df_mostrar.select_dtypes(include='datetime').columns:
         df_mostrar[col] = df_mostrar[col].dt.strftime("%d/%m/%Y")
     st.dataframe(df_mostrar, use_container_width=True)
-    # Formatear números con separadores de miles
-    #for col in df_mostrar.select_dtypes(include=['int64', 'float64']).columns:
-    #    df_mostrar[col] = df_mostrar[col].apply(lambda x: f"{x:,.0f}".replace(",", ".") if pd.notnull(x) else x)
 
     registros_mostrados = f"{len(df_mostrar):,}".replace(",", ".")
     registros_totales = f"{len(df):,}".replace(",", ".")
@@ -582,29 +658,13 @@ if eleccion == "Principal":
         else:
             with st.spinner('Generando PDFs y comprimiendo...'):
                 zip_buffer = io.BytesIO()
-                indices_a_incluir = list(range(df_pendientes.shape[1]))
-                indices_a_excluir = {1, 4, 10}
-                indices_finales = [i for i in indices_a_incluir if i not in indices_a_excluir]
-                NOMBRES_COLUMNAS_PDF = df_pendientes.columns[indices_finales].tolist()
 
             with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zip_file:
                 for usuario in usuarios_pendientes:
-                    df_user = df_pendientes[df_pendientes["USUARIO"] == usuario].copy()
-                    indice_columna_a_redondear = 5
-                    nombre_columna_a_redondear = df_user.columns[indice_columna_a_redondear]
-
-                    if nombre_columna_a_redondear in df_user.columns:
-                        df_user[nombre_columna_a_redondear] = pd.to_numeric(df_user[nombre_columna_a_redondear], errors='coerce').fillna(0).round(0).astype(int)
-
-                    df_pdf = df_user[NOMBRES_COLUMNAS_PDF].copy()
-                    for col in df_pdf.select_dtypes(include='datetime').columns:
-                        df_pdf[col] = df_pdf[col].dt.strftime("%d/%m/%Y")
-
-                    num_expedientes = len(df_pdf)
-                    file_name = f"{num_semana}{usuario}.pdf"
-                    titulo_pdf = f"{usuario} - Semana {num_semana} a {fecha_max_str} - Expedientes Pendientes ({num_expedientes})"
-                    pdf_data = dataframe_to_pdf_bytes(df_pdf, titulo_pdf)
-                    zip_file.writestr(file_name, pdf_data)
+                    pdf_data = generar_pdf_usuario(usuario, df_pendientes, num_semana, fecha_max_str)
+                    if pdf_data:
+                        file_name = f"{num_semana}{usuario}.pdf"
+                        zip_file.writestr(file_name, pdf_data)
 
             zip_buffer.seek(0)
             zip_file_name = f"Informes_Pendientes_Semana_{num_semana}.zip"
@@ -624,291 +684,239 @@ if eleccion == "Principal":
     # Verificar que estamos usando la última semana
     st.info(f"**📅 Semana activa para envío:** {num_semana} (Última semana disponible - {fecha_max_str})")
     
-    # Cargar configuración de usuarios desde Excel
-    def cargar_configuracion_usuarios():
-        """Carga la configuración de usuarios desde archivo Excel"""
-        try:
-            archivo_usuarios = st.file_uploader("📁 Sube el archivo USUARIOS.xlsx", type=["xlsx", "xls"], key="usuarios_upload")
+    # Verificar si el archivo USUARIOS está cargado
+    if df_usuarios is None:
+        st.error("❌ No se ha cargado el archivo USUARIOS. Por favor, cárgalo en la sección de arriba.")
+        st.stop()
+    
+    # Verificar columnas requeridas en USUARIOS
+    columnas_requeridas = ['USUARIOS', 'ENVIAR', 'EMAIL', 'ASUNTO', 'MENSAJE']
+    columnas_faltantes = [col for col in columnas_requeridas if col not in df_usuarios.columns]
+    
+    if columnas_faltantes:
+        st.error(f"❌ Faltan columnas en el archivo USUARIOS: {', '.join(columnas_faltantes)}")
+        st.stop()
+    
+    # Filtrar usuarios activos
+    usuarios_activos = df_usuarios[
+        (df_usuarios['ENVIAR'].str.upper() == 'SÍ') | 
+        (df_usuarios['ENVIAR'].str.upper() == 'SI')
+    ]
+    
+    if usuarios_activos.empty:
+        st.warning("⚠️ No hay usuarios activos para envío (ENVIAR = 'SÍ' o 'SI')")
+    else:
+        # Función para generar el cuerpo del mensaje dinámicamente
+        def generar_cuerpo_mensaje(mensaje_base):
+            """Genera el cuerpo del mensaje con saludo según la hora"""
+            from datetime import datetime
             
-            if archivo_usuarios:
-                usuarios_df = pd.read_excel(archivo_usuarios, sheet_name="Sheet1")
-                
-                # Normalizar nombres de columnas
-                usuarios_df.columns = [col.strip().upper() for col in usuarios_df.columns]
-                
-                # Verificar columnas requeridas
-                columnas_requeridas = ['USUARIOS', 'ENVIAR', 'EMAIL', 'ASUNTO', 'MENSAJE']
-                columnas_faltantes = [col for col in columnas_requeridas if col not in usuarios_df.columns]
-                
-                if columnas_faltantes:
-                    st.error(f"❌ Faltan columnas en el archivo: {', '.join(columnas_faltantes)}")
-                    return None
-                
-                st.success(f"✅ Archivo USUARIOS.xlsx cargado correctamente: {len(usuarios_df)} usuarios")
-                return usuarios_df
-            else:
-                st.info("📝 Por favor, sube el archivo USUARIOS.xlsx para habilitar el envío de correos")
-                return None
-                
-        except Exception as e:
-            st.error(f"❌ Error al cargar USUARIOS.xlsx: {e}")
-            return None
-    
-    # Cargar configuración
-    usuarios_config = cargar_configuracion_usuarios()
-    
-    if usuarios_config is not None:
-        # Filtrar usuarios activos
-        usuarios_activos = usuarios_config[
-            (usuarios_config['ENVIAR'].str.upper() == 'SÍ')
-        ]
+            hora_actual = datetime.now().hour
+            saludo = "Buenos días" if hora_actual < 14 else "Buenas tardes"
+            
+            cuerpo_mensaje = f"{saludo},\n\n{mensaje_base}"
+            return cuerpo_mensaje
         
-        if usuarios_activos.empty:
-            st.warning("⚠️ No hay usuarios activos para envío (ENVIAR = 'SÍ')")
-        else:
-            # Función para generar el cuerpo del mensaje dinámicamente
-            def generar_cuerpo_mensaje(mensaje_base):
-                """Genera el cuerpo del mensaje con saludo según la hora"""
-                from datetime import datetime
+        # Función para procesar el asunto con variables
+        def procesar_asunto(asunto_template, num_semana, fecha_max_str):
+            """Reemplaza variables en el asunto del correo"""
+            asunto_procesado = asunto_template.replace("&num_semana&", str(num_semana))
+            asunto_procesado = asunto_procesado.replace("&fecha_max&", fecha_max_str)
+            return asunto_procesado
+        
+        # Función para enviar correos con Outlook (funciona con Outlook cerrado)
+        def enviar_correo_outlook(destinatario, asunto, cuerpo_mensaje, archivo_pdf, nombre_archivo, cc=None, bcc=None):
+            """
+            Envía correo usando Outlook local (funciona con Outlook cerrado)
+            """
+            try:
+                import win32com.client
+                import os
+                import tempfile
                 
-                hora_actual = datetime.now().hour
-                saludo = "Buenos días" if hora_actual < 14 else "Buenas tardes"
+                # Crear cliente Outlook
+                outlook = win32com.client.Dispatch("Outlook.Application")
+                mail = outlook.CreateItem(0)  # 0 = olMailItem
                 
-                cuerpo_mensaje = f"{saludo},\n\n{mensaje_base}"
-                return cuerpo_mensaje
-            
-            # Función para procesar el asunto con variables
-            def procesar_asunto(asunto_template, num_semana, fecha_max_str):
-                """Reemplaza variables en el asunto del correo"""
-                asunto_procesado = asunto_template.replace("&num_semana&", str(num_semana))
-                asunto_procesado = asunto_procesado.replace("&fecha_max&", fecha_max_str)
-                return asunto_procesado
-            
-            # Función para enviar correos con Outlook (funciona con Outlook cerrado)
-            def enviar_correo_outlook(destinatario, asunto, cuerpo_mensaje, archivo_pdf, nombre_archivo, cc=None, bcc=None):
-                """
-                Envía correo usando Outlook local (funciona con Outlook cerrado)
-                """
+                # Configurar correo
+                mail.To = destinatario
+                mail.Subject = asunto
+                mail.Body = cuerpo_mensaje
+                
+                # Agregar CC si existe
+                if cc and pd.notna(cc) and str(cc).strip():
+                    mail.CC = str(cc)
+                
+                # Agregar BCC si existe
+                if bcc and pd.notna(bcc) and str(bcc).strip():
+                    mail.BCC = str(bcc)
+                
+                # Guardar PDF temporalmente para adjuntar
+                with tempfile.NamedTemporaryFile(delete=False, suffix='.pdf') as temp_file:
+                    temp_file.write(archivo_pdf)
+                    temp_path = temp_file.name
+                
+                # Adjuntar PDF
+                mail.Attachments.Add(temp_path)
+                
+                # Enviar correo (usar Send() en lugar de Display())
+                mail.Send()
+                
+                # Limpiar archivo temporal
                 try:
-                    import win32com.client
-                    import os
-                    import tempfile
-                    
-                    # Crear cliente Outlook
-                    outlook = win32com.client.Dispatch("Outlook.Application")
-                    mail = outlook.CreateItem(0)  # 0 = olMailItem
-                    
-                    # Configurar correo
-                    mail.To = destinatario
-                    mail.Subject = asunto
-                    mail.Body = cuerpo_mensaje
-                    
-                    # Agregar CC si existe
-                    if cc and pd.notna(cc) and str(cc).strip():
-                        mail.CC = str(cc)
-                    
-                    # Agregar BCC si existe
-                    if bcc and pd.notna(bcc) and str(bcc).strip():
-                        mail.BCC = str(bcc)
-                    
-                    # Guardar PDF temporalmente para adjuntar
-                    with tempfile.NamedTemporaryFile(delete=False, suffix='.pdf') as temp_file:
-                        temp_file.write(archivo_pdf)
-                        temp_path = temp_file.name
-                    
-                    # Adjuntar PDF
-                    mail.Attachments.Add(temp_path)
-                    
-                    # Enviar correo (usar Send() en lugar de Display())
-                    mail.Send()
-                    
-                    # Limpiar archivo temporal
-                    try:
-                        os.unlink(temp_path)
-                    except:
-                        pass  # Ignorar errores al eliminar temporal
-                    
-                    return True
-                    
-                except ImportError:
-                    st.error("❌ Error: win32com.client no está disponible. Instala pywin32: pip install pywin32")
-                    return False
-                except Exception as e:
-                    st.error(f"❌ Error al enviar correo a {destinatario}: {e}")
-                    return False
+                    os.unlink(temp_path)
+                except:
+                    pass  # Ignorar errores al eliminar temporal
+                
+                return True
+                
+            except ImportError:
+                st.error("❌ Error: win32com.client no está disponible. Instala pywin32: pip install pywin32")
+                return False
+            except Exception as e:
+                st.error(f"❌ Error al enviar correo a {destinatario}: {e}")
+                return False
+        
+        # Verificar usuarios con expedientes pendientes
+        usuarios_con_pendientes = df_pendientes['USUARIO'].dropna().unique()
+        usuarios_para_envio = []
+        
+        for _, usuario_row in usuarios_activos.iterrows():
+            usuario = usuario_row['USUARIOS']
+            if usuario in usuarios_con_pendientes:
+                num_expedientes = len(df_pendientes[df_pendientes['USUARIO'] == usuario])
+                
+                # Procesar asunto con variables
+                asunto_template = usuario_row['ASUNTO'] if pd.notna(usuario_row['ASUNTO']) else f"Situación RECTAUTO asignados en la semana {num_semana} a {fecha_max_str}"
+                asunto_procesado = procesar_asunto(asunto_template, num_semana, fecha_max_str)
+                
+                # Generar cuerpo del mensaje
+                mensaje_base = usuario_row['MENSAJE'] if pd.notna(usuario_row['MENSAJE']) else "Se adjunta informe de expedientes pendientes."
+                cuerpo_mensaje = generar_cuerpo_mensaje(mensaje_base)
+                
+                usuarios_para_envio.append({
+                    'usuario': usuario,
+                    'resumen': usuario_row.get('RESUMEN', ''),
+                    'email': usuario_row['EMAIL'],
+                    'cc': usuario_row.get('CC', ''),
+                    'bcc': usuario_row.get('BCC', ''),
+                    'expedientes': num_expedientes,
+                    'asunto': asunto_procesado,
+                    'mensaje': mensaje_base,
+                    'cuerpo_mensaje': cuerpo_mensaje
+                })
+            else:
+                st.info(f"ℹ️ Usuario {usuario} no tiene expedientes pendientes - No se enviará correo")
+        
+        if usuarios_para_envio:
+            st.success(f"✅ {len(usuarios_para_envio)} usuarios tienen expedientes pendientes para enviar")
             
-            # Preparar informes PDF para cada usuario
-            def generar_informe_usuario(usuario):
-                """Genera el PDF para un usuario específico"""
-                df_user = df_pendientes[df_pendientes["USUARIO"] == usuario].copy()
-                
-                if df_user.empty:
-                    return None
-                
-                # Procesar datos para PDF
-                indices_a_incluir = list(range(df_user.shape[1]))
-                indices_a_excluir = {1, 4, 10}
-                indices_finales = [i for i in indices_a_incluir if i not in indices_a_excluir]
-                NOMBRES_COLUMNAS_PDF = df_user.columns[indices_finales].tolist()
-                
-                # Redondear columna numérica si existe
-                indice_columna_a_redondear = 5
-                if indice_columna_a_redondear < len(df_user.columns):
-                    nombre_columna_a_redondear = df_user.columns[indice_columna_a_redondear]
-                    if nombre_columna_a_redondear in df_user.columns:
-                        df_user[nombre_columna_a_redondear] = pd.to_numeric(
-                            df_user[nombre_columna_a_redondear], errors='coerce'
-                        ).fillna(0).round(0).astype(int)
-                
-                df_pdf = df_user[NOMBRES_COLUMNAS_PDF].copy()
-                for col in df_pdf.select_dtypes(include='datetime').columns:
-                    df_pdf[col] = df_pdf[col].dt.strftime("%d/%m/%Y")
-                
-                num_expedientes = len(df_pdf)
-                titulo_pdf = f"{usuario} - Semana {num_semana} a {fecha_max_str} - Expedientes Pendientes ({num_expedientes})"
-                
-                return dataframe_to_pdf_bytes(df_pdf, titulo_pdf)
+            # Mostrar resumen
+            col1, col2, col3 = st.columns(3)
+            with col1:
+                st.metric("Usuarios activos", len(usuarios_activos))
+            with col2:
+                st.metric("Con expedientes", len(usuarios_para_envio))
+            with col3:
+                st.metric("Semana activa", f"Semana {num_semana}")
             
-            # Verificar usuarios con expedientes pendientes
-            usuarios_con_pendientes = df_pendientes['USUARIO'].dropna().unique()
-            usuarios_para_envio = []
+            # Mostrar tabla de usuarios para envío
+            with st.expander("📋 Ver detalles de usuarios para envío"):
+                df_envio = pd.DataFrame(usuarios_para_envio)
+                columnas_mostrar = ['usuario', 'resumen', 'email', 'expedientes', 'asunto']
+                st.dataframe(df_envio[columnas_mostrar], use_container_width=True)
             
-            for _, usuario_row in usuarios_activos.iterrows():
-                usuario = usuario_row['USUARIOS']
-                if usuario in usuarios_con_pendientes:
-                    num_expedientes = len(df_pendientes[df_pendientes['USUARIO'] == usuario])
-                    
-                    # Procesar asunto con variables
-                    asunto_template = usuario_row['ASUNTO'] if pd.notna(usuario_row['ASUNTO']) else f"Situación RECTAUTO asignados en la semana {num_semana} a {fecha_max_str}"
-                    asunto_procesado = procesar_asunto(asunto_template, num_semana, fecha_max_str)
-                    
-                    # Generar cuerpo del mensaje
-                    mensaje_base = usuario_row['MENSAJE'] if pd.notna(usuario_row['MENSAJE']) else "Se adjunta informe de expedientes pendientes."
-                    cuerpo_mensaje = generar_cuerpo_mensaje(mensaje_base)
-                    
-                    usuarios_para_envio.append({
-                        'usuario': usuario,
-                        'resumen': usuario_row.get('RESUMEN', ''),
-                        'email': usuario_row['EMAIL'],
-                        'cc': usuario_row.get('CC', ''),
-                        'bcc': usuario_row.get('BCC', ''),
-                        'expedientes': num_expedientes,
-                        'asunto': asunto_procesado,
-                        'mensaje': mensaje_base,
-                        'cuerpo_mensaje': cuerpo_mensaje
-                    })
-                else:
-                    st.info(f"ℹ️ Usuario {usuario} no tiene expedientes pendientes - No se enviará correo")
+            # Previsualización de correo
+            st.subheader("👁️ Previsualización del Correo")
             
             if usuarios_para_envio:
-                st.success(f"✅ {len(usuarios_para_envio)} usuarios tienen expedientes pendientes para enviar")
+                usuario_ejemplo = usuarios_para_envio[0]
+                col1, col2 = st.columns([1, 2])
                 
-                # Mostrar resumen
+                with col1:
+                    st.write("**Destinatario:**", usuario_ejemplo['email'])
+                    if usuario_ejemplo['cc']:
+                        st.write("**CC:**", usuario_ejemplo['cc'])
+                    if usuario_ejemplo['bcc']:
+                        st.write("**BCC:**", usuario_ejemplo['bcc'])
+                    st.write("**Asunto:**", usuario_ejemplo['asunto'])
+                    st.write("**Expedientes:**", usuario_ejemplo['expedientes'])
+                
+                with col2:
+                    st.text_area("**Cuerpo del Mensaje:**", usuario_ejemplo['cuerpo_mensaje'], height=200, key="preview_mensaje")
+            
+            # Botón de envío masivo
+            st.markdown("---")
+            st.subheader("🚀 Envío de Correos")
+            
+            st.warning("""
+            **⚠️ Importante antes de enviar:**
+            - Se usará la cuenta de Outlook predeterminada
+            - No es necesario tener Outlook abierto
+            - Los correos se enviarán inmediatamente
+            - Se adjuntará el PDF individual de cada usuario
+            - **Verifica que los datos sean correctos**
+            """)
+            
+            if st.button("📤 Enviar Correos a Todos los Usuarios", type="primary", key="enviar_correos"):
+                progress_bar = st.progress(0)
+                status_text = st.empty()
+                
+                correos_enviados = 0
+                correos_fallidos = 0
+                
+                for i, usuario_info in enumerate(usuarios_para_envio):
+                    status_text.text(f"📨 Enviando a: {usuario_info['usuario']} ({usuario_info['email']})")
+                    
+                    # Generar PDF usando la función reutilizable
+                    pdf_data = generar_pdf_usuario(usuario_info['usuario'], df_pendientes, num_semana, fecha_max_str)
+                    
+                    if pdf_data:
+                        # Enviar correo con Outlook
+                        nombre_archivo = f"Expedientes_Pendientes_{usuario_info['usuario']}_Semana_{num_semana}.pdf"
+                        
+                        exito = enviar_correo_outlook(
+                            destinatario=usuario_info['email'],
+                            asunto=usuario_info['asunto'],
+                            cuerpo_mensaje=usuario_info['cuerpo_mensaje'],
+                            archivo_pdf=pdf_data,
+                            nombre_archivo=nombre_archivo,
+                            cc=usuario_info.get('cc'),
+                            bcc=usuario_info.get('bcc')
+                        )
+                        
+                        if exito:
+                            correos_enviados += 1
+                            st.success(f"✅ Enviado a {usuario_info['usuario']}")
+                        else:
+                            correos_fallidos += 1
+                            st.error(f"❌ Falló envío a {usuario_info['usuario']}")
+                    else:
+                        st.warning(f"⚠️ No se pudo generar PDF para {usuario_info['usuario']}")
+                        correos_fallidos += 1
+                    
+                    progress_bar.progress((i + 1) / len(usuarios_para_envio))
+                
+                status_text.text("")
+                
+                # Mostrar resumen final
+                st.markdown("---")
+                st.subheader("📊 Resumen del Envío")
+                
                 col1, col2, col3 = st.columns(3)
                 with col1:
-                    st.metric("Usuarios activos", len(usuarios_activos))
+                    st.metric("Total procesados", len(usuarios_para_envio))
                 with col2:
-                    st.metric("Con expedientes", len(usuarios_para_envio))
+                    st.metric("Correos enviados", correos_enviados, delta=f"+{correos_enviados}")
                 with col3:
-                    st.metric("Semana activa", f"Semana {num_semana}")
+                    st.metric("Correos fallidos", correos_fallidos, delta=f"-{correos_fallidos}", delta_color="inverse")
                 
-                # Mostrar tabla de usuarios para envío
-                with st.expander("📋 Ver detalles de usuarios para envío"):
-                    df_envio = pd.DataFrame(usuarios_para_envio)
-                    columnas_mostrar = ['usuario', 'resumen', 'email', 'expedientes', 'asunto']
-                    st.dataframe(df_envio[columnas_mostrar], use_container_width=True)
-                
-                # Previsualización de correo
-                st.subheader("👁️ Previsualización del Correo")
-                
-                if usuarios_para_envio:
-                    usuario_ejemplo = usuarios_para_envio[0]
-                    col1, col2 = st.columns([1, 2])
-                    
-                    with col1:
-                        st.write("**Destinatario:**", usuario_ejemplo['email'])
-                        if usuario_ejemplo['cc']:
-                            st.write("**CC:**", usuario_ejemplo['cc'])
-                        if usuario_ejemplo['bcc']:
-                            st.write("**BCC:**", usuario_ejemplo['bcc'])
-                        st.write("**Asunto:**", usuario_ejemplo['asunto'])
-                        st.write("**Expedientes:**", usuario_ejemplo['expedientes'])
-                    
-                    with col2:
-                        st.text_area("**Cuerpo del Mensaje:**", usuario_ejemplo['cuerpo_mensaje'], height=200, key="preview_mensaje")
-                
-                # Botón de envío masivo
-                st.markdown("---")
-                st.subheader("🚀 Envío de Correos")
-                
-                st.warning("""
-                **⚠️ Importante antes de enviar:**
-                - Se usará la cuenta de Outlook predeterminada
-                - No es necesario tener Outlook abierto
-                - Los correos se enviarán inmediatamente
-                - Se adjuntará el PDF individual de cada usuario
-                - **Verifica que los datos sean correctos**
-                """)
-                
-                if st.button("📤 Enviar Correos a Todos los Usuarios", type="primary", key="enviar_correos"):
-                    progress_bar = st.progress(0)
-                    status_text = st.empty()
-                    
-                    correos_enviados = 0
-                    correos_fallidos = 0
-                    
-                    for i, usuario_info in enumerate(usuarios_para_envio):
-                        status_text.text(f"📨 Enviando a: {usuario_info['usuario']} ({usuario_info['email']})")
-                        
-                        # Generar PDF
-                        pdf_data = generar_informe_usuario(usuario_info['usuario'])
-                        
-                        if pdf_data:
-                            # Enviar correo con Outlook
-                            nombre_archivo = f"Expedientes_Pendientes_{usuario_info['usuario']}_Semana_{num_semana}.pdf"
-                            
-                            exito = enviar_correo_outlook(
-                                destinatario=usuario_info['email'],
-                                asunto=usuario_info['asunto'],
-                                cuerpo_mensaje=usuario_info['cuerpo_mensaje'],
-                                archivo_pdf=pdf_data,
-                                nombre_archivo=nombre_archivo,
-                                cc=usuario_info.get('cc'),
-                                bcc=usuario_info.get('bcc')
-                            )
-                            
-                            if exito:
-                                correos_enviados += 1
-                                st.success(f"✅ Enviado a {usuario_info['usuario']}")
-                            else:
-                                correos_fallidos += 1
-                                st.error(f"❌ Falló envío a {usuario_info['usuario']}")
-                        else:
-                            st.warning(f"⚠️ No se pudo generar PDF para {usuario_info['usuario']}")
-                            correos_fallidos += 1
-                        
-                        progress_bar.progress((i + 1) / len(usuarios_para_envio))
-                    
-                    status_text.text("")
-                    
-                    # Mostrar resumen final
-                    st.markdown("---")
-                    st.subheader("📊 Resumen del Envío")
-                    
-                    col1, col2, col3 = st.columns(3)
-                    with col1:
-                        st.metric("Total procesados", len(usuarios_para_envio))
-                    with col2:
-                        st.metric("Correos enviados", correos_enviados, delta=f"+{correos_enviados}")
-                    with col3:
-                        st.metric("Correos fallidos", correos_fallidos, delta=f"-{correos_fallidos}", delta_color="inverse")
-                    
-                    if correos_enviados > 0:
-                        st.balloons()
-                        st.success("🎉 ¡Envío de correos completado!")
-            
-            else:
-                st.warning("⚠️ No hay usuarios con expedientes pendientes para enviar")
+                if correos_enviados > 0:
+                    st.balloons()
+                    st.success("🎉 ¡Envío de correos completado!")
+        
+        else:
+            st.warning("⚠️ No hay usuarios con expedientes pendientes para enviar")
     
     # Información de configuración
     st.markdown("---")
@@ -926,15 +934,17 @@ if eleccion == "Principal":
         
         **📋 Estructura del archivo USUARIOS.xlsx (Hoja Sheet1):**
         - USUARIOS: Código del usuario (debe coincidir con RECTAUTO)
-        - ENVIAR: "SI" o "NO" 
+        - ENVIAR: "SI" o "SÍ" (en mayúsculas)
         - EMAIL: Dirección de correo
-        - ASUNTO: Puede usar &num_semana& y &fecha_max&
+        - ASUNTO: Puede usar &num_semana& y &fecha_max& como variables
         - MENSAJE: Texto del mensaje
-        - CC, BCC: Opcionales (separar múltiples con ;)
-        - RESUMEN: Opcional (nombre del usuario)
+        - CC, BCC: Opcionales (separar múltiples emails con ;)
+        - RESUMEN: Opcional (nombre completo del usuario)
+        - Otras columnas: Se pueden añadir sin afectar el funcionamiento
         """)
 
 elif eleccion == "Indicadores clave (KPI)":
+    # ... (el código de la sección KPI se mantiene igual)
     # Usar df_combinado en lugar de df
     df = df_combinado
     
