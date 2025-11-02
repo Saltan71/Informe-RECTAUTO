@@ -55,7 +55,7 @@ def cargar_y_procesar_notifica(archivo):
         df = pd.read_excel(archivo, sheet_name=HOJA)
         df.columns = [col.upper() for col in df.columns]
         
-        # Ordenar por RUE ORIGEN (ascendente) y FECHA APERTURA (descendente)
+        # Ordenar por RUE Origen (ascendente) y Fecha Apertura (descendente)
         if 'RUE Origen' in df.columns and 'Fecha Apertura' in df.columns:
             df['Fecha Apertura'] = pd.to_datetime(df['Fecha Apertura'], errors='coerce')
             df = df.sort_values(['RUE Origen', 'Fecha Apertura'], ascending=[True, False])
@@ -94,7 +94,7 @@ def cargar_y_procesar_triaje(archivo):
             columnas_a_mantener = ['RUE', 'Usuario-csv', 'Calificación', 'Observaciones', 'FECHA ASIG']
             columnas_existentes = [col for col in columnas_a_mantener if col in df.columns]
             df = df[['RUE'] + columnas_existentes]
-            
+            df
             return df
         else:
             st.warning("TRIAJE no tiene al menos 4 columnas")
