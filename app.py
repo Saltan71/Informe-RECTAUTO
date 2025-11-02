@@ -166,7 +166,7 @@ def dataframe_to_pdf_bytes(df, title):
     pdf.ln(5)
 
     # Anchos de columna específicos
-    col_widths = [30, 13, 13, 10, 18, 13, 11, 13, 26, 20, 22, 12, 20, 13, 12, 24, 20, 13]
+    col_widths = [28, 11, 11, 10, 18, 10, 11, 18, 13, 26, 22, 10, 18, 13, 10, 24, 20, 13]
     
     # Ajustar anchos si el número de columnas es diferente
     if len(df.columns) < len(col_widths):
