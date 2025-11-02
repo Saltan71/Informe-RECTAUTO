@@ -54,7 +54,7 @@ def cargar_y_procesar_notifica(archivo):
     try:
         df = pd.read_excel(archivo, sheet_name=HOJA)
         df.columns = [col.upper().strip() for col in df.columns]
-        
+        df
         # Ordenar por RUE ORIGEN (ascendente) y FECHA APERTURA (descendente)
         if 'RUE ORIGEN' in df.columns and 'FECHA APERTURA' in df.columns:
             df['FECHA APERTURA'] = pd.to_datetime(df['FECHA APERTURA'], errors='coerce')
