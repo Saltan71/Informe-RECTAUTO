@@ -93,7 +93,7 @@ def cargar_y_procesar_triaje(archivo):
             # Mantener solo columnas relevantes
             columnas_a_mantener = ['RUETriaje', 'Usuario-csv', 'Calificación', 'Observaciones', 'FECHA ASIG']
             columnas_existentes = [col for col in columnas_a_mantener if col in df.columns]
-            df = df[['RUETriaje'] + columnas_existentes]
+            df = df[columnas_existentes]
             df
             return df
         else:
