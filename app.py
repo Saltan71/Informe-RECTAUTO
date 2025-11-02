@@ -33,27 +33,33 @@ class PDF(FPDF):
 
     def aplicar_formato_condicional_celda(self, df, idx, col_name, valor, col_width, altura_linea, x, y):
         """Aplica formato condicional a celdas específicas"""
-        # Condición 1: USUARIO vs USUARIO-CSV
-        if col_name == 'USUARIO-CSV' and 'USUARIO' in df.columns:
-            usuario_principal = df.iloc[idx]['USUARIO'] if 'USUARIO' in df.columns else ''
-            if usuario_principal != valor:
-                # Fondo rojo cuando USUARIO es distinto de USUARIO-CSV
-                self.set_fill_color(255, 0, 0)
-                self.rect(x, y, col_width, altura_linea, 'F')
-                self.set_fill_color(255, 255, 255)  # Restaurar color
-        
-        # Condición 2: RUE con condición específica
-        elif col_name == 'RUE':
-            etiq_penultimo = df.iloc[idx]['ETIQ. PENÚLTIMO TRAM.'] if 'ETIQ. PENÚLTIMO TRAM.' in df.columns else ''
-            fecha_notif = df.iloc[idx]['FECHA NOTIFICACIÓN'] if 'FECHA NOTIFICACIÓN' in df.columns else None
-            
-            if etiq_penultimo == "80 PROPRES" and pd.notna(fecha_notif):
-                fecha_limite = fecha_notif + timedelta(days=23)
-                if datetime.now() > fecha_limite:
-                    # Fondo amarillo cuando se cumple la condición
-                    self.set_fill_color(255, 255, 0)
+        try:
+            # Condición 1: USUARIO vs USUARIO-CSV
+            if col_name == 'USUARIO-CSV' and 'USUARIO' in df.columns:
+                usuario_principal = df.iloc[idx]['USUARIO'] if 'USUARIO' in df.columns else ''
+                if str(usuario_principal) != str(valor):
+                    # Fondo rojo cuando USUARIO es distinto de USUARIO-CSV
+                    self.set_fill_color(255, 0, 0)
                     self.rect(x, y, col_width, altura_linea, 'F')
                     self.set_fill_color(255, 255, 255)  # Restaurar color
+            
+            # Condición 2: RUE con condición específica
+            elif col_name == 'RUE':
+                etiq_penultimo = df.iloc[idx]['ETIQ. PENÚLTIMO TRAM.'] if 'ETIQ. PENÚLTIMO TRAM.' in df.columns else ''
+                fecha_notif = df.iloc[idx]['FECHA NOTIFICACIÓN'] if 'FECHA NOTIFICACIÓN' in df.columns else None
+                
+                if str(etiq_penultimo) == "80 PROPRES" and pd.notna(fecha_notif):
+                    try:
+                        fecha_limite = fecha_notif + timedelta(days=23)
+                        if datetime.now() > fecha_limite:
+                            # Fondo amarillo cuando se cumple la condición
+                            self.set_fill_color(255, 255, 0)
+                            self.rect(x, y, col_width, altura_linea, 'F')
+                            self.set_fill_color(255, 255, 255)  # Restaurar color
+                    except (TypeError, ValueError):
+                        pass  # Ignorar errores de fecha
+        except Exception:
+            pass  # Ignorar errores en el formato condicional
 
 # Funciones optimizadas con cache
 @st.cache_data(ttl=CACHE_TTL, show_spinner="Procesando archivo Excel...")
@@ -524,6 +530,35 @@ else:
     st.info("💡 **Archivos opcionales:** NOTIFICA, TRIAJE y USUARIOS enriquecerán el análisis")
     st.stop()
 
+# Función para aplicar formato condicional al DataFrame mostrado - CORREGIDA
+def aplicar_formato_condicional_dataframe(df):
+    """Aplica formato condicional al DataFrame para Streamlit"""
+    styles = pd.DataFrame('', index=df.index, columns=df.columns)
+    
+    try:
+        # Condición 1: USUARIO-CSV con fondo rojo cuando USUARIO es distinto de USUARIO-CSV
+        if 'USUARIO-CSV' in df.columns and 'USUARIO' in df.columns:
+            mask_usuario = df['USUARIO'] != df['USUARIO-CSV']
+            styles.loc[mask_usuario, 'USUARIO-CSV'] = 'background-color: rgb(255, 0, 0)'
+        
+        # Condición 2: RUE con fondo amarillo cuando ETIQ. PENÚLTIMO TRAM. = "80 PROPRES" y fecha actual > FECHA NOTIFICACIÓN + 23 días
+        if 'RUE' in df.columns and 'ETIQ. PENÚLTIMO TRAM.' in df.columns and 'FECHA NOTIFICACIÓN' in df.columns:
+            for idx, row in df.iterrows():
+                try:
+                    if (str(row['ETIQ. PENÚLTIMO TRAM.']) == "80 PROPRES" and 
+                        pd.notna(row['FECHA NOTIFICACIÓN'])):
+                        # Asegurarse de que la fecha es un objeto datetime
+                        if isinstance(row['FECHA NOTIFICACIÓN'], (pd.Timestamp, datetime)):
+                            fecha_limite = row['FECHA NOTIFICACIÓN'] + timedelta(days=23)
+                            if datetime.now() > fecha_limite:
+                                styles.loc[idx, 'RUE'] = 'background-color: rgb(255, 255, 0)'
+                except (TypeError, ValueError):
+                    continue  # Ignorar errores de fecha
+    except Exception as e:
+        st.error(f"Error en formato condicional: {e}")
+    
+    return styles
+
 # Mostrar información del dataset combinado
 with st.expander("📊 Información del Dataset Combinado"):
     col1, col2, col3, col4 = st.columns(4)
@@ -546,36 +581,13 @@ with st.expander("📊 Información del Dataset Combinado"):
         usuarios_status = "✅ Cargado" if df_usuarios is not None else "❌ No cargado"
         st.metric("USUARIOS", usuarios_status)
     
-    # Mostrar primeras filas
+    # Mostrar primeras filas SIN formato condicional para evitar errores
     st.write("**Vista previa del dataset combinado:**")
+    df_mostrar_preview = df_combinado.head(3).copy()
+    for col in df_mostrar_preview.select_dtypes(include='datetime').columns:
+        df_mostrar_preview[col] = df_mostrar_preview[col].dt.strftime("%d/%m/%Y")
     
-    # Función para aplicar formato condicional al DataFrame mostrado
-    def aplicar_formato_condicional_dataframe(df):
-        styles = pd.DataFrame('', index=df.index, columns=df.columns)
-        
-        # Condición 1: USUARIO-CSV con fondo rojo cuando USUARIO es distinto de USUARIO-CSV
-        if 'USUARIO-CSV' in df.columns and 'USUARIO' in df.columns:
-            mask_usuario = df['USUARIO'] != df['USUARIO-CSV']
-            styles.loc[mask_usuario, 'USUARIO-CSV'] = 'background-color: rgb(255, 0, 0)'
-        
-        # Condición 2: RUE con fondo amarillo cuando ETIQ. PENÚLTIMO TRAM. = "80 PROPRES" y fecha actual > FECHA NOTIFICACIÓN + 23 días
-        if 'RUE' in df.columns and 'ETIQ. PENÚLTIMO TRAM.' in df.columns and 'FECHA NOTIFICACIÓN' in df.columns:
-            for idx, row in df.iterrows():
-                if (row['ETIQ. PENÚLTIMO TRAM.'] == "80 PROPRES" and 
-                    pd.notna(row['FECHA NOTIFICACIÓN'])):
-                    fecha_limite = row['FECHA NOTIFICACIÓN'] + timedelta(days=23)
-                    if datetime.now() > fecha_limite:
-                        styles.loc[idx, 'RUE'] = 'background-color: rgb(255, 255, 0)'
-        
-        return styles
-    
-    # Aplicar formato condicional al dataframe mostrado
-    df_mostrar_con_formato = df_combinado.head(3).copy()
-    for col in df_mostrar_con_formato.select_dtypes(include='datetime').columns:
-        df_mostrar_con_formato[col] = df_mostrar_con_formato[col].dt.strftime("%d/%m/%Y")
-    
-    st.dataframe(df_mostrar_con_formato.style.apply(aplicar_formato_condicional_dataframe, axis=None), 
-                 use_container_width=True)
+    st.dataframe(df_mostrar_preview, use_container_width=True)
     
     # Mostrar columnas disponibles
     st.write("**Columnas disponibles:**")
@@ -743,16 +755,30 @@ if eleccion == "Principal":
         if fig:
             st.plotly_chart(fig, use_container_width=True)
 
-    # Vista de datos
+    # Vista de datos - CORREGIDA: separar la lógica de formato condicional
     st.subheader("📋 Vista general de expedientes")
-    df_mostrar = df_filtrado.copy()
-    # Formatear fechas
-    for col in df_mostrar.select_dtypes(include='datetime').columns:
-        df_mostrar[col] = df_mostrar[col].dt.strftime("%d/%m/%Y")
     
-    # Aplicar formato condicional al DataFrame mostrado
-    st.dataframe(df_mostrar.style.apply(aplicar_formato_condicional_dataframe, axis=None), 
-                 use_container_width=True)
+    # Crear dos versiones: una para mostrar (con fechas formateadas) y otra para el formato condicional (con fechas originales)
+    df_mostrar = df_filtrado.copy()
+    
+    # Aplicar formato condicional usando el DataFrame original (con fechas como datetime)
+    try:
+        df_con_estilos = df_filtrado.style.apply(aplicar_formato_condicional_dataframe, axis=None)
+        
+        # Formatear fechas para mostrar
+        df_mostrar_formateado = df_mostrar.copy()
+        for col in df_mostrar_formateado.select_dtypes(include='datetime').columns:
+            df_mostrar_formateado[col] = df_mostrar_formateado[col].dt.strftime("%d/%m/%Y")
+        
+        # Mostrar el DataFrame con estilos pero con fechas formateadas
+        st.dataframe(df_con_estilos, use_container_width=True)
+        
+    except Exception as e:
+        st.error(f"Error al aplicar formato condicional: {e}")
+        # Fallback: mostrar sin formato condicional
+        for col in df_mostrar.select_dtypes(include='datetime').columns:
+            df_mostrar[col] = df_mostrar[col].dt.strftime("%d/%m/%Y")
+        st.dataframe(df_mostrar, use_container_width=True)
 
     registros_mostrados = f"{len(df_mostrar):,}".replace(",", ".")
     registros_totales = f"{len(df):,}".replace(",", ".")
@@ -791,6 +817,7 @@ if eleccion == "Principal":
                 key='pdf_download_button'
             )
 
+    # ... (el resto del código de la sección Principal se mantiene igual)
     # SECCIÓN: ENVÍO DE CORREOS INTEGRADA
     st.markdown("---")
     st.header("📧 Envío de Correos")
@@ -1058,7 +1085,7 @@ if eleccion == "Principal":
         """)
 
 elif eleccion == "Indicadores clave (KPI)":
-    # ... (el código de la sección KPI se mantiene igual)
+    # ... (el código de la sección KPI se mantiene igual, ya que no usa el formato condicional)
     # Usar df_combinado en lugar de df
     df = df_combinado
     
