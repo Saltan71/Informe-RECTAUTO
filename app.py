@@ -248,23 +248,6 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# CSS más específico para el slider de semanas
-st.markdown("""
-<style>
-    /* Para la etiqueta "Selecciona la semana:" */
-    div[data-testid="stSelectSlider"] label {
-        color: #007933 !important;
-        font-weight: bold !important;
-    }
-        
-    /* Para el valor de la semana seleccionada que se muestra */
-    div[data-testid="stSelectSlider"] div:has(> div[role="slider"]) ~ div {
-        color: #007933 !important;
-        font-weight: bold !important;
-    }
-</style>
-""", unsafe_allow_html=True)
-
 # Logo
 st.sidebar.image("Logo Atrian.png", width=260)
 
