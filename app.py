@@ -158,14 +158,16 @@ def convertir_fechas(df):
 
 @st.cache_data(ttl=CACHE_TTL)
 def dataframe_to_pdf_bytes(df, title):
-    """Genera un PDF desde un DataFrame con cache y altura de filas autoajustable"""
+    """Genera un PDF desde un DataFrame con cache y altura de filas autoajustable mejorado"""
     pdf = PDF('L', 'mm', 'A4')
     pdf.add_page()
     pdf.set_font("Arial", "B", 8)
     pdf.cell(0, 10, title, 0, 1, 'C')
     pdf.ln(5)
 
-    col_widths = [33, 11, 11, 10, 18, 11, 10, 18, 11, 33, 22, 11, 18, 11, 10, 22, 22, 11]
+    # Anchos de columna específicos
+    col_widths = [28, 11, 11, 10, 16, 11, 11, 16, 11, 26, 22, 10, 18, 11, 10, 22, 20, 10]
+    
     # Ajustar anchos si el número de columnas es diferente
     if len(df.columns) < len(col_widths):
         col_widths = col_widths[:len(df.columns)]
@@ -173,11 +175,12 @@ def dataframe_to_pdf_bytes(df, title):
         col_widths.extend([20] * (len(df.columns) - len(col_widths)))
     
     df_mostrar_pdf = df.iloc[:, :len(col_widths)]
-    ALTURA_ENCABEZADO = 11
-    ALTURA_BASE_FILA = 6  # Altura base para una fila con una línea
+    ALTURA_ENCABEZADO = 8
+    ALTURA_LINEA = 3  # Altura mínima por línea
+    ALTURA_BASE = 4   # Altura base para la primera línea
 
     def imprimir_encabezados():
-        pdf.set_font("Arial", "", 5)
+        pdf.set_font("Arial", "B", 5)
         pdf.set_fill_color(200, 220, 255)
         y_inicio = pdf.get_y()
         
@@ -188,14 +191,17 @@ def dataframe_to_pdf_bytes(df, title):
             pdf.set_xy(x, y)
             
             texto = str(header)
+            # Calcular si el texto cabe en una línea
             ancho_texto = pdf.get_string_width(texto)
             
             if ancho_texto <= col_widths[i] - 2:
+                # Centrar texto que cabe en una línea
                 altura_texto = 3
                 y_pos = y + (ALTURA_ENCABEZADO - altura_texto) / 2
                 pdf.set_xy(x, y_pos)
                 pdf.cell(col_widths[i], altura_texto, texto, 0, 0, 'C')
             else:
+                # Usar multi_cell para texto largo
                 pdf.set_xy(x, y + 1)
                 pdf.multi_cell(col_widths[i], 2.5, texto, 0, 'C')
             
@@ -209,66 +215,74 @@ def dataframe_to_pdf_bytes(df, title):
     
     for _, row in df_mostrar_pdf.iterrows():
         # Calcular la altura máxima necesaria para esta fila
-        altura_maxima_fila = ALTURA_BASE_FILA
+        max_lineas = 1
         
-        # Primera pasada: calcular la altura necesaria para cada celda
-        alturas_celdas = []
         for i, col_data in enumerate(row):
-            texto = str(col_data).replace("\n", " ")
+            texto = str(col_data) if col_data is not None else ""
             
-            # Si el texto está vacío, usar altura base
             if not texto.strip():
-                alturas_celdas.append(ALTURA_BASE_FILA)
                 continue
                 
             # Calcular cuántas líneas necesitará el texto
-            ancho_disponible = col_widths[i] - 2  # Margen interno
+            ancho_disponible = col_widths[i] - 2
             ancho_texto = pdf.get_string_width(texto)
             
-            # Si el texto cabe en una línea
             if ancho_texto <= ancho_disponible:
-                alturas_celdas.append(ALTURA_BASE_FILA)
+                lineas_necesarias = 1
             else:
                 # Calcular número aproximado de líneas necesarias
-                lineas_estimadas = max(1, int(ancho_texto / ancho_disponible) + 1)
-                altura_celda = ALTURA_BASE_FILA * lineas_estimadas
-                alturas_celdas.append(altura_celda)
-                
-                # Actualizar altura máxima de la fila
-                if altura_celda > altura_maxima_fila:
-                    altura_maxima_fila = altura_celda
+                lineas_necesarias = max(1, int(ancho_texto / ancho_disponible) + 1)
+                # Considerar saltos de línea existentes
+                lineas_necesarias += texto.count('\n')
+            
+            if lineas_necesarias > max_lineas:
+                max_lineas = lineas_necesarias
+        
+        # Calcular altura total de la fila
+        altura_fila = ALTURA_BASE + ((max_lineas - 1) * ALTURA_LINEA)
         
         # Verificar si necesitamos nueva página
-        if pdf.get_y() + altura_maxima_fila > 190:
+        if pdf.get_y() + altura_fila > 190:
             pdf.add_page()
             imprimir_encabezados()
-            # Reiniciar altura máxima después de nueva página
-            altura_maxima_fila = ALTURA_BASE_FILA
 
-        # Segunda pasada: imprimir las celdas con la altura calculada
+        # Imprimir la fila
         x_inicio = pdf.get_x()
         y_inicio = pdf.get_y()
         
+        # Primero dibujar todos los bordes
+        for i in range(len(row)):
+            pdf.rect(x_inicio + sum(col_widths[:i]), y_inicio, col_widths[i], altura_fila)
+        
+        # Luego imprimir el contenido
         for i, col_data in enumerate(row):
-            texto = str(col_data).replace("\n", " ")
-            altura_celda_actual = alturas_celdas[i]
+            texto = str(col_data) if col_data is not None else ""
+            x_celda = x_inicio + sum(col_widths[:i])
+            y_celda = y_inicio + 1  # Pequeño margen interno
             
-            # Posicionar en la celda actual
-            pdf.set_xy(x_inicio, y_inicio)
+            # Posicionar en la celda
+            pdf.set_xy(x_celda, y_celda)
             
-            # Si la celda necesita más altura que la base, usar multi_cell
-            if altura_celda_actual > ALTURA_BASE_FILA:
-                # Calcular cuántas líneas realmente necesitamos
-                lineas_reales = altura_celda_actual // ALTURA_BASE_FILA
-                pdf.multi_cell(col_widths[i], ALTURA_BASE_FILA, texto, 1, 'L')
+            # Para cada celda, calcular cuántas líneas necesita específicamente
+            ancho_disponible = col_widths[i] - 2
+            ancho_texto = pdf.get_string_width(texto)
+            
+            if ancho_texto <= ancho_disponible:
+                # Texto cabe en una línea
+                pdf.cell(col_widths[i], ALTURA_LINEA, texto, 0, 0, 'L')
             else:
-                pdf.cell(col_widths[i], altura_celda_actual, texto, 1, 0, 'L')
-            
-            # Mover a la siguiente columna
-            x_inicio += col_widths[i]
+                # Texto necesita múltiples líneas
+                lineas_esta_celda = max(1, int(ancho_texto / ancho_disponible) + 1)
+                lineas_esta_celda += texto.count('\n')
+                
+                # Altura específica para esta celda
+                altura_esta_celda = ALTURA_BASE + ((lineas_esta_celda - 1) * ALTURA_LINEA)
+                
+                # Usar multi_cell para texto que ocupa múltiples líneas
+                pdf.multi_cell(col_widths[i], ALTURA_LINEA, texto, 0, 'L')
         
         # Mover a la siguiente fila
-        pdf.set_xy(pdf.l_margin, y_inicio + altura_maxima_fila)
+        pdf.set_xy(pdf.l_margin, y_inicio + altura_fila)
 
     pdf_output = pdf.output(dest='B')
     return pdf_output
