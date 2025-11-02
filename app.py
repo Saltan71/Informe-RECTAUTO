@@ -195,32 +195,31 @@ def convertir_fechas(df):
     return df
 
 @st.cache_data(ttl=CACHE_TTL)
-def dataframe_to_pdf_bytes(df, title, df_original=None):
-    """Genera un PDF desde un DataFrame con cache y altura de filas autoajustable"""
+def dataframe_to_pdf_bytes(df_mostrar, title, df_original):
+    """Genera un PDF desde un DataFrame con formato condicional"""
     pdf = PDF('L', 'mm', 'A4')
     pdf.add_page()
     pdf.set_font("Arial", "B", 8)
     pdf.cell(0, 10, title, 0, 1, 'C')
     pdf.ln(5)
 
+    # Definir anchos de columnas
     col_widths = [28, 11, 11, 10, 18, 11, 11, 18, 13, 22, 22, 10, 18, 13, 10, 24, 20, 13]
-    # Ajustar anchos si el número de columnas es diferente
-    if len(df.columns) < len(col_widths):
-        col_widths = col_widths[:len(df.columns)]
-    elif len(df.columns) > len(col_widths):
-        col_widths.extend([20] * (len(df.columns) - len(col_widths)))
+    if len(df_mostrar.columns) < len(col_widths):
+        col_widths = col_widths[:len(df_mostrar.columns)]
+    elif len(df_mostrar.columns) > len(col_widths):
+        col_widths.extend([20] * (len(df_mostrar.columns) - len(col_widths)))
     
-    df_mostrar_pdf = df.iloc[:, :len(col_widths)]
     ALTURA_ENCABEZADO = 13
-    ALTURA_LINEA = 3  # Altura mínima por línea de texto
-    ALTURA_BASE_FILA = 5  # Altura base para una fila con una línea
+    ALTURA_LINEA = 3
+    ALTURA_BASE_FILA = 5
 
     def imprimir_encabezados():
         pdf.set_font("Arial", "", 5)
         pdf.set_fill_color(200, 220, 255)
         y_inicio = pdf.get_y()
         
-        for i, header in enumerate(df_mostrar_pdf.columns):
+        for i, header in enumerate(df_mostrar.columns):
             x = pdf.get_x()
             y = pdf.get_y()
             pdf.cell(col_widths[i], ALTURA_ENCABEZADO, "", 1, 0, 'C', True)
@@ -243,36 +242,26 @@ def dataframe_to_pdf_bytes(df, title, df_original=None):
         pdf.set_xy(pdf.l_margin, y_inicio + ALTURA_ENCABEZADO)
 
     imprimir_encabezados()
-
     pdf.set_font("Arial", "", 5)
     
-    for idx, row in df_mostrar_pdf.iterrows():
-        # Calcular la altura máxima necesaria para esta fila
+    # Iterar por cada fila del DataFrame a mostrar
+    for idx, (_, row) in enumerate(df_mostrar.iterrows()):
+        # Calcular altura máxima necesaria para esta fila
         max_lineas = 1
         
-        # Primera pasada: calcular el número máximo de líneas necesarias
-        for i, col_data in enumerate(row):
+        for col_data in row:
             texto = str(col_data).replace("\n", " ")
-            
             if not texto.strip():
                 continue
                 
-            # Calcular cuántas líneas necesitará el texto
-            ancho_disponible = col_widths[i] - 2  # Margen interno
+            ancho_disponible = min(col_widths) - 2
             ancho_texto = pdf.get_string_width(texto)
             
-            # Si el texto cabe en una línea
-            if ancho_texto <= ancho_disponible:
-                lineas_necesarias = 1
-            else:
-                # Calcular número aproximado de líneas necesarias
+            if ancho_texto > ancho_disponible:
                 lineas_necesarias = max(1, int(ancho_texto / ancho_disponible) + 1)
-            
-            # Actualizar máximo de líneas
-            if lineas_necesarias > max_lineas:
-                max_lineas = lineas_necesarias
+                if lineas_necesarias > max_lineas:
+                    max_lineas = lineas_necesarias
         
-        # Calcular altura total de la fila
         altura_fila = ALTURA_BASE_FILA + ((max_lineas - 1) * ALTURA_LINEA)
         
         # Verificar si necesitamos nueva página
@@ -280,7 +269,7 @@ def dataframe_to_pdf_bytes(df, title, df_original=None):
             pdf.add_page()
             imprimir_encabezados()
 
-        # Segunda pasada: imprimir las celdas
+        # Imprimir fila
         x_inicio = pdf.get_x()
         y_inicio = pdf.get_y()
         
@@ -288,30 +277,23 @@ def dataframe_to_pdf_bytes(df, title, df_original=None):
         for i in range(len(row)):
             pdf.rect(x_inicio + sum(col_widths[:i]), y_inicio, col_widths[i], altura_fila)
         
-        # Imprimir contenido de las celdas
-        for i, col_data in enumerate(row):
+        # Imprimir contenido con formato condicional
+        for i, (col_name, col_data) in enumerate(zip(df_mostrar.columns, row)):
             texto = str(col_data).replace("\n", " ")
             x_celda = x_inicio + sum(col_widths[:i])
             y_celda = y_inicio
             
-            # Aplicar formato condicional antes de imprimir
-            col_name = df_mostrar_pdf.columns[i]
+            # APLICAR FORMATO CONDICIONAL (esto es clave)
+            pdf.aplicar_formato_condicional_pdf(df_original, idx, col_name, col_widths[i], altura_fila, x_celda, y_celda)
             
-            # Usar df_original si está disponible, de lo contrario usar df_mostrar_pdf
-            df_para_formato = df_original if df_original is not None else df_mostrar_pdf
-            pdf.aplicar_formato_condicional_pdf(df_para_formato, idx, col_name, col_data, col_widths[i], altura_fila, x_celda, y_celda)
-            
-            # Posicionar en la celda actual
+            # Posicionar y escribir el texto
             pdf.set_xy(x_celda, y_celda)
-            
-            # Usar multi_cell para texto que puede ocupar múltiples líneas
             pdf.multi_cell(col_widths[i], ALTURA_LINEA, texto, 0, 'L')
         
         # Mover a la siguiente fila
         pdf.set_xy(pdf.l_margin, y_inicio + altura_fila)
 
-    pdf_output = pdf.output(dest='B')
-    return pdf_output
+    return pdf.output(dest='B')
     
 def obtener_hash_archivo(archivo):
     """Genera un hash único del archivo para detectar cambios"""
@@ -322,7 +304,7 @@ def obtener_hash_archivo(archivo):
     archivo.seek(0)
     return file_hash
 
-# CSS ACTUALIZADO CON ESTILOS PARA BOTONES Y MENÚS DESPLEGABLES
+# CSS (se mantiene igual)
 st.markdown("""
 <style>
     [data-testid="stSidebar"] {
@@ -503,7 +485,7 @@ with st.sidebar:
         st.rerun()
 
 
-# Función para generar PDF de usuario (modificada para pasar el DataFrame original)
+# Función para generar PDF de usuario (REVISADA)
 def generar_pdf_usuario(usuario, df_pendientes, num_semana, fecha_max_str):
     """Genera el PDF para un usuario específico"""
     df_user = df_pendientes[df_pendientes["USUARIO"] == usuario].copy()
@@ -511,7 +493,7 @@ def generar_pdf_usuario(usuario, df_pendientes, num_semana, fecha_max_str):
     if df_user.empty:
         return None
     
-    # Procesar datos para PDF
+    # Procesar datos para PDF - mantener las columnas originales para el formato condicional
     indices_a_incluir = list(range(df_user.shape[1]))
     indices_a_excluir = {1, 4, 10}
     indices_finales = [i for i in indices_a_incluir if i not in indices_a_excluir]
@@ -524,19 +506,17 @@ def generar_pdf_usuario(usuario, df_pendientes, num_semana, fecha_max_str):
         if nombre_columna_a_redondear in df_user.columns:
             df_user[nombre_columna_a_redondear] = pd.to_numeric(df_user[nombre_columna_a_redondear], errors='coerce').fillna(0).round(0).astype(int)
 
-    df_pdf = df_user[NOMBRES_COLUMNAS_PDF].copy()
-    # Mantener las fechas como datetime para el formato condicional
-    # Solo convertimos a string para mostrar
-    df_pdf_mostrar = df_pdf.copy()
+    # Crear DataFrame para mostrar (con fechas formateadas)
+    df_pdf_mostrar = df_user[NOMBRES_COLUMNAS_PDF].copy()
     for col in df_pdf_mostrar.select_dtypes(include='datetime').columns:
         df_pdf_mostrar[col] = df_pdf_mostrar[col].dt.strftime("%d/%m/%Y")
 
-    num_expedientes = len(df_pdf)
+    num_expedientes = len(df_pdf_mostrar)
     titulo_pdf = f"{usuario} - Semana {num_semana} a {fecha_max_str} - Expedientes Pendientes ({num_expedientes})"
     
-    # Pasar tanto el DataFrame para mostrar como el original para el formato condicional
-    return dataframe_to_pdf_bytes(df_pdf_mostrar, titulo_pdf, df_original=df_user)
-    
+    # Pasar el DataFrame ORIGINAL (con fechas datetime) para el formato condicional
+    # y el DataFrame para mostrar (con fechas formateadas) para la visualización
+    return dataframe_to_pdf_bytes(df_pdf_mostrar, titulo_pdf, df_original=df_user)    
 
 # NUEVA SECCIÓN: CARGA DE CUATRO ARCHIVOS (incluyendo USUARIOS)
 st.markdown("---")
