@@ -156,9 +156,114 @@ def convertir_fechas(df):
             df[col] = pd.to_datetime(df[col], errors='coerce')
     return df
 
+
+
+def aplicar_formato_condicional_streamlit(df):
+    """Aplica formato condicional al DataFrame para Streamlit"""
+    # Crear una copia para no modificar el original
+    df_estilizado = df.copy()
+    
+    # Función para resaltar USUARIO-CSV cuando USUARIO es distinto de USUARIO-CSV
+    def resaltar_usuario_csv(row):
+        styles = [''] * len(row)
+        if 'USUARIO-CSV' in df_estilizado.columns and 'USUARIO' in df_estilizado.columns:
+            usuario_idx = df_estilizado.columns.get_loc('USUARIO')
+            usuario_csv_idx = df_estilizado.columns.get_loc('USUARIO-CSV')
+            
+            usuario = row.iloc[usuario_idx]
+            usuario_csv = row.iloc[usuario_csv_idx]
+            
+            if pd.notna(usuario) and pd.notna(usuario_csv) and str(usuario) != str(usuario_csv):
+                styles[usuario_csv_idx] = 'background-color: #ff0000; color: white;'
+        
+        return styles
+    
+    # Función para resaltar RUE cuando ETIQ. PENÚLTIMO TRAM. = "80 PROPRES" y fecha actual > FECHA NOTIFICACIÓN + 23 días
+    def resaltar_rue_vencido(row):
+        styles = [''] * len(row)
+        
+        if all(col in df_estilizado.columns for col in ['RUE', 'ETIQ. PENÚLTIMO TRAM.', 'FECHA NOTIFICACIÓN']):
+            rue_idx = df_estilizado.columns.get_loc('RUE')
+            etiq_idx = df_estilizado.columns.get_loc('ETIQ. PENÚLTIMO TRAM.')
+            fecha_notif_idx = df_estilizado.columns.get_loc('FECHA NOTIFICACIÓN')
+            
+            etiq = row.iloc[etiq_idx]
+            fecha_notif_str = row.iloc[fecha_notif_idx]
+            
+            if (pd.notna(etiq) and str(etiq).strip() == "80 PROPRES" and 
+                pd.notna(fecha_notif_str) and fecha_notif_str.strip()):
+                
+                try:
+                    # Convertir fecha de string a datetime
+                    fecha_notif = datetime.strptime(str(fecha_notif_str), "%d/%m/%Y")
+                    fecha_limite = fecha_notif + timedelta(days=23)
+                    
+                    if datetime.now() > fecha_limite:
+                        styles[rue_idx] = 'background-color: #ffff00; color: black;'
+                except ValueError:
+                    # Si hay error en el formato de fecha, ignorar
+                    pass
+        
+        return styles
+    
+    # Aplicar estilos condicionales
+    styler = df_estilizado.style
+    
+    # Aplicar formato para USUARIO-CSV
+    styler = styler.apply(resaltar_usuario_csv, axis=1)
+    
+    # Aplicar formato para RUE
+    styler = styler.apply(resaltar_rue_vencido, axis=1)
+    
+    return styler
+
+
+
+def aplicar_formato_condicional_pdf(valor, columna, fila_completa=None):
+    """Define los formatos condicionales para el PDF"""
+    formatos = {
+        'bg_color': None,  # Color de fondo (RGB)
+        'text_color': None, # Color de texto (RGB)
+        'font_style': ''    # 'B' para negrita, 'I' para cursiva, 'U' para subrayado
+    }
+    
+    # Regla 1: USUARIO-CSV con fondo rojo cuando USUARIO es distinto de USUARIO-CSV
+    if columna == 'USUARIO-CSV' and fila_completa is not None:
+        usuario = fila_completa.get('USUARIO', '')
+        usuario_csv = valor
+        
+        if (usuario is not None and usuario_csv is not None and 
+            str(usuario).strip() != str(usuario_csv).strip()):
+            formatos['bg_color'] = (255, 0, 0)  # Rojo
+            formatos['text_color'] = (255, 255, 255)  # Texto blanco para contraste
+    
+    # Regla 2: RUE con fondo amarillo cuando ETIQ. PENÚLTIMO TRAM. = "80 PROPRES" 
+    # y fecha actual > FECHA NOTIFICACIÓN + 23 días
+    elif columna == 'RUE' and fila_completa is not None:
+        etiq = fila_completa.get('ETIQ. PENÚLTIMO TRAM.', '')
+        fecha_notif_str = fila_completa.get('FECHA NOTIFICACIÓN', '')
+        
+        if (etiq is not None and str(etiq).strip() == "80 PROPRES" and 
+            fecha_notif_str is not None and str(fecha_notif_str).strip()):
+            
+            try:
+                # Convertir fecha de string a datetime
+                fecha_notif = datetime.strptime(str(fecha_notif_str), "%d/%m/%Y")
+                fecha_limite = fecha_notif + timedelta(days=23)
+                
+                if datetime.now() > fecha_limite:
+                    formatos['bg_color'] = (255, 255, 0)  # Amarillo
+                    formatos['text_color'] = (0, 0, 0)  # Texto negro
+            except ValueError:
+                # Si hay error en el formato de fecha, ignorar
+                pass
+    
+    return formatos
+
+
 @st.cache_data(ttl=CACHE_TTL)
 def dataframe_to_pdf_bytes(df, title):
-    """Genera un PDF desde un DataFrame con cache y altura de filas autoajustable"""
+    """Genera PDF con los dos formatos condicionales específicos"""
     pdf = PDF('L', 'mm', 'A4')
     pdf.add_page()
     pdf.set_font("Arial", "B", 8)
@@ -166,6 +271,7 @@ def dataframe_to_pdf_bytes(df, title):
     pdf.ln(5)
 
     col_widths = [28, 11, 11, 10, 18, 11, 11, 18, 13, 22, 22, 10, 18, 13, 10, 24, 20, 13]
+    
     # Ajustar anchos si el número de columnas es diferente
     if len(df.columns) < len(col_widths):
         col_widths = col_widths[:len(df.columns)]
@@ -174,95 +280,122 @@ def dataframe_to_pdf_bytes(df, title):
     
     df_mostrar_pdf = df.iloc[:, :len(col_widths)]
     ALTURA_ENCABEZADO = 13
-    ALTURA_LINEA = 3  # Altura mínima por línea de texto
-    ALTURA_BASE_FILA = 5  # Altura base para una fila con una línea
+    ALTURA_LINEA = 3
+    ALTURA_BASE = 5
+    MARGEN_INTERNO = 1
 
     def imprimir_encabezados():
         pdf.set_font("Arial", "", 5)
-        pdf.set_fill_color(200, 220, 255)
+        pdf.set_fill_color(200, 220, 255)  # Azul claro para encabezados
         y_inicio = pdf.get_y()
         
         for i, header in enumerate(df_mostrar_pdf.columns):
-            x = pdf.get_x()
-            y = pdf.get_y()
-            pdf.cell(col_widths[i], ALTURA_ENCABEZADO, "", 1, 0, 'C', True)
-            pdf.set_xy(x, y)
-            
-            texto = str(header)
-            ancho_texto = pdf.get_string_width(texto)
-            
-            if ancho_texto <= col_widths[i] - 2:
-                altura_texto = 3
-                y_pos = y + (ALTURA_ENCABEZADO - altura_texto) / 2
-                pdf.set_xy(x, y_pos)
-                pdf.cell(col_widths[i], altura_texto, texto, 0, 0, 'C')
-            else:
-                pdf.set_xy(x, y + 1)
-                pdf.multi_cell(col_widths[i], 2.5, texto, 0, 'C')
-            
-            pdf.set_xy(x + col_widths[i], y)
+            pdf.cell(col_widths[i], ALTURA_ENCABEZADO, str(header), 1, 0, 'C', True)
         
+        pdf.ln()
         pdf.set_xy(pdf.l_margin, y_inicio + ALTURA_ENCABEZADO)
 
     imprimir_encabezados()
-
     pdf.set_font("Arial", "", 5)
     
-    for _, row in df_mostrar_pdf.iterrows():
-        # Calcular la altura máxima necesaria para esta fila
+    for _, row in enumerate(df_mostrar_pdf.iterrows()):
+        # Convertir la fila a dict para el formato condicional
+        fila_dict = row.to_dict()
+        
+        # Calcular altura de fila
         max_lineas = 1
         
-        # Primera pasada: calcular el número máximo de líneas necesarias
         for i, col_data in enumerate(row):
-            texto = str(col_data).replace("\n", " ")
-            
-            if not texto.strip():
-                continue
-                
-            # Calcular cuántas líneas necesitará el texto
-            ancho_disponible = col_widths[i] - 2  # Margen interno
+            texto = str(col_data) if col_data is not None else ""
+            ancho_disponible = col_widths[i] - (2 * MARGEN_INTERNO)
             ancho_texto = pdf.get_string_width(texto)
             
-            # Si el texto cabe en una línea
-            if ancho_texto <= ancho_disponible:
-                lineas_necesarias = 1
-            else:
-                # Calcular número aproximado de líneas necesarias
+            if ancho_texto > ancho_disponible:
                 lineas_necesarias = max(1, int(ancho_texto / ancho_disponible) + 1)
-            
-            # Actualizar máximo de líneas
-            if lineas_necesarias > max_lineas:
-                max_lineas = lineas_necesarias
+                if lineas_necesarias > max_lineas:
+                    max_lineas = lineas_necesarias
         
-        # Calcular altura total de la fila
-        altura_fila = ALTURA_BASE_FILA + ((max_lineas - 1) * ALTURA_LINEA)
+        altura_fila = ALTURA_BASE + ((max_lineas - 1) * ALTURA_LINEA) + 1
         
         # Verificar si necesitamos nueva página
         if pdf.get_y() + altura_fila > 190:
             pdf.add_page()
             imprimir_encabezados()
 
-        # Segunda pasada: imprimir las celdas
+        # Imprimir fila con formatos condicionales
         x_inicio = pdf.get_x()
         y_inicio = pdf.get_y()
         
-        # Dibujar bordes de las celdas
-        for i in range(len(row)):
-            pdf.rect(x_inicio + sum(col_widths[:i]), y_inicio, col_widths[i], altura_fila)
-        
-        # Imprimir contenido de las celdas
+        # Primero: dibujar todas las celdas con sus formatos
         for i, col_data in enumerate(row):
-            texto = str(col_data).replace("\n", " ")
+            texto = str(col_data) if col_data is not None else ""
+            columna_nombre = df_mostrar_pdf.columns[i]
+            
+            # Obtener formato condicional
+            formato = aplicar_formato_condicional_pdf(texto, columna_nombre, fila_dict)
+            
             x_celda = x_inicio + sum(col_widths[:i])
             y_celda = y_inicio
             
-            # Posicionar en la celda actual
-            pdf.set_xy(x_celda, y_celda)
+            # Aplicar color de fondo si existe
+            if formato['bg_color']:
+                pdf.set_fill_color(*formato['bg_color'])
+                pdf.rect(x_celda, y_celda, col_widths[i], altura_fila, 'F')
             
-            # Usar multi_cell para texto que puede ocupar múltiples líneas
-            pdf.multi_cell(col_widths[i], ALTURA_LINEA, texto, 0, 'L')
+            # Dibujar borde de la celda
+            pdf.rect(x_celda, y_celda, col_widths[i], altura_fila)
+            
+            # Restaurar color de relleno por defecto
+            pdf.set_fill_color(255, 255, 255)
         
-        # Mover a la siguiente fila
+        # Segundo: imprimir el texto en cada celda
+        for i, col_data in enumerate(row):
+            texto = str(col_data) if col_data is not None else ""
+            columna_nombre = df_mostrar_pdf.columns[i]
+            
+            # Obtener formato condicional nuevamente para el texto
+            formato = aplicar_formato_condicional_pdf(texto, columna_nombre, fila_dict)
+            
+            x_celda = x_inicio + sum(col_widths[:i]) + MARGEN_INTERNO
+            y_celda = y_inicio + MARGEN_INTERNO
+            
+            # Aplicar color de texto si existe
+            if formato['text_color']:
+                pdf.set_text_color(*formato['text_color'])
+            else:
+                pdf.set_text_color(0, 0, 0)  # Negro por defecto
+            
+            # Aplicar estilo de fuente
+            estilo_fuente = formato['font_style'] if formato['font_style'] else ''
+            pdf.set_font("Arial", estilo_fuente, 5)
+            
+            # Dividir texto en líneas
+            lineas = []
+            palabras = texto.split(' ')
+            linea_actual = ""
+            
+            for palabra in palabras:
+                prueba = linea_actual + " " + palabra if linea_actual else palabra
+                if pdf.get_string_width(prueba) <= col_widths[i] - (2 * MARGEN_INTERNO):
+                    linea_actual = prueba
+                else:
+                    if linea_actual:
+                        lineas.append(linea_actual)
+                    linea_actual = palabra
+            
+            if linea_actual:
+                lineas.append(linea_actual)
+            
+            # Imprimir cada línea
+            for j, linea in enumerate(lineas):
+                pdf.set_xy(x_celda, y_celda + (j * ALTURA_LINEA))
+                pdf.cell(col_widths[i] - (2 * MARGEN_INTERNO), ALTURA_LINEA, linea, 0, 0, 'L')
+            
+            # Restaurar estilo por defecto para la siguiente celda
+            pdf.set_font("Arial", "", 5)
+            pdf.set_text_color(0, 0, 0)
+        
+        # Mover a siguiente fila
         pdf.set_xy(pdf.l_margin, y_inicio + altura_fila)
 
     pdf_output = pdf.output(dest='B')
