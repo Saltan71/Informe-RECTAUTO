@@ -74,7 +74,7 @@ def cargar_y_procesar_notifica(archivo):
 def cargar_y_procesar_triaje(archivo):
     """Carga y procesa el archivo TRIAJE"""
     try:
-        df = pd.read_excel(archivo, sheet_name="TRIAJE")
+        df = pd.read_excel(archivo, sheet_name="Triaje")
         df.columns = [col.upper() for col in df.columns]
         
         # Crear RUE a partir de las primeras 4 columnas
