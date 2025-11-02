@@ -64,7 +64,7 @@ def cargar_y_procesar_notifica(archivo):
         columnas_a_mantener = ['RUE ORIGEN', 'FECHA NOTIFICACION']
         columnas_existentes = [col for col in columnas_a_mantener if col in df.columns]
         df = df[columnas_existentes]
-        display(df)
+        df
         return df
     except Exception as e:
         st.error(f"Error procesando NOTIFICA: {e}")
