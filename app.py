@@ -170,7 +170,7 @@ def dataframe_to_pdf_bytes(df, title):
     ALTURA_ENCABEZADO = 11
 
     def imprimir_encabezados():
-        pdf.set_font("Arial", "B", 4)
+        pdf.set_font("Arial", "", 5)
         pdf.set_fill_color(200, 220, 255)
         y_inicio = pdf.get_y()
         
