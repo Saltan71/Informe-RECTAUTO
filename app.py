@@ -407,7 +407,7 @@ with st.expander("📊 Información del Dataset Combinado"):
     
     with col3:
         archivos_usados = 1
-        if archivo_notifica and 'FECHA NOTIFICACION' in df_combinado.columns:
+        if archivo_notifica and 'FECHA NOTIFICACIÓN' in df_combinado.columns:
             archivos_usados += 1
         if archivo_triaje and any(col in df_combinado.columns for col in ['USUARIO-CSV', 'CALIFICACIÓN', 'OBSERVACIONES', 'FECHA ASIG']):
             archivos_usados += 1
