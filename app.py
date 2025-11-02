@@ -173,7 +173,7 @@ def dataframe_to_pdf_bytes(df, title):
         col_widths.extend([20] * (len(df.columns) - len(col_widths)))
     
     df_mostrar_pdf = df.iloc[:, :len(col_widths)]
-    ALTURA_ENCABEZADO = 11
+    ALTURA_ENCABEZADO = 13
     ALTURA_LINEA = 3  # Altura mínima por línea de texto
     ALTURA_BASE_FILA = 5  # Altura base para una fila con una línea
 
