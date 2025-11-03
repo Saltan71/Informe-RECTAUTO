@@ -203,7 +203,7 @@ def dataframe_to_pdf_bytes(df_mostrar, title, df_original):
     pdf = PDF('L', 'mm', 'A4')
     pdf.add_page()
     pdf.set_font("Arial", "B", 8)
-    pdf.cell(0, 10, title, 0, 1, 'C')
+    pdf.cell(0, 5, title, 0, 1, 'C')
     pdf.ln(5)
 
     # Definir anchos de columnas
@@ -213,9 +213,9 @@ def dataframe_to_pdf_bytes(df_mostrar, title, df_original):
     elif len(df_mostrar.columns) > len(col_widths):
         col_widths.extend([20] * (len(df_mostrar.columns) - len(col_widths)))
     
-    ALTURA_ENCABEZADO = 13
+    ALTURA_ENCABEZADO = 12
     ALTURA_LINEA = 3
-    ALTURA_BASE_FILA = 5
+    ALTURA_BASE_FILA = 4
 
     def imprimir_encabezados():
         pdf.set_font("Arial", "", 5)
