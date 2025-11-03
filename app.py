@@ -10,6 +10,7 @@ import matplotlib.pyplot as plt
 import os
 import hashlib
 import tempfile
+import shutil
 
 # Constantes
 FECHA_REFERENCIA = datetime(2022, 11, 1)
