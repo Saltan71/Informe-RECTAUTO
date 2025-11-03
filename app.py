@@ -694,9 +694,11 @@ with estado_col5:
     st.metric("DOCUMENTOS", documentos_status)
 
 with estado_col6:
-    archivos_necesarios = 1 if archivo_rectauto else 0
-    archivos_totales = 5
-    st.metric("Progreso", f"{archivos_necesarios}/{archivos_totales}")
+    archivos_cargados = sum([1 for f in [archivo_rectauto, archivo_notifica, archivo_triaje, archivo_usuarios, archivo_documentos] if f])
+    st.metric("Total Cargados", f"{archivos_cargados}/5")
+    #archivos_necesarios = 1 if archivo_rectauto else 0
+    #archivos_totales = 5
+    #st.metric("Progreso", f"{archivos_necesarios}/{archivos_totales}")
 
 # Procesar archivos cuando estén listos
 if archivo_rectauto:
