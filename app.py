@@ -23,13 +23,13 @@ st.title("📊 Seguimiento Equipo Regional RECTAUTO")
 class PDF(FPDF):
     def header(self):
         self.set_font('Arial', 'B', 8)
-        self.cell(0, 10, 'Informe de Expedientes Pendientes', 0, 1, 'C')
+        self.cell(0, 5, 'Informe de Expedientes Pendientes', 0, 1, 'C')
         self.ln(5)
 
     def footer(self):
         self.set_y(-15)
         self.set_font('Arial', 'I', 6)
-        self.cell(0, 10, f'Página {self.page_no()}', 0, 0, 'C')
+        self.cell(0, 5, f'Página {self.page_no()}', 0, 0, 'C')
     
     def aplicar_formato_condicional_pdf(self, df_original, idx, col_name, col_width, altura_fila, x, y):
         """Aplica formato condicional a celdas específicas en el PDF"""
@@ -213,9 +213,9 @@ def dataframe_to_pdf_bytes(df_mostrar, title, df_original):
     elif len(df_mostrar.columns) > len(col_widths):
         col_widths.extend([20] * (len(df_mostrar.columns) - len(col_widths)))
     
-    ALTURA_ENCABEZADO = 12
-    ALTURA_LINEA = 3
-    ALTURA_BASE_FILA = 4
+    ALTURA_ENCABEZADO = 13
+    ALTURA_LINEA = 1
+    ALTURA_BASE_FILA = 3
 
     def imprimir_encabezados():
         pdf.set_font("Arial", "", 5)
