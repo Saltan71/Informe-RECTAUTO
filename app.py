@@ -214,7 +214,7 @@ def dataframe_to_pdf_bytes(df_mostrar, title, df_original):
         col_widths.extend([20] * (len(df_mostrar.columns) - len(col_widths)))
     
     ALTURA_ENCABEZADO = 13
-    ALTURA_LINEA = 2
+    ALTURA_LINEA = 1
     ALTURA_BASE_FILA = 5
 
     def imprimir_encabezados():
