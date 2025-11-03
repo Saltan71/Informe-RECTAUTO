@@ -183,55 +183,66 @@ def cargar_documentacion_desde_repositorio():
             return {
                 'opciones': opciones_docu,
                 'documentos': df_documentos,
-                'archivo_path': archivo_path
+                'archivo_path': archivo_path,
+                'cargado': True
             }
         else:
-            st.warning("⚠️ Archivo DocumPresentada.xlsx no encontrado en el repositorio")
+            st.warning("⚠️ Archivo DocumPresentada.xlsx no encontrado en el repositorio. Usando valores por defecto.")
+            # Valores por defecto basados en la estructura que proporcionaste
+            opciones_por_defecto = [
+                'ALEGACIONES', 'ATIENDE REQUER', 'COMPROBACIÓN', 'INFORME CATASTRO',
+                'PRE NOTIFICADA', 'RECALIFICACIÓN', 'RECEDOCU', 'REITERA SOLICITUD',
+                'SOLICITUD', 'VALOR REFERENCIA'
+            ]
             return {
-                'opciones': [],
+                'opciones': opciones_por_defecto,
                 'documentos': pd.DataFrame(columns=['RUE', 'DOCUMENTACION']),
-                'archivo_path': None
+                'archivo_path': None,
+                'cargado': False
             }
     except Exception as e:
         st.error(f"Error cargando documentación desde repositorio: {e}")
+        # Valores por defecto en caso de error
+        opciones_por_defecto = [
+            'ALEGACIONES', 'ATIENDE REQUER', 'COMPROBACIÓN', 'INFORME CATASTRO',
+            'PRE NOTIFICADA', 'RECALIFICACIÓN', 'RECEDOCU', 'REITERA SOLICITUD',
+            'SOLICITUD', 'VALOR REFERENCIA'
+        ]
         return {
-            'opciones': [],
+            'opciones': opciones_por_defecto,
             'documentos': pd.DataFrame(columns=['RUE', 'DOCUMENTACION']),
-            'archivo_path': None
+            'archivo_path': None,
+            'cargado': False
         }
 
 def guardar_documentacion(df_documentos):
-    """Guarda los datos de documentación en el archivo Excel del repositorio"""
+    """Guarda los datos de documentación y ofrece el archivo actualizado para descarga"""
     try:
-        archivo_path = "DocumPresentada.xlsx"
+        # Crear un archivo temporal en memoria
+        output = io.BytesIO()
         
-        if not os.path.exists(archivo_path):
-            st.error("❌ No se puede encontrar el archivo DocumPresentada.xlsx en el repositorio")
-            return None
-        
-        # Crear un archivo temporal
-        with tempfile.NamedTemporaryFile(delete=False, suffix='.xlsx') as tmp_file:
-            # Escribir las dos hojas
-            with pd.ExcelWriter(tmp_file.name, engine='openpyxl') as writer:
-                # Hoja DOCUMENTOS con los datos actualizados
-                df_documentos.to_excel(writer, sheet_name='DOCUMENTOS', index=False)
-                
-                # Hoja DOCU con las opciones (recargar del original)
-                df_docu_original = pd.read_excel(archivo_path, sheet_name='DOCU')
+        with pd.ExcelWriter(output, engine='openpyxl') as writer:
+            # Hoja DOCUMENTOS con los datos actualizados
+            df_documentos.to_excel(writer, sheet_name='DOCUMENTOS', index=False)
+            
+            # Hoja DOCU con las opciones (recargar del original)
+            try:
+                df_docu_original = pd.read_excel("DocumPresentada.xlsx", sheet_name='DOCU')
                 df_docu_original.to_excel(writer, sheet_name='DOCU', index=False)
-            
-            # Reemplazar el archivo original con el actualizado
-            shutil.copy2(tmp_file.name, archivo_path)
-            
-            # Leer el contenido del archivo actualizado
-            with open(archivo_path, 'rb') as f:
-                contenido = f.read()
-            
-            # Eliminar archivo temporal
-            os.unlink(tmp_file.name)
-            
-            return contenido
-            
+            except:
+                # Si no se puede cargar el original, crear una hoja DOCU básica
+                df_docu_fallback = pd.DataFrame({
+                    'OPCIONES': [
+                        'ALEGACIONES', 'ATIENDE REQUER', 'COMPROBACIÓN', 'INFORME CATASTRO',
+                        'PRE NOTIFICADA', 'RECALIFICACIÓN', 'RECEDOCU', 'REITERA SOLICITUD',
+                        'SOLICITUD', 'VALOR REFERENCIA'
+                    ]
+                })
+                df_docu_fallback.to_excel(writer, sheet_name='DOCU', index=False)
+        
+        output.seek(0)
+        return output.getvalue()
+        
     except Exception as e:
         st.error(f"Error guardando documentación: {e}")
         return None
@@ -685,7 +696,13 @@ with estado_col4:
     st.metric("USUARIOS", usuarios_status)
 
 with estado_col5:
-    documentacion_status = "✅ Cargado" if st.session_state.get("datos_documentacion", {}).get('archivo_path') else "❌ No encontrado"
+    datos_doc = st.session_state.get("datos_documentacion", {})
+    if datos_doc.get('cargado'):
+        documentacion_status = "✅ Cargado"
+    elif datos_doc.get('archivo_path'):
+        documentacion_status = "⚠️ Parcial"
+    else:
+        documentacion_status = "❌ No encontrado"
     st.metric("DOCUMENTACIÓN", documentacion_status)
 
 # Procesar archivos cuando estén listos
@@ -1211,14 +1228,21 @@ if eleccion == "Principal":
                 contenido_actualizado = guardar_documentacion(df_documentos_actualizado)
                 
                 if contenido_actualizado:
-                    st.success("✅ Archivo de documentación actualizado correctamente en el repositorio")
+                    # Ofrecer descarga del archivo actualizado
+                    st.download_button(
+                        label="⬇️ Descargar Archivo Actualizado",
+                        data=contenido_actualizado,
+                        file_name="DocumPresentada_actualizado.xlsx",
+                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                        key="download_documentacion"
+                    )
+                    st.success("✅ Archivo de documentación generado correctamente. Descárgalo y reemplaza el archivo en el repositorio.")
                     
                     # Actualizar la cache y recargar los datos
                     st.cache_data.clear()
                     st.session_state["datos_documentacion"] = cargar_documentacion_desde_repositorio()
-                    st.rerun()
                 else:
-                    st.error("❌ Error al guardar el archivo de documentación")
+                    st.error("❌ Error al generar el archivo de documentación")
 
     # Descarga de informes
     st.markdown("---")
