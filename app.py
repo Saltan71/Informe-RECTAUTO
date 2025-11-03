@@ -12,6 +12,12 @@ import hashlib
 import tempfile
 import shutil
 
+
+test_file = "test_write_access.tmp"
+with open(test_file, 'w') as f:
+    f.write("test")
+
+
 # Constantes
 FECHA_REFERENCIA = datetime(2022, 11, 1)
 HOJA = "Sheet1"
