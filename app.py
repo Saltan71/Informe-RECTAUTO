@@ -13,11 +13,10 @@ import tempfile
 import shutil
 
 
-# Inicializar variables de sesión para documentación (añade esto al principio)
-if 'mostrar_descarga' not in st.session_state:
-    st.session_state.mostrar_descarga = False
-if 'documentos_actualizados' not in st.session_state:
-    st.session_state.documentos_actualizados = None
+test_file = "test_write_access.tmp"
+with open(test_file, 'w') as f:
+    f.write("test")
+
 
 # Constantes
 FECHA_REFERENCIA = datetime(2022, 11, 1)
@@ -27,6 +26,14 @@ CACHE_TTL = 7200  # 2 horas en segundos
 
 st.set_page_config(page_title="Informe Rectauto", layout="wide")
 st.title("📊 Seguimiento Equipo Regional RECTAUTO")
+
+# Inicializar variables de sesión para documentación
+if 'mostrar_descarga' not in st.session_state:
+    st.session_state.mostrar_descarga = False
+if 'documentos_actualizados' not in st.session_state:
+    st.session_state.documentos_actualizados = None
+if 'cambios_documentacion' not in st.session_state:
+    st.session_state.cambios_documentacion = {}
 
 # Clase PDF (mejorada con ordenamiento)
 class PDF(FPDF):
@@ -292,7 +299,7 @@ def dataframe_to_pdf_bytes(df_mostrar, title, df_original):
     pdf.ln(5)
 
     # Actualizar anchos de columnas para incluir DOCUM.INCORP. (ancho 18)
-    col_widths = [28, 11, 11, 8, 16, 11, 11, 16, 13, 20, 22, 10, 18, 14, 13, 10, 24, 20, 13, 18]
+    col_widths = [28, 11, 11, 10, 18, 11, 11, 18, 13, 22, 22, 10, 18, 14, 13, 10, 24, 20, 13, 18]
     if len(df_mostrar.columns) < len(col_widths):
         col_widths = col_widths[:len(df_mostrar.columns)]
     elif len(df_mostrar.columns) > len(col_widths):
@@ -780,128 +787,6 @@ else:
     st.info("💡 **Archivos opcionales:** NOTIFICA, TRIAJE, USUARIOS y DOCUMENTOS enriquecerán el análisis")
     st.stop()
 
-
-
-# NUEVA SECCIÓN: GESTIÓN DE DOCUMENTACIÓN INCORPORADA
-st.markdown("---")
-st.header("📄 Gestión de Documentación Incorporada")
-
-if archivo_documentos and datos_documentos:
-    # Filtro para expedientes con ETIQ. PENÚLTIMO TRAM. = "90 INCDOCU"
-    df_incdocu = df_filtrado[
-        df_filtrado['ETIQ. PENÚLTIMO TRAM.'] == "90 INCDOCU"
-    ].copy()
-    
-    if df_incdocu.empty:
-        st.info("ℹ️ No hay expedientes con ETIQ. PENÚLTIMO TRAM. = '90 INCDOCU' en los filtros actuales")
-    else:
-        st.success(f"📋 Encontrados {len(df_incdocu)} expedientes con '90 INCDOCU'")
-        
-        # Obtener opciones del desplegable
-        opciones_docu = datos_documentos['opciones']
-        opciones_combo = [""] + opciones_docu  # Añadir opción vacía
-        
-        # Crear interfaz para editar la documentación
-        st.subheader("Editar Documentación Incorporada")
-        
-        # Diccionario para almacenar cambios
-        if 'cambios_documentacion' not in st.session_state:
-            st.session_state.cambios_documentacion = {}
-        
-        # Mostrar tabla editable
-        for idx, row in df_incdocu.iterrows():
-            rue = row['RUE']
-            docum_actual = row.get('DOCUM.INCORP.', '')
-            
-            col1, col2, col3 = st.columns([2, 3, 1])
-            
-            with col1:
-                st.write(f"**RUE:** {rue}")
-            
-            with col2:
-                # Selectbox para elegir documentación
-                clave_docum = f"docum_{rue}"
-                nueva_docum = st.selectbox(
-                    "Documentación:",
-                    options=opciones_combo,
-                    index=opciones_combo.index(docum_actual) if docum_actual in opciones_combo else 0,
-                    key=clave_docum,
-                    label_visibility="collapsed"
-                )
-                
-                # Guardar cambio en session_state
-                if nueva_docum != docum_actual:
-                    st.session_state.cambios_documentacion[rue] = nueva_docum
-            
-            with col3:
-                if st.button("💾 Guardar", key=f"btn_{rue}"):
-                    # Actualizar el DataFrame combinado
-                    df_combinado.loc[df_combinado['RUE'] == rue, 'DOCUM.INCORP.'] = nueva_docum
-                    st.session_state["df_combinado"] = df_combinado
-                    st.success(f"✅ Documentación actualizada para RUE {rue}")
-        
-        # Botón para guardar todos los cambios en el archivo DOCUMENTOS.xlsx
-        st.markdown("---")
-        col1, col2 = st.columns([3, 1])
-        
-        with col2:
-            if st.button("💾 Guardar Todos los Cambios en DOCUMENTOS.xlsx", type="primary", key="guardar_documentos"):
-                with st.spinner("Guardando cambios..."):
-                    # Crear DataFrame con todos los datos de documentación actualizados
-                    df_documentos_actualizado = df_combinado[['RUE', 'DOCUM.INCORP.']].copy()
-                    df_documentos_actualizado = df_documentos_actualizado.dropna(subset=['DOCUM.INCORP.'])
-                    df_documentos_actualizado = df_documentos_actualizado[df_documentos_actualizado['DOCUM.INCORP.'] != '']
-                    
-                    # Guardar en el archivo DOCUMENTOS.xlsx
-                    contenido_actualizado = guardar_documentos_actualizados(
-                        archivo_documentos, 
-                        df_documentos_actualizado
-                    )
-                    
-                    if contenido_actualizado:
-                        st.session_state.documentos_actualizados = contenido_actualizado
-                        st.session_state.mostrar_descarga = True
-                        st.success("✅ Archivo DOCUMENTOS.xlsx actualizado correctamente")
-                        
-                        # Limpiar cambios
-                        st.session_state.cambios_documentacion = {}
-                        
-                        # Actualizar cache
-                        st.cache_data.clear()
-                        
-                    else:
-                        st.error("❌ Error al guardar el archivo DOCUMENTOS.xlsx")
-        
-        # Mostrar botón de descarga si hay archivo actualizado
-        if st.session_state.get('mostrar_descarga', False) and st.session_state.get('documentos_actualizados'):
-            st.markdown("---")
-            st.subheader("📥 Descargar Archivo Actualizado")
-            
-            # Generar nombre de archivo con timestamp
-            from datetime import datetime
-            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            nombre_archivo = f"DOCUMENTOS_actualizado_{timestamp}.xlsx"
-            
-            st.download_button(
-                label="⬇️ Descargar DOCUMENTOS.xlsx actualizado",
-                data=st.session_state.documentos_actualizados,
-                file_name=nombre_archivo,
-                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                key="descarga_documentos"
-            )
-            
-            # Opción para continuar sin descargar
-            if st.button("Continuar sin descargar", key="continuar_sin_descargar"):
-                st.session_state.mostrar_descarga = False
-                st.rerun()
-else:
-    st.warning("⚠️ Carga el archivo DOCUMENTOS.xlsx para gestionar la documentación incorporada")
-
-
-
-
-
-
 # Función para identificar filas prioritarias (RUE amarillo)
 def identificar_filas_prioritarias(df):
     """Identifica filas que deben aparecer primero (RUE amarillo)"""
@@ -1314,10 +1199,6 @@ if eleccion == "Principal":
             # Crear interfaz para editar la documentación
             st.subheader("Editar Documentación Incorporada")
             
-            # Diccionario para almacenar cambios
-            if 'cambios_documentacion' not in st.session_state:
-                st.session_state.cambios_documentacion = {}
-            
             # Mostrar tabla editable
             for idx, row in df_incdocu.iterrows():
                 rue = row['RUE']
@@ -1355,37 +1236,55 @@ if eleccion == "Principal":
             col1, col2 = st.columns([3, 1])
             
             with col2:
-                if st.button("💾 Guardar Todos los Cambios en DOCUMENTOS.xlsx", type="primary"):
-                    # Crear DataFrame con todos los datos de documentación actualizados
-                    df_documentos_actualizado = df_combinado[['RUE', 'DOCUM.INCORP.']].copy()
-                    df_documentos_actualizado = df_documentos_actualizado.dropna(subset=['DOCUM.INCORP.'])
-                    df_documentos_actualizado = df_documentos_actualizado[df_documentos_actualizado['DOCUM.INCORP.'] != '']
-                    
-                    # Guardar en el archivo DOCUMENTOS.xlsx
-                    contenido_actualizado = guardar_documentos_actualizados(
-                        archivo_documentos, 
-                        df_documentos_actualizado
-                    )
-                    
-                    if contenido_actualizado:
-                        st.success("✅ Archivo DOCUMENTOS.xlsx actualizado correctamente")
+                if st.button("💾 Guardar Todos los Cambios en DOCUMENTOS.xlsx", type="primary", key="guardar_documentos"):
+                    with st.spinner("Guardando cambios..."):
+                        # Crear DataFrame con todos los datos de documentación actualizados
+                        df_documentos_actualizado = df_combinado[['RUE', 'DOCUM.INCORP.']].copy()
+                        df_documentos_actualizado = df_documentos_actualizado.dropna(subset=['DOCUM.INCORP.'])
+                        df_documentos_actualizado = df_documentos_actualizado[df_documentos_actualizado['DOCUM.INCORP.'] != '']
                         
-                        # Ofrecer descarga del archivo actualizado
-                        st.download_button(
-                            label="⬇️ Descargar DOCUMENTOS.xlsx actualizado",
-                            data=contenido_actualizado,
-                            file_name="DOCUMENTOS_actualizado.xlsx",
-                            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                        # Guardar en el archivo DOCUMENTOS.xlsx
+                        contenido_actualizado = guardar_documentos_actualizados(
+                            archivo_documentos, 
+                            df_documentos_actualizado
                         )
                         
-                        # Limpiar cambios
-                        st.session_state.cambios_documentacion = {}
-                        
-                        # Actualizar cache
-                        st.cache_data.clear()
-                        st.rerun()
-                    else:
-                        st.error("❌ Error al guardar el archivo DOCUMENTOS.xlsx")
+                        if contenido_actualizado:
+                            st.session_state.documentos_actualizados = contenido_actualizado
+                            st.session_state.mostrar_descarga = True
+                            st.success("✅ Archivo DOCUMENTOS.xlsx actualizado correctamente")
+                            
+                            # Limpiar cambios
+                            st.session_state.cambios_documentacion = {}
+                            
+                            # Actualizar cache
+                            st.cache_data.clear()
+                            
+                        else:
+                            st.error("❌ Error al guardar el archivo DOCUMENTOS.xlsx")
+            
+            # Mostrar botón de descarga si hay archivo actualizado
+            if st.session_state.get('mostrar_descarga', False) and st.session_state.get('documentos_actualizados'):
+                st.markdown("---")
+                st.subheader("📥 Descargar Archivo Actualizado")
+                
+                # Generar nombre de archivo con timestamp
+                from datetime import datetime
+                timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                nombre_archivo = f"DOCUMENTOS_actualizado_{timestamp}.xlsx"
+                
+                st.download_button(
+                    label="⬇️ Descargar DOCUMENTOS.xlsx actualizado",
+                    data=st.session_state.documentos_actualizados,
+                    file_name=nombre_archivo,
+                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                    key="descarga_documentos"
+                )
+                
+                # Opción para continuar sin descargar
+                if st.button("Continuar sin descargar", key="continuar_sin_descargar"):
+                    st.session_state.mostrar_descarga = False
+                    st.rerun()
     else:
         st.warning("⚠️ Carga el archivo DOCUMENTOS.xlsx para gestionar la documentación incorporada")
 
