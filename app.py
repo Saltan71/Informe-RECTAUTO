@@ -9,6 +9,7 @@ from fpdf import FPDF
 import matplotlib.pyplot as plt
 import os
 import hashlib
+import tempfile
 
 # Constantes
 FECHA_REFERENCIA = datetime(2022, 11, 1)
@@ -157,7 +158,79 @@ def cargar_y_procesar_usuarios(archivo):
         return None
 
 @st.cache_data(ttl=CACHE_TTL)
-def combinar_archivos(rectauto_df, notifica_df=None, triaje_df=None):
+def cargar_documentacion_desde_repositorio():
+    """Carga el archivo de documentación desde el repositorio"""
+    try:
+        # Intentar cargar el archivo desde el mismo directorio
+        archivo_path = "DocumPresentada.xlsx"
+        
+        if os.path.exists(archivo_path):
+            # Cargar hoja DOCU para los valores del desplegable
+            df_docu = pd.read_excel(archivo_path, sheet_name='DOCU')
+            opciones_docu = df_docu.iloc[:, 0].dropna().tolist()
+            
+            # Cargar hoja DOCUMENTOS para los valores guardados
+            df_documentos = pd.read_excel(archivo_path, sheet_name='DOCUMENTOS')
+            df_documentos.columns = [col.upper().strip() for col in df_documentos.columns]
+            
+            return {
+                'opciones': opciones_docu,
+                'documentos': df_documentos,
+                'archivo_path': archivo_path
+            }
+        else:
+            st.warning("⚠️ Archivo DocumPresentada.xlsx no encontrado en el repositorio")
+            return {
+                'opciones': [],
+                'documentos': pd.DataFrame(columns=['RUE', 'DOCUMENTACION']),
+                'archivo_path': None
+            }
+    except Exception as e:
+        st.error(f"Error cargando documentación desde repositorio: {e}")
+        return {
+            'opciones': [],
+            'documentos': pd.DataFrame(columns=['RUE', 'DOCUMENTACION']),
+            'archivo_path': None
+        }
+
+def guardar_documentacion(df_documentos):
+    """Guarda los datos de documentación en el archivo Excel del repositorio"""
+    try:
+        archivo_path = "DocumPresentada.xlsx"
+        
+        if not os.path.exists(archivo_path):
+            st.error("❌ No se puede encontrar el archivo DocumPresentada.xlsx en el repositorio")
+            return None
+        
+        # Crear un archivo temporal
+        with tempfile.NamedTemporaryFile(delete=False, suffix='.xlsx') as tmp_file:
+            # Escribir las dos hojas
+            with pd.ExcelWriter(tmp_file.name, engine='openpyxl') as writer:
+                # Hoja DOCUMENTOS con los datos actualizados
+                df_documentos.to_excel(writer, sheet_name='DOCUMENTOS', index=False)
+                
+                # Hoja DOCU con las opciones (recargar del original)
+                df_docu_original = pd.read_excel(archivo_path, sheet_name='DOCU')
+                df_docu_original.to_excel(writer, sheet_name='DOCU', index=False)
+            
+            # Reemplazar el archivo original con el actualizado
+            shutil.copy2(tmp_file.name, archivo_path)
+            
+            # Leer el contenido del archivo actualizado
+            with open(archivo_path, 'rb') as f:
+                contenido = f.read()
+            
+            # Eliminar archivo temporal
+            os.unlink(tmp_file.name)
+            
+            return contenido
+            
+    except Exception as e:
+        st.error(f"Error guardando documentación: {e}")
+        return None
+
+@st.cache_data(ttl=CACHE_TTL)
+def combinar_archivos(rectauto_df, notifica_df=None, triaje_df=None, datos_documentacion=None):
     """Combina los tres archivos en un único DataFrame"""
     df_combinado = rectauto_df.copy()
     
@@ -187,6 +260,24 @@ def combinar_archivos(rectauto_df, notifica_df=None, triaje_df=None):
         )
         st.sidebar.info(f"✅ TRIAJE combinado: {len(triaje_df)} registros")
     
+    # Añadir columna DOCUM.INCORP. después de FECHA NOTIFICACIÓN
+    if 'FECHA NOTIFICACIÓN' in df_combinado.columns:
+        # Buscar la posición de FECHA NOTIFICACIÓN
+        columnas = df_combinado.columns.tolist()
+        pos_fecha_notif = columnas.index('FECHA NOTIFICACIÓN')
+        
+        # Insertar DOCUM.INCORP. después de FECHA NOTIFICACIÓN
+        columnas.insert(pos_fecha_notif + 1, 'DOCUM.INCORP.')
+        df_combinado = df_combinado.reindex(columns=columnas)
+        
+        # Si tenemos datos de documentación, rellenar los valores
+        if datos_documentacion is not None and not datos_documentacion['documentos'].empty:
+            df_documentos = datos_documentacion['documentos']
+            # Crear un mapeo RUE -> DOCUMENTACION
+            mapeo_documentos = df_documentos.set_index('RUE')['DOCUMENTACION'].to_dict()
+            # Aplicar el mapeo a la nueva columna
+            df_combinado['DOCUM.INCORP.'] = df_combinado['RUE'].map(mapeo_documentos)
+    
     return df_combinado
 
 @st.cache_data(ttl=CACHE_TTL)
@@ -206,8 +297,8 @@ def dataframe_to_pdf_bytes(df_mostrar, title, df_original):
     pdf.cell(0, 5, title, 0, 1, 'C')
     pdf.ln(5)
 
-    # Definir anchos de columnas
-    col_widths = [28, 11, 11, 10, 18, 11, 11, 18, 13, 22, 22, 10, 18, 13, 10, 24, 20, 13]
+    # Actualizar anchos de columnas para incluir DOCUM.INCORP. (ancho 14)
+    col_widths = [28, 11, 11, 10, 18, 11, 11, 18, 13, 22, 22, 10, 18, 14, 13, 10, 24, 20, 13]
     if len(df_mostrar.columns) < len(col_widths):
         col_widths = col_widths[:len(df_mostrar.columns)]
     elif len(df_mostrar.columns) > len(col_widths):
@@ -487,7 +578,12 @@ with st.sidebar:
         st.success("Cache limpiada correctamente")
         st.rerun()
 
-# NUEVA SECCIÓN: CARGA DE CUATRO ARCHIVOS (incluyendo USUARIOS)
+# Cargar documentación desde el repositorio al inicio
+if "datos_documentacion" not in st.session_state:
+    with st.spinner("📄 Cargando documentación desde repositorio..."):
+        st.session_state["datos_documentacion"] = cargar_documentacion_desde_repositorio()
+
+# NUEVA SECCIÓN: CARGA DE CUATRO ARCHIVOS (sin documentación)
 st.markdown("---")
 st.subheader("📁 Carga de Archivos")
 
@@ -562,7 +658,7 @@ with col4:
 st.markdown("---")
 st.subheader("📋 Estado de Carga")
 
-# Mostrar estado con métricas
+# Mostrar estado con métricas (5 columnas ahora)
 estado_col1, estado_col2, estado_col3, estado_col4, estado_col5 = st.columns(5)
 
 with estado_col1:
@@ -582,8 +678,8 @@ with estado_col4:
     st.metric("USUARIOS", usuarios_status)
 
 with estado_col5:
-    archivos_cargados = sum([1 for f in [archivo_rectauto, archivo_notifica, archivo_triaje, archivo_usuarios] if f])
-    st.metric("Total Cargados", f"{archivos_cargados}/4")
+    documentacion_status = "✅ Cargado" if st.session_state.get("datos_documentacion", {}).get('archivo_path') else "❌ No encontrado"
+    st.metric("DOCUMENTACIÓN", documentacion_status)
 
 # Procesar archivos cuando estén listos
 if archivo_rectauto:
@@ -617,8 +713,9 @@ if archivo_rectauto:
                 if archivo_triaje:
                     df_triaje = cargar_y_procesar_triaje(archivo_triaje)
                 
-                # Combinar todos los archivos
-                df_combinado = combinar_archivos(df_rectauto, df_notifica, df_triaje)
+                # Combinar todos los archivos incluyendo documentación
+                datos_documentacion = st.session_state.get("datos_documentacion")
+                df_combinado = combinar_archivos(df_rectauto, df_notifica, df_triaje, datos_documentacion)
                 # Convertir columnas de fecha
                 df_combinado = convertir_fechas(df_combinado)
                 
@@ -734,6 +831,12 @@ def aplicar_formato_condicional_dataframe(df):
                                 styles.loc[idx, 'RUE'] = 'background-color: rgb(255, 255, 0)'
                 except (TypeError, ValueError):
                     continue  # Ignorar errores de fecha
+        
+        # Condición 3: Resaltar DOCUM.INCORP. cuando tiene valor
+        if 'DOCUM.INCORP.' in df.columns:
+            mask_docum = df['DOCUM.INCORP.'].notna() & (df['DOCUM.INCORP.'] != '')
+            styles.loc[mask_docum, 'DOCUM.INCORP.'] = 'background-color: rgb(173, 216, 230)'  # Azul claro
+            
     except Exception as e:
         st.error(f"Error en formato condicional: {e}")
     
@@ -777,6 +880,8 @@ with st.expander("📊 Información del Dataset Combinado"):
             grupo = 'NOTIFICA'
         elif col in ['USUARIO-CSV', 'CALIFICACIÓN', 'OBSERVACIONES', 'FECHA ASIG']:
             grupo = 'TRIAJE'
+        elif col == 'DOCUM.INCORP.':
+            grupo = 'DOCUMENTACIÓN'
         else:
             grupo = 'RECTAUTO'
         
@@ -1030,6 +1135,83 @@ if eleccion == "Principal":
     registros_mostrados = f"{len(df_mostrar):,}".replace(",", ".")
     registros_totales = f"{len(df):,}".replace(",", ".")
     st.write(f"Mostrando {registros_mostrados} de {registros_totales} registros")
+
+    # NUEVA SECCIÓN: GESTIÓN DE DOCUMENTACIÓN INCORPORADA
+    st.markdown("---")
+    st.header("📄 Gestión de Documentación Incorporada")
+    
+    # Verificar que tenemos datos de documentación
+    datos_documentacion = st.session_state.get("datos_documentacion", {})
+    if not datos_documentacion.get('archivo_path'):
+        st.warning("⚠️ No se encontró el archivo DocumPresentada.xlsx en el repositorio")
+    else:
+        # Filtro para expedientes con ETIQ. PENÚLTIMO TRAM. = "90 INCDOCU"
+        df_incdocu = df_filtrado[
+            df_filtrado['ETIQ. PENÚLTIMO TRAM.'] == "90 INCDOCU"
+        ].copy()
+        
+        if df_incdocu.empty:
+            st.info("ℹ️ No hay expedientes con ETIQ. PENÚLTIMO TRAM. = '90 INCDOCU' en los filtros actuales")
+        else:
+            st.success(f"📋 Encontrados {len(df_incdocu)} expedientes con '90 INCDOCU'")
+            
+            # Obtener opciones del desplegable
+            opciones_docu = datos_documentacion.get('opciones', [])
+            opciones_combo = [""] + opciones_docu  # Añadir opción vacía
+            
+            # Crear interfaz para editar la documentación
+            st.subheader("Editar Documentación Incorporada")
+            
+            # Mostrar tabla editable
+            for idx, row in df_incdocu.iterrows():
+                rue = row['RUE']
+                docum_actual = row.get('DOCUM.INCORP.', '')
+                
+                col1, col2, col3 = st.columns([2, 3, 1])
+                
+                with col1:
+                    st.write(f"**RUE:** {rue}")
+                
+                with col2:
+                    # Selectbox para elegir documentación
+                    clave_docum = f"docum_{rue}"
+                    nueva_docum = st.selectbox(
+                        "Documentación:",
+                        options=opciones_combo,
+                        index=opciones_combo.index(docum_actual) if docum_actual in opciones_combo else 0,
+                        key=clave_docum,
+                        label_visibility="collapsed"
+                    )
+                    
+                    # Actualizar el DataFrame combinado inmediatamente
+                    if nueva_docum != docum_actual:
+                        df_combinado.loc[df_combinado['RUE'] == rue, 'DOCUM.INCORP.'] = nueva_docum
+                        st.session_state["df_combinado"] = df_combinado
+                
+                with col3:
+                    if st.button("💾 Guardar", key=f"btn_{rue}"):
+                        st.success(f"✅ Documentación actualizada para RUE {rue}")
+            
+            # Botón para guardar todos los cambios en el archivo Excel
+            st.markdown("---")
+            if st.button("💾 Guardar Todos los Cambios en Archivo", type="primary"):
+                # Crear DataFrame con los datos actualizados de documentación
+                df_documentos_actualizado = df_combinado[['RUE', 'DOCUM.INCORP.']].copy()
+                df_documentos_actualizado = df_documentos_actualizado.dropna(subset=['DOCUM.INCORP.'])
+                df_documentos_actualizado = df_documentos_actualizado[df_documentos_actualizado['DOCUM.INCORP.'] != '']
+                
+                # Guardar en el archivo Excel
+                contenido_actualizado = guardar_documentacion(df_documentos_actualizado)
+                
+                if contenido_actualizado:
+                    st.success("✅ Archivo de documentación actualizado correctamente en el repositorio")
+                    
+                    # Actualizar la cache y recargar los datos
+                    st.cache_data.clear()
+                    st.session_state["datos_documentacion"] = cargar_documentacion_desde_repositorio()
+                    st.rerun()
+                else:
+                    st.error("❌ Error al guardar el archivo de documentación")
 
     # Descarga de informes
     st.markdown("---")
