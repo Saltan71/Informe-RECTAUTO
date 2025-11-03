@@ -265,7 +265,7 @@ def dataframe_to_pdf_bytes(df_mostrar, title, df_original):
                 if lineas_necesarias > max_lineas:
                     max_lineas = lineas_necesarias
         
-        altura_fila = ALTURA_BASE_FILA + ((max_lineas - 1) * ALTURA_LINEA)
+        altura_fila = ALTURA_BASE_FILA + ((max_lineas - 1) * ALTURA_LINEA) / 2
         
         # Verificar si necesitamos nueva página
         if pdf.get_y() + altura_fila > 190:
