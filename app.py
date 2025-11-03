@@ -291,7 +291,7 @@ def dataframe_to_pdf_bytes(df_mostrar, title, df_original):
     pdf.ln(5)
 
     # Actualizar anchos de columnas para incluir DOCUM.INCORP. (ancho 18)
-    col_widths = [28, 11, 11, 10, 18, 11, 11, 18, 13, 22, 22, 10, 18, 14, 13, 10, 24, 20, 13, 18]
+    col_widths = [28, 11, 11, 8, 16, 11, 11, 16, 13, 20, 22, 10, 18, 14, 13, 10, 24, 20, 13, 18]
     if len(df_mostrar.columns) < len(col_widths):
         col_widths = col_widths[:len(df_mostrar.columns)]
     elif len(df_mostrar.columns) > len(col_widths):
