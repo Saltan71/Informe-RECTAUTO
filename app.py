@@ -1426,26 +1426,56 @@ if eleccion == "Principal":
     
         # --- Preparar usuarios para envío ---
         df_pendientes = df[df["ESTADO"].isin(ESTADOS_PENDIENTES)].copy()
-        usuarios_con_pendientes = df_pendientes['USUARIO'].dropna().unique()
+        
+        # --- Normalizar usuarios con pendientes en un set de strings ---
+        usuarios_con_pendientes_raw = df_pendientes['USUARIO'].dropna().unique()
+        usuarios_con_pendientes_set = set()
+        for u in usuarios_con_pendientes_raw:
+            try:
+                su = str(u).strip()
+                if su and su.lower() != 'nan':
+                    usuarios_con_pendientes_set.add(su)
+            except Exception:
+                continue
+        
+        # --- Construir la lista de usuarios para envío (normalizando USUARIOS del Excel) ---
         usuarios_para_envio = []
-    
-        for _, usuario_row in usuarios_activos.iterrows():
-            usuario = usuario_row['USUARIOS']
-            if usuario in usuarios_con_pendientes:
-                num_expedientes = len(df_pendientes[df_pendientes['USUARIO'] == usuario])
-                asunto_base = usuario_row.get('ASUNTO', f"Situación RECTAUTO asignados - Semana {num_semana}")
+        
+        for idx, usuario_row in usuarios_activos.iterrows():
+            # Tomar el valor tal cual del Excel y normalizarlo a string
+            usuario_raw = usuario_row.get('USUARIOS', '')
+            usuario = str(usuario_raw).strip() if usuario_raw is not None else ""
+            if not usuario:
+                # Notificar pero continuar
+                st.warning(f"Fila {idx}: valor vacío en columna 'USUARIOS' — se omite.")
+                continue
+        
+            # Comparación insensible a mayúsculas/minúsculas
+            match = usuario.lower() in {x.lower() for x in usuarios_con_pendientes_set}
+        
+            if match:
+                num_expedientes = len(df_pendientes[df_pendientes['USUARIO'].astype(str).str.strip().str.lower() == usuario.lower()])
+                asunto_base = usuario_row.get('ASUNTO', "")
                 asunto = procesar_asunto(asunto_base, num_semana, fecha_max_str)
-                mensaje_base = f"{usuario_row.get('MENSAJE1', '')}\n\n{usuario_row.get('MENSAJE2', '')}\n\n{usuario_row.get('MENSAJE3', '')}\n\n{usuario_row.get('DESPEDIDA', '')}"
+                mensaje_base = (
+                    (usuario_row.get('MENSAJE1', '') or "") + "\n\n" +
+                    (usuario_row.get('MENSAJE2', '') or "") + "\n\n" +
+                    (usuario_row.get('MENSAJE3', '') or "") + "\n\n" +
+                    (usuario_row.get('DESPEDIDA', '') or "")
+                )
                 cuerpo = generar_cuerpo_mensaje(mensaje_base)
                 usuarios_para_envio.append({
                     "usuario": usuario,
-                    "email": usuario_row["EMAIL"],
-                    "cc": usuario_row.get("CC", ""),
-                    "bcc": usuario_row.get("BCC", ""),
+                    "email": usuario_row.get("EMAIL", ""),
+                    "cc": usuario_row.get("CC", "") or "",
+                    "bcc": usuario_row.get("BCC", "") or "",
                     "expedientes": num_expedientes,
                     "asunto": asunto,
                     "cuerpo": cuerpo
                 })
+            else:
+                st.info(f"ℹ️ Usuario {usuario} no tiene expedientes pendientes — no se incluirá.")
+
     
         if not usuarios_para_envio:
             st.warning("⚠️ No hay usuarios con expedientes pendientes para generar correos.")
