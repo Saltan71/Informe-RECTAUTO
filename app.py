@@ -11,7 +11,6 @@ import os
 import hashlib
 import tempfile
 import shutil
-import pywin32
 
 
 test_file = "test_write_access.tmp"
