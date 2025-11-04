@@ -1336,7 +1336,7 @@ if eleccion == "Principal":
         st.stop()
     
     # Verificar columnas requeridas en USUARIOS
-    columnas_requeridas = ['USUARIOS', 'ENVIAR', 'EMAIL', 'ASUNTO', 'MENSAJE']
+    columnas_requeridas = ['USUARIOS', 'ENVIAR', 'EMAIL', 'ASUNTO', 'MENSAJE1', 'MENSAJE2', 'MENSAJE3', 'DESPEDIDA']
     columnas_faltantes = [col for col in columnas_requeridas if col not in df_usuarios.columns]
     
     if columnas_faltantes:
@@ -1437,7 +1437,8 @@ if eleccion == "Principal":
                 asunto_procesado = procesar_asunto(asunto_template, num_semana, fecha_max_str)
                 
                 # Generar cuerpo del mensaje
-                mensaje_base = usuario_row['MENSAJE'] if pd.notna(usuario_row['MENSAJE']) else "Se adjunta informe de expedientes pendientes."
+                #mensaje_base = usuario_row['MENSAJE'] if pd.notna(usuario_row['MENSAJE']) else "Se adjunta informe de expedientes pendientes."
+                mensaje_base = f"{usuario_row['MENSAJE1']}, \n\n, {usuario_row['MENSAJE2']}, \n\n, {usuario_row['MENSAJE3']}, \n\n, {usuario_row['DESPEDIDA']}" if pd.notna(usuario_row['MENSAJE1']) else "Se adjunta informe de expedientes pendientes."
                 cuerpo_mensaje = generar_cuerpo_mensaje(mensaje_base)
                 
                 usuarios_para_envio.append({
