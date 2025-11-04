@@ -1416,10 +1416,13 @@ if eleccion == "Principal":
             return f"{saludo},\n\n{mensaje_base}"
     
         def procesar_asunto(asunto_template, num_semana, fecha_max_str):
-            """Reemplaza variables en el asunto del correo."""
-            asunto = asunto_template.replace("&num_semana&", str(num_semana))
+            """Reemplaza variables en el asunto del correo, manejando valores nulos o numéricos."""
+            # Asegurarse de que el asunto sea texto
+            asunto = str(asunto_template) if asunto_template is not None else ""
+            asunto = asunto.replace("&num_semana&", str(num_semana))
             asunto = asunto.replace("&fecha_max&", fecha_max_str)
             return asunto
+
     
         # --- Preparar usuarios para envío ---
         df_pendientes = df[df["ESTADO"].isin(ESTADOS_PENDIENTES)].copy()
