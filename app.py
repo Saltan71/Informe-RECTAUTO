@@ -1353,9 +1353,10 @@ if eleccion == "Principal":
         # --- Funciones auxiliares ---
         from email.message import EmailMessage
         import base64
-    
+        import streamlit as st
+        
         def generar_eml(destinatario, asunto, cuerpo_mensaje, archivo_pdf, nombre_archivo, cc=None, bcc=None):
-            """Genera un archivo .eml con cuerpo HTML, firma personalizada y logo embebido."""
+            """Genera un archivo .eml con firma HTML y codificación UTF-8."""
             try:
                 msg = EmailMessage()
                 msg["To"] = destinatario
@@ -1364,8 +1365,8 @@ if eleccion == "Principal":
                     msg["Cc"] = cc
                 if bcc:
                     msg["Bcc"] = bcc
-    
-                # Cargar logo embebido
+        
+                # Logo embebido (en caso de que se abra fuera de Outlook, p.e. Thunderbird)
                 logo_path = "Logo Atrian.png"
                 logo_html = ""
                 try:
@@ -1374,8 +1375,8 @@ if eleccion == "Principal":
                         logo_html = f'<img src="data:image/png;base64,{logo_b64}" alt="Logo RECTAUTO" style="height:60px;">'
                 except Exception as e:
                     st.warning(f"No se pudo cargar el logo ({e}) — se omitirá en la firma.")
-    
-                # Cuerpo HTML con firma
+        
+                # HTML del cuerpo
                 cuerpo_html = f"""
                 <html>
                     <body style="font-family: Arial, sans-serif; font-size: 11pt; color: #333;">
@@ -1390,10 +1391,11 @@ if eleccion == "Principal":
                     </body>
                 </html>
                 """
-    
-                msg.set_content(cuerpo_mensaje)
-                msg.add_alternative(cuerpo_html, subtype="html")
-    
+        
+                # Añadir cuerpo de texto plano y versión HTML (ambas en UTF-8)
+                msg.set_content(cuerpo_mensaje, charset="utf-8")
+                msg.add_alternative(cuerpo_html, subtype="html", charset="utf-8")
+        
                 # Adjuntar PDF
                 msg.add_attachment(
                     archivo_pdf,
@@ -1401,12 +1403,13 @@ if eleccion == "Principal":
                     subtype="pdf",
                     filename=nombre_archivo
                 )
-    
+        
                 return msg.as_bytes()
-    
+        
             except Exception as e:
                 st.error(f"❌ Error al generar archivo .eml: {e}")
                 return None
+
     
         def generar_cuerpo_mensaje(mensaje_base):
             """Genera el cuerpo del mensaje con saludo según la hora."""
@@ -1416,12 +1419,15 @@ if eleccion == "Principal":
             return f"{saludo},\n\n{mensaje_base}"
     
         def procesar_asunto(asunto_template, num_semana, fecha_max_str):
-            """Reemplaza variables en el asunto del correo, manejando valores nulos o numéricos."""
-            # Asegurarse de que el asunto sea texto
-            asunto = str(asunto_template) if asunto_template is not None else ""
+            """Reemplaza variables en el asunto del correo, evitando NaN o valores vacíos."""
+            if not asunto_template or str(asunto_template).lower() == 'nan':
+                return f"Situación RECTAUTO asignados - Semana {num_semana}"
+        
+            asunto = str(asunto_template)
             asunto = asunto.replace("&num_semana&", str(num_semana))
             asunto = asunto.replace("&fecha_max&", fecha_max_str)
             return asunto
+
 
     
         # --- Preparar usuarios para envío ---
