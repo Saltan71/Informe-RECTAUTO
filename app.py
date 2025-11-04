@@ -1323,22 +1323,22 @@ if eleccion == "Principal":
                 key='pdf_download_button'
             )
 
-    # SECCIÓN: ENVÍO DE CORREOS (versión .EML con firma y logo)
+    # SECCIÓN: ENVÍO DE CORREOS (versión .EML final, compatible con Outlook)
     st.markdown("---")
     st.header("📧 Envío de Correos")
     
     st.info(f"**📅 Semana activa para envío:** {num_semana} (Última semana disponible - {fecha_max_str})")
     
-    # Verificar si el archivo USUARIOS está cargado
+    # Verificar archivo USUARIOS
     if df_usuarios is None:
         st.error("❌ No se ha cargado el archivo USUARIOS. Por favor, cárgalo en la sección de arriba.")
         st.stop()
     
-    # Verificar columnas requeridas en USUARIOS
+    # Verificar columnas requeridas
     columnas_requeridas = ['USUARIOS', 'ENVIAR', 'EMAIL', 'ASUNTO', 'MENSAJE1']
-    columnas_faltantes = [col for col in columnas_requeridas if col not in df_usuarios.columns]
-    if columnas_faltantes:
-        st.error(f"❌ Faltan columnas en el archivo USUARIOS: {', '.join(columnas_faltantes)}")
+    faltantes = [c for c in columnas_requeridas if c not in df_usuarios.columns]
+    if faltantes:
+        st.error(f"❌ Faltan columnas en el archivo USUARIOS: {', '.join(faltantes)}")
         st.stop()
     
     # Filtrar usuarios activos
@@ -1350,34 +1350,46 @@ if eleccion == "Principal":
     if usuarios_activos.empty:
         st.warning("⚠️ No hay usuarios activos para envío (ENVIAR = 'SÍ' o 'SI')")
     else:
-        # --- Funciones auxiliares ---
         from email.message import EmailMessage
-        import base64
-        import streamlit as st
-        
+        from email import encoders
+        from email.mime.text import MIMEText
+        import base64, io, zipfile
+        from datetime import datetime
+    
+        # === Funciones auxiliares ===
+        def procesar_asunto(asunto_template, num_semana, fecha_max_str):
+            """Maneja variables y NaN en el asunto"""
+            if not asunto_template or str(asunto_template).lower() == 'nan':
+                return f"Situación RECTAUTO asignados - Semana {num_semana}"
+            asunto = str(asunto_template)
+            asunto = asunto.replace("&num_semana&", str(num_semana))
+            asunto = asunto.replace("&fecha_max&", fecha_max_str)
+            return asunto
+    
+        def generar_cuerpo_mensaje(mensaje_base):
+            """Añade saludo dinámico según la hora"""
+            hora = datetime.now().hour
+            saludo = "Buenos días" if hora < 14 else "Buenas tardes"
+            return f"{saludo},\n\n{mensaje_base}"
+    
         def generar_eml(destinatario, asunto, cuerpo_mensaje, archivo_pdf, nombre_archivo, cc=None, bcc=None):
-            """Genera un archivo .eml con firma HTML y codificación UTF-8."""
+            """
+            Genera .eml con codificación base64 (UTF-8) para evitar caracteres raros.
+            Incluye firma y logo remoto visible en Outlook.
+            """
             try:
                 msg = EmailMessage()
                 msg["To"] = destinatario
                 msg["Subject"] = asunto
-                if cc:
-                    msg["Cc"] = cc
-                if bcc:
-                    msg["Bcc"] = bcc
-        
-                # Logo embebido (en caso de que se abra fuera de Outlook, p.e. Thunderbird)
-                logo_path = "Logo Atrian.png"
-                logo_html = ""
-                try:
-                    with open(logo_path, "rb") as f:
-                        logo_b64 = base64.b64encode(f.read()).decode("utf-8")
-                        logo_html = f'<img src="data:image/png;base64,{logo_b64}" alt="Logo RECTAUTO" style="height:60px;">'
-                except Exception as e:
-                    st.warning(f"No se pudo cargar el logo ({e}) — se omitirá en la firma.")
-        
-                # HTML del cuerpo
-                cuerpo_html = f"""
+                if cc: msg["Cc"] = cc
+                if bcc: msg["Bcc"] = bcc
+    
+                # Logo remoto (visible en Outlook)
+                logo_url = "https://intranet.miempresa.es/rectauto/logo.png"  # 🔁 cambia esta URL al logo real
+                logo_html = f'<img src="{logo_url}" alt="Logo RECTAUTO" style="height:60px;">'
+    
+                # HTML cuerpo
+                cuerpo_html = f"""\
                 <html>
                     <body style="font-family: Arial, sans-serif; font-size: 11pt; color: #333;">
                         <p>{cuerpo_mensaje.replace(chr(10), '<br>')}</p>
@@ -1391,11 +1403,14 @@ if eleccion == "Principal":
                     </body>
                 </html>
                 """
-        
-                # Añadir cuerpo de texto plano y versión HTML (ambas en UTF-8)
+    
+                # Texto plano + HTML en base64 (Outlook-safe)
                 msg.set_content(cuerpo_mensaje, charset="utf-8")
-                msg.add_alternative(cuerpo_html, subtype="html", charset="utf-8")
-        
+                html_part = MIMEText(cuerpo_html.encode('utf-8'), "html", "utf-8")
+                encoders.encode_base64(html_part)
+                msg.make_mixed()
+                msg.attach(html_part)
+    
                 # Adjuntar PDF
                 msg.add_attachment(
                     archivo_pdf,
@@ -1403,134 +1418,90 @@ if eleccion == "Principal":
                     subtype="pdf",
                     filename=nombre_archivo
                 )
-        
+    
                 return msg.as_bytes()
-        
             except Exception as e:
-                st.error(f"❌ Error al generar archivo .eml: {e}")
+                st.error(f"❌ Error al generar .eml: {e}")
                 return None
-
     
-        def generar_cuerpo_mensaje(mensaje_base):
-            """Genera el cuerpo del mensaje con saludo según la hora."""
-            from datetime import datetime
-            hora_actual = datetime.now().hour
-            saludo = "Buenos días" if hora_actual < 14 else "Buenas tardes"
-            return f"{saludo},\n\n{mensaje_base}"
-    
-        def procesar_asunto(asunto_template, num_semana, fecha_max_str):
-            """Reemplaza variables en el asunto del correo, evitando NaN o valores vacíos."""
-            if not asunto_template or str(asunto_template).lower() == 'nan':
-                return f"Situación RECTAUTO asignados - Semana {num_semana}"
-        
-            asunto = str(asunto_template)
-            asunto = asunto.replace("&num_semana&", str(num_semana))
-            asunto = asunto.replace("&fecha_max&", fecha_max_str)
-            return asunto
-
-
-    
-        # --- Preparar usuarios para envío ---
+        # === Construcción de correos ===
         df_pendientes = df[df["ESTADO"].isin(ESTADOS_PENDIENTES)].copy()
-        
-        # --- Normalizar usuarios con pendientes en un set de strings ---
-        usuarios_con_pendientes_raw = df_pendientes['USUARIO'].dropna().unique()
-        usuarios_con_pendientes_set = set()
-        for u in usuarios_con_pendientes_raw:
-            try:
-                su = str(u).strip()
-                if su and su.lower() != 'nan':
-                    usuarios_con_pendientes_set.add(su)
-            except Exception:
-                continue
-        
-        # --- Construir la lista de usuarios para envío (normalizando USUARIOS del Excel) ---
+        usuarios_raw = df_pendientes['USUARIO'].dropna().unique()
+        usuarios_set = {str(u).strip().lower() for u in usuarios_raw if str(u).strip().lower() != 'nan'}
         usuarios_para_envio = []
-        
-        for idx, usuario_row in usuarios_activos.iterrows():
-            # Tomar el valor tal cual del Excel y normalizarlo a string
-            usuario_raw = usuario_row.get('USUARIOS', '')
-            usuario = str(usuario_raw).strip() if usuario_raw is not None else ""
-            if not usuario:
-                # Notificar pero continuar
-                st.warning(f"Fila {idx}: valor vacío en columna 'USUARIOS' — se omite.")
+    
+        for idx, urow in usuarios_activos.iterrows():
+            usuario_raw = urow.get('USUARIOS', '')
+            usuario = str(usuario_raw).strip().lower()
+            if not usuario or usuario == 'nan':
+                st.warning(f"Fila {idx}: usuario vacío en USUARIOS, se omite.")
                 continue
-        
-            # Comparación insensible a mayúsculas/minúsculas
-            match = usuario.lower() in {x.lower() for x in usuarios_con_pendientes_set}
-        
-            if match:
-                num_expedientes = len(df_pendientes[df_pendientes['USUARIO'].astype(str).str.strip().str.lower() == usuario.lower()])
-                asunto_base = usuario_row.get('ASUNTO', "")
-                asunto = procesar_asunto(asunto_base, num_semana, fecha_max_str)
+            if usuario in usuarios_set:
+                num_exp = len(df_pendientes[df_pendientes['USUARIO'].astype(str).str.strip().str.lower() == usuario])
+                asunto = procesar_asunto(urow.get('ASUNTO', ''), num_semana, fecha_max_str)
                 mensaje_base = (
-                    (usuario_row.get('MENSAJE1', '') or "") + "\n\n" +
-                    (usuario_row.get('MENSAJE2', '') or "") + "\n\n" +
-                    (usuario_row.get('MENSAJE3', '') or "") + "\n\n" +
-                    (usuario_row.get('DESPEDIDA', '') or "")
+                    (urow.get('MENSAJE1', '') or '') + "\n\n" +
+                    (urow.get('MENSAJE2', '') or '') + "\n\n" +
+                    (urow.get('MENSAJE3', '') or '') + "\n\n" +
+                    (urow.get('DESPEDIDA', '') or '')
                 )
                 cuerpo = generar_cuerpo_mensaje(mensaje_base)
                 usuarios_para_envio.append({
-                    "usuario": usuario,
-                    "email": usuario_row.get("EMAIL", ""),
-                    "cc": usuario_row.get("CC", "") or "",
-                    "bcc": usuario_row.get("BCC", "") or "",
-                    "expedientes": num_expedientes,
+                    "usuario": usuario.upper(),
+                    "email": urow.get("EMAIL", ""),
+                    "cc": urow.get("CC", "") or "",
+                    "bcc": urow.get("BCC", "") or "",
+                    "expedientes": num_exp,
                     "asunto": asunto,
                     "cuerpo": cuerpo
                 })
             else:
-                st.info(f"ℹ️ Usuario {usuario} no tiene expedientes pendientes — no se incluirá.")
-
+                st.info(f"ℹ️ Usuario {usuario} no tiene expedientes pendientes.")
     
         if not usuarios_para_envio:
-            st.warning("⚠️ No hay usuarios con expedientes pendientes para generar correos.")
+            st.warning("⚠️ No hay usuarios con expedientes pendientes.")
         else:
-            st.success(f"✅ {len(usuarios_para_envio)} usuarios tienen expedientes pendientes para generar correos .eml")
+            st.success(f"✅ {len(usuarios_para_envio)} usuarios con expedientes pendientes detectados.")
     
-            # --- Previsualización ---
+            st.subheader("👁️ Previsualización")
             ejemplo = usuarios_para_envio[0]
-            st.subheader("👁️ Previsualización de correo")
             col1, col2 = st.columns([1, 2])
             with col1:
                 st.write("**Destinatario:**", ejemplo["email"])
                 st.write("**Asunto:**", ejemplo["asunto"])
                 st.write("**Expedientes:**", ejemplo["expedientes"])
             with col2:
-                st.text_area("Cuerpo del mensaje:", ejemplo["cuerpo"], height=200, key="preview")
+                st.text_area("Cuerpo del mensaje:", ejemplo["cuerpo"], height=220, key="preview")
     
             st.markdown("---")
             st.subheader("📦 Generar y descargar correos")
     
             st.warning("""
             ⚠️ Los correos se generarán en formato **.eml** con el PDF adjunto.
-            Puedes abrirlos en Outlook para revisar, firmar (si lo deseas) y enviarlos manualmente.
+            Ábrelos en Outlook para revisar y enviar manualmente.
             """)
     
-            # --- Generar ZIP con .eml ---
-            if st.button("📤 Generar correos .eml para enviar manualmente", type="primary"):
-                import io, zipfile
-    
+            if st.button("📤 Generar correos .eml (ZIP descargable)", type="primary"):
                 progress = st.progress(0)
                 zip_buffer = io.BytesIO()
                 generados, fallidos = 0, 0
     
-                with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zip_file:
-                    for i, user in enumerate(usuarios_para_envio):
-                        pdf_data = generar_pdf_usuario(user["usuario"], df_pendientes, num_semana, fecha_max_str)
+                with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zipf:
+                    for i, u in enumerate(usuarios_para_envio):
+                        pdf_data = generar_pdf_usuario(u["usuario"], df_pendientes, num_semana, fecha_max_str)
                         if pdf_data:
-                            nombre_pdf = f"Expedientes_{user['usuario']}_Semana_{num_semana}.pdf"
-                            eml_data = generar_eml(
-                                destinatario=user["email"],
-                                asunto=user["asunto"],
-                                cuerpo_mensaje=user["cuerpo"],
+                            nombre_pdf = f"Expedientes_{u['usuario']}_Semana_{num_semana}.pdf"
+                            eml_bytes = generar_eml(
+                                destinatario=u["email"],
+                                asunto=u["asunto"],
+                                cuerpo_mensaje=u["cuerpo"],
                                 archivo_pdf=pdf_data,
                                 nombre_archivo=nombre_pdf,
-                                cc=user["cc"],
-                                bcc=user["bcc"]
+                                cc=u["cc"],
+                                bcc=u["bcc"]
                             )
-                            if eml_data:
-                                zip_file.writestr(f"{user['usuario']}.eml", eml_data)
+                            if eml_bytes:
+                                zipf.writestr(f"{u['usuario']}.eml", eml_bytes)
                                 generados += 1
                             else:
                                 fallidos += 1
@@ -1540,7 +1511,6 @@ if eleccion == "Principal":
     
                 zip_buffer.seek(0)
                 nombre_zip = f"Correos_RECTAUTO_Semana_{num_semana}.zip"
-    
                 st.download_button(
                     label=f"⬇️ Descargar {generados} correos .eml (ZIP)",
                     data=zip_buffer.read(),
