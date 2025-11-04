@@ -1385,7 +1385,7 @@ if eleccion == "Principal":
                 if bcc: msg["Bcc"] = bcc
     
                 # Logo remoto (visible en Outlook)
-                logo_url = "https://intranet.miempresa.es/rectauto/logo.png"  # 🔁 cambia esta URL al logo real
+                logo_url = "https://www.juntadeandalucia.es/sites/default/files/logos-dominios/ata_1.png"  # 🔁 cambia esta URL al logo real
                 logo_html = f'<img src="{logo_url}" alt="Logo RECTAUTO" style="height:60px;">'
     
                 # HTML cuerpo
