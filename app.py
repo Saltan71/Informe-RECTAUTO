@@ -48,7 +48,7 @@ class PDF(FPDF):
         self.cell(0, 5, f'Página {self.page_no()}', 0, 0, 'C')
     
     def aplicar_formato_condicional_pdf(self, df_original, idx, col_name, col_width, altura_fila, x, y):
-        """Aplica formato condicional a celdas específicas en el PDF"""
+        """Aplica formato condicional a celdas específicas en el PDF con NUEVAS condiciones"""
         try:
             if idx >= len(df_original):
                 return
@@ -68,21 +68,47 @@ class PDF(FPDF):
                         self.rect(x, y, col_width, altura_fila, 'F')
                         self.set_fill_color(255, 255, 255)
             
-            # Condición 2: RUE con condición específica
+            # Condición 2: RUE con MÚLTIPLES condiciones específicas
             elif col_name == 'RUE':
                 etiq_penultimo = fila.get('ETIQ. PENÚLTIMO TRAM.', '')
                 fecha_notif = fila.get('FECHA NOTIFICACIÓN', None)
+                docum_incorp = fila.get('DOCUM.INCORP.', '')
                 
+                es_amarillo = False
+                
+                # CONDICIÓN 2.1: "80 PROPRES" con fecha límite superada
                 if (str(etiq_penultimo).strip() == "80 PROPRES" and 
                     pd.notna(fecha_notif) and 
                     isinstance(fecha_notif, (pd.Timestamp, datetime))):
                     
                     fecha_limite = fecha_notif + timedelta(days=23)
                     if datetime.now() > fecha_limite:
-                        # Fondo amarillo cuando se cumple la condición
-                        self.set_fill_color(255, 255, 0)
-                        self.rect(x, y, col_width, altura_fila, 'F')
-                        self.set_fill_color(255, 255, 255)
+                        es_amarillo = True
+                
+                # NUEVA CONDICIÓN 2.2: "50 REQUERIR" con fecha límite superada
+                elif (str(etiq_penultimo).strip() == "50 REQUERIR" and 
+                    pd.notna(fecha_notif) and 
+                    isinstance(fecha_notif, (pd.Timestamp, datetime))):
+                    
+                    fecha_limite = fecha_notif + timedelta(days=23)
+                    if datetime.now() > fecha_limite:
+                        es_amarillo = True
+                
+                # NUEVA CONDICIÓN 2.3: "70 ALEGACI" o "60 CONTESTA"
+                elif str(etiq_penultimo).strip() in ["70 ALEGACI", "60 CONTESTA"]:
+                    es_amarillo = True
+                
+                # NUEVA CONDICIÓN 2.4: DOCUM.INCORP. no vacío Y distinto de "SOLICITUD" o "REITERA SOLICITUD"
+                elif (pd.notna(docum_incorp) and 
+                    str(docum_incorp).strip() != '' and
+                    str(docum_incorp).strip().upper() not in ["SOLICITUD", "REITERA SOLICITUD"]):
+                    es_amarillo = True
+                
+                if es_amarillo:
+                    # Fondo amarillo cuando se cumple alguna condición
+                    self.set_fill_color(255, 255, 0)
+                    self.rect(x, y, col_width, altura_fila, 'F')
+                    self.set_fill_color(255, 255, 255)
             
             # Condición 3: Resaltar DOCUM.INCORP. cuando tiene valor
             elif col_name == 'DOCUM.INCORP.':
@@ -203,32 +229,36 @@ def cargar_y_procesar_documentos(archivo):
         return None
 
 def guardar_documentos_actualizados(archivo_original, df_documentos_actualizado):
-    """Guarda los datos actualizados en el archivo DOCUMENTOS.xlsx"""
+    """Guarda los datos actualizados en el archivo DOCUMENTOS.xlsx (compatible con Windows y Cloud)."""
     try:
-        # Crear un archivo temporal
-        with tempfile.NamedTemporaryFile(delete=False, suffix='.xlsx') as tmp_file:
-            # Escribir las dos hojas
-            with pd.ExcelWriter(tmp_file.name, engine='openpyxl') as writer:
-                # Hoja DOCUMENTOS con los datos actualizados
-                df_documentos_actualizado.to_excel(writer, sheet_name='DOCUMENTOS', index=False)
-                
-                # Hoja DOCU con las opciones (recargar del original)
-                archivo_original.seek(0)
-                df_docu_original = pd.read_excel(archivo_original, sheet_name='DOCU')
-                df_docu_original.to_excel(writer, sheet_name='DOCU', index=False)
-            
-            # Leer el contenido del archivo actualizado
-            with open(tmp_file.name, 'rb') as f:
-                contenido = f.read()
-            
-            # Eliminar archivo temporal
-            os.unlink(tmp_file.name)
-            
-            return contenido
-            
+        # Crear archivo temporal (cerrado inmediatamente para evitar bloqueo en Windows)
+        tmp_file = tempfile.NamedTemporaryFile(delete=False, suffix=".xlsx")
+        tmp_path = tmp_file.name
+        tmp_file.close()  # 🔹 Muy importante: libera el archivo en Windows
+
+        # Escribir las dos hojas en el archivo temporal
+        with pd.ExcelWriter(tmp_path, engine="openpyxl") as writer:
+            # Hoja DOCUMENTOS actualizada
+            df_documentos_actualizado.to_excel(writer, sheet_name="DOCUMENTOS", index=False)
+
+            # Hoja DOCU recargada del original
+            archivo_original.seek(0)
+            df_docu_original = pd.read_excel(archivo_original, sheet_name="DOCU")
+            df_docu_original.to_excel(writer, sheet_name="DOCU", index=False)
+
+        # Leer contenido ya guardado
+        with open(tmp_path, "rb") as f:
+            contenido = f.read()
+
+        # Eliminar el archivo temporal (libre ya de bloqueos)
+        os.remove(tmp_path)
+
+        return contenido
+
     except Exception as e:
         st.error(f"Error guardando DOCUMENTOS: {e}")
         return None
+
 
 @st.cache_data(ttl=CACHE_TTL)
 def combinar_archivos(rectauto_df, notifica_df=None, triaje_df=None, usuarios_df=None, documentos_data=None):
@@ -290,105 +320,148 @@ def convertir_fechas(df):
     return df
 
 @st.cache_data(ttl=CACHE_TTL)
+@st.cache_data(ttl=CACHE_TTL)
 def dataframe_to_pdf_bytes(df_mostrar, title, df_original):
-    """Genera un PDF desde un DataFrame con formato condicional"""
-    pdf = PDF('L', 'mm', 'A4')
-    pdf.add_page()
-    pdf.set_font("Arial", "B", 8)
-    pdf.cell(0, 5, title, 0, 1, 'C')
-    pdf.ln(5)
+    """Genera un PDF desde un DataFrame con formato condicional (compatible con fpdf2 y Windows)."""
+    try:
+        # Crear el PDF usando tu clase personalizada (hereda de FPDF)
+        pdf = PDF('L', 'mm', 'A4')
+        pdf.add_page()
+        pdf.set_font("Arial", "B", 8)
+        pdf.cell(0, 5, title, 0, 1, 'C')
+        pdf.ln(5)
 
-    # Actualizar anchos de columnas para incluir DOCUM.INCORP. (ancho 18)
-    col_widths = [28, 11, 11, 10, 18, 11, 11, 18, 13, 22, 22, 10, 18, 14, 13, 10, 24, 20, 13, 18]
-    if len(df_mostrar.columns) < len(col_widths):
-        col_widths = col_widths[:len(df_mostrar.columns)]
-    elif len(df_mostrar.columns) > len(col_widths):
-        col_widths.extend([20] * (len(df_mostrar.columns) - len(col_widths)))
-    
-    ALTURA_ENCABEZADO = 13
-    ALTURA_LINEA = 3
-    ALTURA_BASE_FILA = 2
+        # --- Definición de columnas REDUCIDAS ---
+        # Anchos reducidos para ETIQ. PENÚLTIMO TRAM. y ETIQ. ÚLTIMO TRAM.
+        # Eliminada FECHA DE ACTUALIZACIÓN DATOS
+        col_widths = [28, 11, 11, 8, 16, 11, 11, 16, 11, 20, 20, 9, 18, 11, 14, 9, 24, 20, 11]  # 19 columnas en lugar de 20
+        
+        # Ajustar si hay menos columnas
+        if len(df_mostrar.columns) < len(col_widths):
+            col_widths = col_widths[:len(df_mostrar.columns)]
+        elif len(df_mostrar.columns) > len(col_widths):
+            col_widths.extend([18] * (len(df_mostrar.columns) - len(col_widths)))
 
-    def imprimir_encabezados():
+        ALTURA_ENCABEZADO = 13
+        ALTURA_LINEA = 3
+        ALTURA_BASE_FILA = 2
+
+        # --- Encabezados de tabla ---
+        def imprimir_encabezados():
+            pdf.set_font("Arial", "", 5)
+            pdf.set_fill_color(200, 220, 255)
+            y_inicio = pdf.get_y()
+
+            for i, header in enumerate(df_mostrar.columns):
+                # EXCLUIR columna "FECHA DE ACTUALIZACIÓN DATOS"
+                if "FECHA DE ACTUALIZACIÓN DATOS" in header.upper():
+                    continue
+                    
+                x = pdf.get_x()
+                y = pdf.get_y()
+                pdf.cell(col_widths[i], ALTURA_ENCABEZADO, "", 1, 0, 'C', True)
+                pdf.set_xy(x, y)
+
+                texto = str(header)
+                ancho_texto = pdf.get_string_width(texto)
+
+                if ancho_texto <= col_widths[i] - 2:
+                    altura_texto = 3
+                    y_pos = y + (ALTURA_ENCABEZADO - altura_texto) / 2
+                    pdf.set_xy(x, y_pos)
+                    pdf.cell(col_widths[i], altura_texto, texto, 0, 0, 'C')
+                else:
+                    pdf.set_xy(x, y + 1)
+                    pdf.multi_cell(col_widths[i], 2.5, texto, 0, 'C')
+
+                pdf.set_xy(x + col_widths[i], y)
+
+            pdf.set_xy(pdf.l_margin, y_inicio + ALTURA_ENCABEZADO)
+
+        imprimir_encabezados()
         pdf.set_font("Arial", "", 5)
-        pdf.set_fill_color(200, 220, 255)
-        y_inicio = pdf.get_y()
-        
-        for i, header in enumerate(df_mostrar.columns):
-            x = pdf.get_x()
-            y = pdf.get_y()
-            pdf.cell(col_widths[i], ALTURA_ENCABEZADO, "", 1, 0, 'C', True)
-            pdf.set_xy(x, y)
-            
-            texto = str(header)
-            ancho_texto = pdf.get_string_width(texto)
-            
-            if ancho_texto <= col_widths[i] - 2:
-                altura_texto = 3
-                y_pos = y + (ALTURA_ENCABEZADO - altura_texto) / 2
-                pdf.set_xy(x, y_pos)
-                pdf.cell(col_widths[i], altura_texto, texto, 0, 0, 'C')
-            else:
-                pdf.set_xy(x, y + 1)
-                pdf.multi_cell(col_widths[i], 2.5, texto, 0, 'C')
-            
-            pdf.set_xy(x + col_widths[i], y)
-        
-        pdf.set_xy(pdf.l_margin, y_inicio + ALTURA_ENCABEZADO)
 
-    imprimir_encabezados()
-    pdf.set_font("Arial", "", 5)
-    
-    # Iterar por cada fila del DataFrame a mostrar
-    for idx, (_, row) in enumerate(df_mostrar.iterrows()):
-        # Calcular altura máxima necesaria para esta fila
-        max_lineas = 1
-        
-        for col_data in row:
-            texto = str(col_data).replace("\n", " ")
-            if not texto.strip():
-                continue
+        # --- Filas de datos ---
+        for idx, (_, row) in enumerate(df_mostrar.iterrows()):
+            max_lineas = 1
+            for col_idx, (col_name, col_data) in enumerate(zip(df_mostrar.columns, row)):
+                # EXCLUIR columna "FECHA DE ACTUALIZACIÓN DATOS"
+                if "FECHA DE ACTUALIZACIÓN DATOS" in col_name.upper():
+                    continue
+                    
+                texto = str(col_data).replace("\n", " ")
+                # REEMPLAZAR "nan" por vacío
+                if texto.lower() == "nan" or texto.strip() == "":
+                    texto = ""
+                    
+                if not texto.strip():
+                    continue
+                ancho_disponible = min(col_widths) - 2
+                ancho_texto = pdf.get_string_width(texto)
+                if ancho_texto > ancho_disponible:
+                    lineas_necesarias = max(1, int(ancho_texto / ancho_disponible) + 1)
+                    max_lineas = max(max_lineas, lineas_necesarias)
+
+            altura_fila = ALTURA_BASE_FILA + ((max_lineas - 1) * ALTURA_LINEA) / 2
+
+            # Saltar de página si es necesario
+            if pdf.get_y() + altura_fila > 190:
+                pdf.add_page()
+                imprimir_encabezados()
+
+            x_inicio = pdf.get_x()
+            y_inicio = pdf.get_y()
+
+            # Bordes de las celdas (excluyendo FECHA DE ACTUALIZACIÓN DATOS)
+            ancho_total = 0
+            for i, col_name in enumerate(df_mostrar.columns):
+                if "FECHA DE ACTUALIZACIÓN DATOS" in col_name.upper():
+                    continue
+                ancho_total += col_widths[i]
+                pdf.rect(x_inicio + sum(col_widths[:i]), y_inicio, col_widths[i], altura_fila)
+
+            # Contenido con formato condicional (excluyendo FECHA DE ACTUALIZACIÓN DATOS)
+            col_idx_visible = 0
+            for i, (col_name, col_data) in enumerate(zip(df_mostrar.columns, row)):
+                # EXCLUIR columna "FECHA DE ACTUALIZACIÓN DATOS"
+                if "FECHA DE ACTUALIZACIÓN DATOS" in col_name.upper():
+                    continue
+                    
+                texto = str(col_data).replace("\n", " ")
+                # REEMPLAZAR "nan" por vacío
+                if texto.lower() == "nan" or texto.strip() == "":
+                    texto = ""
+                    
+                x_celda = x_inicio + sum(col_widths[:col_idx_visible])
+                y_celda = y_inicio
+
+                pdf.aplicar_formato_condicional_pdf(
+                    df_original, idx, col_name, col_widths[col_idx_visible], altura_fila, x_celda, y_celda
+                )
+
+                pdf.set_xy(x_celda, y_celda)
+                pdf.multi_cell(col_widths[col_idx_visible], ALTURA_LINEA, texto, 0, 'L')
                 
-            ancho_disponible = min(col_widths) - 2
-            ancho_texto = pdf.get_string_width(texto)
-            
-            if ancho_texto > ancho_disponible:
-                lineas_necesarias = max(1, int(ancho_texto / ancho_disponible) + 1)
-                if lineas_necesarias > max_lineas:
-                    max_lineas = lineas_necesarias
-        
-        altura_fila = ALTURA_BASE_FILA + ((max_lineas - 1) * ALTURA_LINEA) / 2
-        
-        # Verificar si necesitamos nueva página
-        if pdf.get_y() + altura_fila > 190:
-            pdf.add_page()
-            imprimir_encabezados()
+                col_idx_visible += 1
 
-        # Imprimir fila
-        x_inicio = pdf.get_x()
-        y_inicio = pdf.get_y()
-        
-        # Dibujar bordes de las celdas
-        for i in range(len(row)):
-            pdf.rect(x_inicio + sum(col_widths[:i]), y_inicio, col_widths[i], altura_fila)
-        
-        # Imprimir contenido con formato condicional
-        for i, (col_name, col_data) in enumerate(zip(df_mostrar.columns, row)):
-            texto = str(col_data).replace("\n", " ")
-            x_celda = x_inicio + sum(col_widths[:i])
-            y_celda = y_inicio
-            
-            # APLICAR FORMATO CONDICIONAL
-            pdf.aplicar_formato_condicional_pdf(df_original, idx, col_name, col_widths[i], altura_fila, x_celda, y_celda)
-            
-            # Posicionar y escribir el texto
-            pdf.set_xy(x_celda, y_celda)
-            pdf.multi_cell(col_widths[i], ALTURA_LINEA, texto, 0, 'L')
-        
-        # Mover a la siguiente fila
-        pdf.set_xy(pdf.l_margin, y_inicio + altura_fila)
+            pdf.set_xy(pdf.l_margin, y_inicio + altura_fila)
 
-    return pdf.output(dest='B')
+        # --- Exportar a bytes (compatible con todas las versiones de fpdf2) ---
+        pdf_output = pdf.output(dest='S')
+
+        # Normalizar salida: puede ser str, bytes o bytearray según versión de fpdf2
+        if isinstance(pdf_output, str):
+            pdf_bytes = pdf_output.encode('latin1')
+        elif isinstance(pdf_output, (bytes, bytearray)):
+            pdf_bytes = bytes(pdf_output)
+        else:
+            raise TypeError(f"Tipo inesperado devuelto por fpdf.output(): {type(pdf_output)}")
+
+        return io.BytesIO(pdf_bytes).getvalue()
+
+    except Exception as e:
+        st.error(f"Error generando PDF: {e}")
+        return None
 
 def obtener_hash_archivo(archivo):
     """Genera un hash único del archivo para detectar cambios"""
@@ -791,7 +864,7 @@ else:
 
 # Función para identificar filas prioritarias (RUE amarillo)
 def identificar_filas_prioritarias(df):
-    """Identifica filas que deben aparecer primero (RUE amarillo)"""
+    """Identifica filas que deben aparecer primero (RUE amarillo) con NUEVAS condiciones"""
     try:
         # Crear una columna temporal para ordenar
         df_priorizado = df.copy()
@@ -801,13 +874,36 @@ def identificar_filas_prioritarias(df):
             try:
                 etiq_penultimo = fila.get('ETIQ. PENÚLTIMO TRAM.', '')
                 fecha_notif = fila.get('FECHA NOTIFICACIÓN', None)
+                docum_incorp = fila.get('DOCUM.INCORP.', '')
                 
+                # CONDICIÓN 1: "80 PROPRES" con fecha límite superada
                 if (str(etiq_penultimo).strip() == "80 PROPRES" and 
                     pd.notna(fecha_notif) and 
                     isinstance(fecha_notif, (pd.Timestamp, datetime))):
                     
                     fecha_limite = fecha_notif + timedelta(days=23)
-                    return datetime.now() > fecha_limite
+                    if datetime.now() > fecha_limite:
+                        return True
+                
+                # NUEVA CONDICIÓN 2: "50 REQUERIR" con fecha límite superada
+                if (str(etiq_penultimo).strip() == "50 REQUERIR" and 
+                    pd.notna(fecha_notif) and 
+                    isinstance(fecha_notif, (pd.Timestamp, datetime))):
+                    
+                    fecha_limite = fecha_notif + timedelta(days=23)
+                    if datetime.now() > fecha_limite:
+                        return True
+                
+                # NUEVA CONDICIÓN 3: "70 ALEGACI" o "60 CONTESTA"
+                if (str(etiq_penultimo).strip() in ["70 ALEGACI", "60 CONTESTA"]):
+                    return True
+                
+                # NUEVA CONDICIÓN 4: DOCUM.INCORP. no vacío Y distinto de "SOLICITUD" o "REITERA SOLICITUD"
+                if (pd.notna(docum_incorp) and 
+                    str(docum_incorp).strip() != '' and
+                    str(docum_incorp).strip().upper() not in ["SOLICITUD", "REITERA SOLICITUD"]):
+                    return True
+                    
             except:
                 pass
             return False
@@ -838,7 +934,7 @@ def ordenar_dataframe_por_prioridad(df):
 
 # Función para aplicar formato condicional al DataFrame mostrado
 def aplicar_formato_condicional_dataframe(df):
-    """Aplica formato condicional al DataFrame para Streamlit"""
+    """Aplica formato condicional al DataFrame para Streamlit con NUEVAS condiciones"""
     styles = pd.DataFrame('', index=df.index, columns=df.columns)
     
     try:
@@ -847,17 +943,45 @@ def aplicar_formato_condicional_dataframe(df):
             mask_usuario = df['USUARIO'] != df['USUARIO-CSV']
             styles.loc[mask_usuario, 'USUARIO-CSV'] = 'background-color: rgb(255, 0, 0)'
         
-        # Condición 2: RUE con fondo amarillo cuando ETIQ. PENÚLTIMO TRAM. = "80 PROPRES" y fecha actual > FECHA NOTIFICACIÓN + 23 días
-        if 'RUE' in df.columns and 'ETIQ. PENÚLTIMO TRAM.' in df.columns and 'FECHA NOTIFICACIÓN' in df.columns:
+        # Condición 2: RUE con MÚLTIPLES condiciones específicas
+        if 'RUE' in df.columns:
             for idx, row in df.iterrows():
                 try:
-                    if (str(row['ETIQ. PENÚLTIMO TRAM.']) == "80 PROPRES" and 
-                        pd.notna(row['FECHA NOTIFICACIÓN'])):
-                        # Asegurarse de que la fecha es un objeto datetime
-                        if isinstance(row['FECHA NOTIFICACIÓN'], (pd.Timestamp, datetime)):
-                            fecha_limite = row['FECHA NOTIFICACIÓN'] + timedelta(days=23)
+                    etiq_penultimo = row.get('ETIQ. PENÚLTIMO TRAM.', '')
+                    fecha_notif = row.get('FECHA NOTIFICACIÓN', None)
+                    docum_incorp = row.get('DOCUM.INCORP.', '')
+                    
+                    es_amarillo = False
+                    
+                    # CONDICIÓN 2.1: "80 PROPRES" con fecha límite superada
+                    if (str(etiq_penultimo) == "80 PROPRES" and 
+                        pd.notna(fecha_notif)):
+                        if isinstance(fecha_notif, (pd.Timestamp, datetime)):
+                            fecha_limite = fecha_notif + timedelta(days=23)
                             if datetime.now() > fecha_limite:
-                                styles.loc[idx, 'RUE'] = 'background-color: rgb(255, 255, 0)'
+                                es_amarillo = True
+                    
+                    # NUEVA CONDICIÓN 2.2: "50 REQUERIR" con fecha límite superada
+                    elif (str(etiq_penultimo) == "50 REQUERIR" and 
+                          pd.notna(fecha_notif)):
+                        if isinstance(fecha_notif, (pd.Timestamp, datetime)):
+                            fecha_limite = fecha_notif + timedelta(days=23)
+                            if datetime.now() > fecha_limite:
+                                es_amarillo = True
+                    
+                    # NUEVA CONDICIÓN 2.3: "70 ALEGACI" o "60 CONTESTA"
+                    elif str(etiq_penultimo) in ["70 ALEGACI", "60 CONTESTA"]:
+                        es_amarillo = True
+                    
+                    # NUEVA CONDICIÓN 2.4: DOCUM.INCORP. no vacío Y distinto de "SOLICITUD" o "REITERA SOLICITUD"
+                    elif (pd.notna(docum_incorp) and 
+                          str(docum_incorp).strip() != '' and
+                          str(docum_incorp).strip().upper() not in ["SOLICITUD", "REITERA SOLICITUD"]):
+                        es_amarillo = True
+                    
+                    if es_amarillo:
+                        styles.loc[idx, 'RUE'] = 'background-color: rgb(255, 255, 0)'
+                        
                 except (TypeError, ValueError):
                     continue  # Ignorar errores de fecha
         
@@ -952,7 +1076,13 @@ def generar_pdf_usuario(usuario, df_pendientes, num_semana, fecha_max_str):
     
     # Procesar datos para PDF - mantener las columnas originales para el formato condicional
     indices_a_incluir = list(range(df_user_ordenado.shape[1]))
-    indices_a_excluir = {1, 4, 10}
+    indices_a_excluir = {1, 4, 11}
+    
+    # EXCLUIR también la columna "FECHA DE ACTUALIZACIÓN DATOS" si existe
+    for idx, col_name in enumerate(df_user_ordenado.columns):
+        if "FECHA DE ACTUALIZACIÓN DATOS" in col_name.upper():
+            indices_a_excluir.add(idx)
+    
     indices_finales = [i for i in indices_a_incluir if i not in indices_a_excluir]
     NOMBRES_COLUMNAS_PDF = df_user_ordenado.columns[indices_finales].tolist()
 
@@ -963,16 +1093,24 @@ def generar_pdf_usuario(usuario, df_pendientes, num_semana, fecha_max_str):
         if nombre_columna_a_redondear in df_user_ordenado.columns:
             df_user_ordenado[nombre_columna_a_redondear] = pd.to_numeric(df_user_ordenado[nombre_columna_a_redondear], errors='coerce').fillna(0).round(0).astype(int)
 
-    # Crear DataFrame para mostrar (con fechas formateadas)
+    # Crear DataFrame para mostrar (con fechas formateadas y "nan" reemplazados)
     df_pdf_mostrar = df_user_ordenado[NOMBRES_COLUMNAS_PDF].copy()
-    for col in df_pdf_mostrar.select_dtypes(include='datetime').columns:
-        df_pdf_mostrar[col] = df_pdf_mostrar[col].dt.strftime("%d/%m/%Y")
+    
+    # Formatear fechas y reemplazar "nan"
+    for col in df_pdf_mostrar.columns:
+        if df_pdf_mostrar[col].dtype == 'object':
+            df_pdf_mostrar[col] = df_pdf_mostrar[col].apply(
+                lambda x: "" if pd.isna(x) or str(x).lower() == "nan" else x
+            )
+        elif 'fecha' in col.lower():
+            df_pdf_mostrar[col] = df_pdf_mostrar[col].apply(
+                lambda x: x.strftime("%d/%m/%Y") if pd.notna(x) else ""
+            )
 
     num_expedientes = len(df_pdf_mostrar)
     titulo_pdf = f"{usuario} - Semana {num_semana} a {fecha_max_str} - Expedientes Pendientes ({num_expedientes})"
     
     # Pasar el DataFrame ORIGINAL ORDENADO (con fechas datetime) para el formato condicional
-    # y el DataFrame para mostrar (con fechas formateadas) para la visualización
     return dataframe_to_pdf_bytes(df_pdf_mostrar, titulo_pdf, df_original=df_user_ordenado)
 
 if eleccion == "Principal":
@@ -1128,30 +1266,196 @@ if eleccion == "Principal":
         if fig:
             st.plotly_chart(fig, use_container_width=True)
 
-    # Vista de datos - CORREGIDA: separar la lógica de formato condicional
+    # VISTA GENERAL - SOLUCIÓN STREAMLIT NATIVO OPTIMIZADA
     st.subheader("📋 Vista general de expedientes")
-    
-    # Crear dos versiones: una para mostrar (con fechas formateadas) y otra para el formato condicional (con fechas originales)
+
+    # Crear copia y formatear fechas
     df_mostrar = df_filtrado.copy()
-    
-    # Aplicar formato condicional usando el DataFrame original (con fechas como datetime)
-    try:
-        df_con_estilos = df_filtrado.style.apply(aplicar_formato_condicional_dataframe, axis=None)
+
+    # Formatear TODAS las columnas de fecha
+    for col in df_mostrar.select_dtypes(include='datetime').columns:
+        df_mostrar[col] = df_mostrar[col].dt.strftime("%d/%m/%Y")
+
+    # Mostrar tabla principal SIN formato condicional pero CON fechas formateadas
+    st.dataframe(df_mostrar, use_container_width=True, height=400)
+
+    # Sección de RESUMEN de formatos condicionales
+    st.markdown("---")
+    st.subheader("🔍 Resumen de Expedientes con Formatos Condicionales")
+
+    # Crear pestañas para cada tipo de formato condicional
+    tab1, tab2, tab3 = st.tabs(["🟡 RUE Prioritarios", "🔴 USUARIO-CSV Discrepantes", "🔵 Con Documentación"])
+
+    with tab1:
+        # RUE amarillos - CON NUEVAS CONDICIONES
+        st.write("**Expedientes con RUE prioritario (amarillo):**")
+        df_amarillos = df_filtrado.copy()
+        mask_amarillo = pd.Series(False, index=df_amarillos.index)
         
-        # Formatear fechas para mostrar
-        df_mostrar_formateado = df_mostrar.copy()
-        for col in df_mostrar_formateado.select_dtypes(include='datetime').columns:
-            df_mostrar_formateado[col] = df_mostrar_formateado[col].dt.strftime("%d/%m/%Y")
+        for idx, row in df_amarillos.iterrows():
+            try:
+                etiq_penultimo = row.get('ETIQ. PENÚLTIMO TRAM.', '')
+                fecha_notif = row.get('FECHA NOTIFICACIÓN', None)
+                docum_incorp = row.get('DOCUM.INCORP.', '')
+                
+                # CONDICIÓN 1: "80 PROPRES" con fecha límite superada
+                if (str(etiq_penultimo).strip() == "80 PROPRES" and 
+                    pd.notna(fecha_notif) and 
+                    isinstance(fecha_notif, (pd.Timestamp, datetime))):
+                    
+                    fecha_limite = fecha_notif + timedelta(days=23)
+                    if datetime.now() > fecha_limite:
+                        mask_amarillo[idx] = True
+                
+                # NUEVA CONDICIÓN 2: "50 REQUERIR" con fecha límite superada
+                elif (str(etiq_penultimo).strip() == "50 REQUERIR" and 
+                    pd.notna(fecha_notif) and 
+                    isinstance(fecha_notif, (pd.Timestamp, datetime))):
+                    
+                    fecha_limite = fecha_notif + timedelta(days=23)
+                    if datetime.now() > fecha_limite:
+                        mask_amarillo[idx] = True
+                
+                # NUEVA CONDICIÓN 3: "70 ALEGACI" o "60 CONTESTA"
+                elif str(etiq_penultimo).strip() in ["70 ALEGACI", "60 CONTESTA"]:
+                    mask_amarillo[idx] = True
+                
+                # NUEVA CONDICIÓN 4: DOCUM.INCORP. no vacío Y distinto de "SOLICITUD" o "REITERA SOLICITUD"
+                elif (pd.notna(docum_incorp) and 
+                    str(docum_incorp).strip() != '' and
+                    str(docum_incorp).strip().upper() not in ["SOLICITUD", "REITERA SOLICITUD"]):
+                    mask_amarillo[idx] = True
+                    
+            except:
+                pass
+
+    with tab2:
+        # USUARIO-CSV rojos
+        st.write("**Expedientes con discrepancia USUARIO/USUARIO-CSV (rojo):**")
         
-        # Mostrar el DataFrame con estilos pero con fechas formateadas
-        st.dataframe(df_con_estilos, use_container_width=True)
+        if 'USUARIO' in df_filtrado.columns and 'USUARIO-CSV' in df_filtrado.columns:
+            mask_rojo = df_filtrado['USUARIO'] != df_filtrado['USUARIO-CSV']
+            
+            if mask_rojo.any():
+                df_temp = df_filtrado[mask_rojo].copy()
+                # Formatear fechas para mostrar
+                for col in df_temp.select_dtypes(include='datetime').columns:
+                    df_temp[col] = df_temp[col].dt.strftime("%d/%m/%Y")
+                
+                # Mostrar solo columnas relevantes
+                columnas_relevantes = ['RUE', 'USUARIO', 'USUARIO-CSV', 'EQUIPO', 'ESTADO']
+                columnas_disponibles = [col for col in columnas_relevantes if col in df_temp.columns]
+                
+                st.dataframe(df_temp[columnas_disponibles], use_container_width=True)
+                st.error(f"**Total: {mask_rojo.sum()} expedientes con discrepancia**")
+                
+                # Análisis de discrepancias
+                st.write("**Análisis de discrepancias:**")
+                discrepancia_detalle = df_temp.groupby(['USUARIO', 'USUARIO-CSV']).size().reset_index(name='Cantidad')
+                st.dataframe(discrepancia_detalle, use_container_width=True)
+            else:
+                st.success("✅ No hay discrepancias entre USUARIO y USUARIO-CSV")
+        else:
+            st.info("Columnas USUARIO y/o USUARIO-CSV no disponibles")
+
+    with tab3:
+        # DOCUM.INCORP. azules
+        st.write("**Expedientes con documentación incorporada (azul):**")
         
-    except Exception as e:
-        st.error(f"Error al aplicar formato condicional: {e}")
-        # Fallback: mostrar sin formato condicional
-        for col in df_mostrar.select_dtypes(include='datetime').columns:
-            df_mostrar[col] = df_mostrar[col].dt.strftime("%d/%m/%Y")
-        st.dataframe(df_mostrar, use_container_width=True)
+        if 'DOCUM.INCORP.' in df_filtrado.columns:
+            mask_docum = df_filtrado['DOCUM.INCORP.'].notna() & (df_filtrado['DOCUM.INCORP.'] != '')
+            
+            if mask_docum.any():
+                df_temp = df_filtrado[mask_docum].copy()
+                # Formatear fechas para mostrar
+                for col in df_temp.select_dtypes(include='datetime').columns:
+                    df_temp[col] = df_temp[col].dt.strftime("%d/%m/%Y")
+                
+                # Mostrar solo columnas relevantes
+                columnas_relevantes = ['RUE', 'DOCUM.INCORP.', 'USUARIO', 'EQUIPO', 'ETIQ. PENÚLTIMO TRAM.']
+                columnas_disponibles = [col for col in columnas_relevantes if col in df_temp.columns]
+                
+                st.dataframe(df_temp[columnas_disponibles], use_container_width=True)
+                st.info(f"**Total: {mask_docum.sum()} expedientes con documentación**")
+                
+                # Análisis por tipo de documentación
+                if 'DOCUM.INCORP.' in df_temp.columns:
+                    st.write("**Tipos de documentación:**")
+                    conteo_docum = df_temp['DOCUM.INCORP.'].value_counts()
+                    for doc_type, count in conteo_docum.head(10).items():  # Mostrar top 10
+                        st.write(f"- {doc_type}: {count} expedientes")
+            else:
+                st.info("No hay expedientes con documentación incorporada")
+        else:
+            st.info("Columna DOCUM.INCORP. no disponible")
+
+    # Estadísticas generales
+    st.markdown("---")
+    st.subheader("📊 Estadísticas Generales")
+
+    col1, col2, col3, col4 = st.columns(4)
+
+    with col1:
+        registros_mostrados = f"{len(df_mostrar):,}".replace(",", ".")
+        registros_totales = f"{len(df):,}".replace(",", ".")
+        st.metric("Registros mostrados", f"{registros_mostrados}/{registros_totales}")
+
+    with col2:
+        # Contar RUE amarillos - CON NUEVAS CONDICIONES
+        mask_amarillo = pd.Series(False, index=df_filtrado.index)
+        for idx, row in df_filtrado.iterrows():
+            try:
+                etiq_penultimo = row.get('ETIQ. PENÚLTIMO TRAM.', '')
+                fecha_notif = row.get('FECHA NOTIFICACIÓN', None)
+                docum_incorp = row.get('DOCUM.INCORP.', '')
+                
+                # CONDICIÓN 1: "80 PROPRES" con fecha límite superada
+                if (str(etiq_penultimo).strip() == "80 PROPRES" and 
+                    pd.notna(fecha_notif) and 
+                    isinstance(fecha_notif, (pd.Timestamp, datetime))):
+                    
+                    fecha_limite = fecha_notif + timedelta(days=23)
+                    if datetime.now() > fecha_limite:
+                        mask_amarillo[idx] = True
+                
+                # NUEVA CONDICIÓN 2: "50 REQUERIR" con fecha límite superada
+                elif (str(etiq_penultimo).strip() == "50 REQUERIR" and 
+                    pd.notna(fecha_notif) and 
+                    isinstance(fecha_notif, (pd.Timestamp, datetime))):
+                    
+                    fecha_limite = fecha_notif + timedelta(days=23)
+                    if datetime.now() > fecha_limite:
+                        mask_amarillo[idx] = True
+                
+                # NUEVA CONDICIÓN 3: "70 ALEGACI" o "60 CONTESTA"
+                elif str(etiq_penultimo).strip() in ["70 ALEGACI", "60 CONTESTA"]:
+                    mask_amarillo[idx] = True
+                
+                # NUEVA CONDICIÓN 4: DOCUM.INCORP. no vacío Y distinto de "SOLICITUD" o "REITERA SOLICITUD"
+                elif (pd.notna(docum_incorp) and 
+                    str(docum_incorp).strip() != '' and
+                    str(docum_incorp).strip().upper() not in ["SOLICITUD", "REITERA SOLICITUD"]):
+                    mask_amarillo[idx] = True
+                    
+            except:
+                pass
+        st.metric("RUE prioritarios", f"{mask_amarillo.sum():,}".replace(",", "."))
+
+    with col3:
+        # Contar USUARIO-CSV rojos
+        if 'USUARIO' in df_filtrado.columns and 'USUARIO-CSV' in df_filtrado.columns:
+            mask_rojo = (df_filtrado['USUARIO'] != df_filtrado['USUARIO-CSV']).sum()
+            st.metric("Discrepancias", f"{mask_rojo:,}".replace(",", "."))
+        else:
+            st.metric("Discrepancias", "N/A")
+
+    with col4:
+        # Contar DOCUM.INCORP. azules
+        if 'DOCUM.INCORP.' in df_filtrado.columns:
+            mask_docum = df_filtrado['DOCUM.INCORP.'].notna().sum()
+            st.metric("Con documentación", f"{mask_docum:,}".replace(",", "."))
+        else:
+            st.metric("Con documentación", "N/A")
 
     # Mostrar estadísticas de los filtros aplicados
     st.sidebar.markdown("---")
@@ -1323,22 +1627,24 @@ if eleccion == "Principal":
                 key='pdf_download_button'
             )
 
-    # SECCIÓN: ENVÍO DE CORREOS (versión .EML final, compatible con Outlook)
+    # SECCIÓN: ENVÍO DE CORREOS INTEGRADA
     st.markdown("---")
     st.header("📧 Envío de Correos")
     
+    # Verificar que estamos usando la última semana
     st.info(f"**📅 Semana activa para envío:** {num_semana} (Última semana disponible - {fecha_max_str})")
     
-    # Verificar archivo USUARIOS
+    # Verificar si el archivo USUARIOS está cargado
     if df_usuarios is None:
         st.error("❌ No se ha cargado el archivo USUARIOS. Por favor, cárgalo en la sección de arriba.")
         st.stop()
     
-    # Verificar columnas requeridas
+    # Verificar columnas requeridas en USUARIOS
     columnas_requeridas = ['USUARIOS', 'ENVIAR', 'EMAIL', 'ASUNTO', 'MENSAJE1']
-    faltantes = [c for c in columnas_requeridas if c not in df_usuarios.columns]
-    if faltantes:
-        st.error(f"❌ Faltan columnas en el archivo USUARIOS: {', '.join(faltantes)}")
+    columnas_faltantes = [col for col in columnas_requeridas if col not in df_usuarios.columns]
+    
+    if columnas_faltantes:
+        st.error(f"❌ Faltan columnas en el archivo USUARIOS: {', '.join(columnas_faltantes)}")
         st.stop()
     
     # Filtrar usuarios activos
@@ -1350,176 +1656,250 @@ if eleccion == "Principal":
     if usuarios_activos.empty:
         st.warning("⚠️ No hay usuarios activos para envío (ENVIAR = 'SÍ' o 'SI')")
     else:
-        from email.message import EmailMessage
-        from email import encoders
-        from email.mime.text import MIMEText
-        import base64, io, zipfile
-        from datetime import datetime
-    
-        # === Funciones auxiliares ===
-        def procesar_asunto(asunto_template, num_semana, fecha_max_str):
-            """Maneja variables y NaN en el asunto"""
-            if not asunto_template or str(asunto_template).lower() == 'nan':
-                return f"Situación RECTAUTO asignados - Semana {num_semana}"
-            asunto = str(asunto_template)
-            asunto = asunto.replace("&num_semana&", str(num_semana))
-            asunto = asunto.replace("&fecha_max&", fecha_max_str)
-            return asunto
-    
+        # Función para generar el cuerpo del mensaje dinámicamente
         def generar_cuerpo_mensaje(mensaje_base):
-            """Añade saludo dinámico según la hora"""
-            hora = datetime.now().hour
-            saludo = "Buenos días" if hora < 14 else "Buenas tardes"
-            return f"{saludo},\n\n{mensaje_base}"
-    
-        def generar_eml(destinatario, asunto, cuerpo_mensaje, archivo_pdf, nombre_archivo, cc=None, bcc=None):
+            """Genera el cuerpo del mensaje con saludo según la hora"""
+            from datetime import datetime
+            
+            hora_actual = datetime.now().hour
+            saludo = "Buenos días" if hora_actual < 14 else "Buenas tardes"
+            
+            cuerpo_mensaje = f"{saludo},\n\n{mensaje_base}"
+            return cuerpo_mensaje
+        
+        # Función para procesar el asunto con variables
+        def procesar_asunto(asunto_template, num_semana, fecha_max_str):
+            """Reemplaza variables en el asunto del correo"""
+            asunto_procesado = asunto_template.replace("&num_semana&", str(num_semana))
+            asunto_procesado = asunto_procesado.replace("&fecha_max&", fecha_max_str)
+            return asunto_procesado
+        
+        # Función para enviar correos con Outlook (funciona con Outlook cerrado)
+        def enviar_correo_outlook(destinatario, asunto, cuerpo_mensaje, archivo_pdf, nombre_archivo, cc=None, bcc=None):
             """
-            Genera .eml con codificación base64 (UTF-8) para evitar caracteres raros.
-            Incluye firma y logo remoto visible en Outlook.
+            Envía correo usando Outlook local con adjunto PDF y nombre correcto.
             """
             try:
-                msg = EmailMessage()
-                msg["To"] = destinatario
-                msg["Subject"] = asunto
-                if cc: msg["Cc"] = cc
-                if bcc: msg["Bcc"] = bcc
-    
-                # Logo remoto (visible en Outlook)
-                logo_url = "https://www.juntadeandalucia.es/sites/default/files/logos-dominios/ata_1.png"  # 🔁 cambia esta URL al logo real
-                logo_html = f'<img src="{logo_url}" alt="Logo RECTAUTO" style="height:60px;">'
-    
-                # HTML cuerpo
-                cuerpo_html = f"""\
-                <html>
-                    <body style="font-family: Arial, sans-serif; font-size: 11pt; color: #333;">
-                        <p>{cuerpo_mensaje.replace(chr(10), '<br>')}</p>
-                        <br><br>
-                        <hr style="border:none;border-top:1px solid #007933;margin:10px 0;">
-                        <p style="margin:0;">
-                            <b>Equipo RECTAUTO</b><br>
-                            {logo_html}<br>
-                            <span style="color:#007933;">Gestión Regional</span>
-                        </p>
-                    </body>
-                </html>
-                """
-    
-                # Texto plano + HTML en base64 (Outlook-safe)
-                msg.set_content(cuerpo_mensaje, charset="utf-8")
-                html_part = MIMEText(cuerpo_html.encode('utf-8'), "html", "utf-8")
-                encoders.encode_base64(html_part)
-                msg.make_mixed()
-                msg.attach(html_part)
-    
-                # Adjuntar PDF
-                msg.add_attachment(
-                    archivo_pdf,
-                    maintype="application",
-                    subtype="pdf",
-                    filename=nombre_archivo
-                )
-    
-                return msg.as_bytes()
+                import win32com.client
+                import os
+                import tempfile
+                import shutil
+
+                outlook = win32com.client.Dispatch("Outlook.Application")
+                mail = outlook.CreateItem(0)  # 0 = olMailItem
+
+                mail.To = destinatario
+                mail.Subject = asunto
+                mail.Body = cuerpo_mensaje
+
+                if cc and pd.notna(cc) and str(cc).strip():
+                    mail.CC = str(cc)
+                if bcc and pd.notna(bcc) and str(bcc).strip():
+                    mail.BCC = str(bcc)
+
+                # Crear archivo temporal y guardarlo con el nombre deseado
+                with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as temp_file:
+                    temp_file.write(archivo_pdf)
+                    temp_path = temp_file.name
+
+                # Crear copia con nombre real dentro de la carpeta temporal
+                carpeta_temp = tempfile.gettempdir()
+                ruta_final = os.path.join(carpeta_temp, nombre_archivo)
+
+                # Asegurar extensión .pdf
+                if not ruta_final.lower().endswith(".pdf"):
+                    ruta_final += ".pdf"
+
+                shutil.copy(temp_path, ruta_final)
+
+                # Adjuntar el archivo con nombre correcto
+                mail.Attachments.Add(Source=ruta_final)
+
+                # Enviar correo
+                mail.Send()
+
+                # Limpieza
+                try:
+                    os.remove(temp_path)
+                    os.remove(ruta_final)
+                except:
+                    pass
+
+                return True
+
+            except ImportError:
+                st.error("❌ Error: win32com.client no está disponible. Instala pywin32: pip install pywin32")
+                return False
             except Exception as e:
-                st.error(f"❌ Error al generar .eml: {e}")
-                return None
-    
-        # === Construcción de correos ===
-        df_pendientes = df[df["ESTADO"].isin(ESTADOS_PENDIENTES)].copy()
-        usuarios_raw = df_pendientes['USUARIO'].dropna().unique()
-        usuarios_set = {str(u).strip().lower() for u in usuarios_raw if str(u).strip().lower() != 'nan'}
+                st.error(f"❌ Error al enviar correo a {destinatario}: {e}")
+                return False
+        
+        # Verificar usuarios con expedientes pendientes
+        usuarios_con_pendientes = df_pendientes['USUARIO'].dropna().unique()
         usuarios_para_envio = []
-    
-        for idx, urow in usuarios_activos.iterrows():
-            usuario_raw = urow.get('USUARIOS', '')
-            usuario = str(usuario_raw).strip().lower()
-            if not usuario or usuario == 'nan':
-                st.warning(f"Fila {idx}: usuario vacío en USUARIOS, se omite.")
-                continue
-            if usuario in usuarios_set:
-                num_exp = len(df_pendientes[df_pendientes['USUARIO'].astype(str).str.strip().str.lower() == usuario])
-                asunto = procesar_asunto(urow.get('ASUNTO', ''), num_semana, fecha_max_str)
-                mensaje_base = (
-                    (urow.get('MENSAJE1', '') or '') + "\n\n" +
-                    (urow.get('MENSAJE2', '') or '') + "\n\n" +
-                    (urow.get('MENSAJE3', '') or '') + "\n\n" +
-                    (urow.get('DESPEDIDA', '') or '')
-                )
-                cuerpo = generar_cuerpo_mensaje(mensaje_base)
+        
+        for _, usuario_row in usuarios_activos.iterrows():
+            usuario = usuario_row['USUARIOS']
+            if usuario in usuarios_con_pendientes:
+                num_expedientes = len(df_pendientes[df_pendientes['USUARIO'] == usuario])
+                
+                # Procesar asunto con variables
+                asunto_template = usuario_row['ASUNTO'] if pd.notna(usuario_row['ASUNTO']) else f"Situación RECTAUTO asignados en la semana {num_semana} a {fecha_max_str}"
+                asunto_procesado = procesar_asunto(asunto_template, num_semana, fecha_max_str)
+                
+                # Generar cuerpo del mensaje
+                #mensaje_base = usuario_row['MENSAJE'] if pd.notna(usuario_row['MENSAJE']) else "Se adjunta informe de expedientes pendientes."
+                mensaje_base = f"{usuario_row['MENSAJE1']} \n\n {usuario_row['MENSAJE2']} \n\n {usuario_row['MENSAJE3']} \n\n {usuario_row['DESPEDIDA']} \n\n __________________ \n\n Equipo RECTAUTO." if pd.notna(usuario_row['MENSAJE1']) else "Se adjunta informe de expedientes pendientes."
+                cuerpo_mensaje = generar_cuerpo_mensaje(mensaje_base)
+                
                 usuarios_para_envio.append({
-                    "usuario": usuario.upper(),
-                    "email": urow.get("EMAIL", ""),
-                    "cc": urow.get("CC", "") or "",
-                    "bcc": urow.get("BCC", "") or "",
-                    "expedientes": num_exp,
-                    "asunto": asunto,
-                    "cuerpo": cuerpo
+                    'usuario': usuario,
+                    'resumen': usuario_row.get('RESUMEN', ''),
+                    'email': usuario_row['EMAIL'],
+                    'cc': usuario_row.get('CC', ''),
+                    'bcc': usuario_row.get('BCC', ''),
+                    'expedientes': num_expedientes,
+                    'asunto': asunto_procesado,
+                    'mensaje': mensaje_base,
+                    'cuerpo_mensaje': cuerpo_mensaje
                 })
             else:
-                st.info(f"ℹ️ Usuario {usuario} no tiene expedientes pendientes.")
-    
-        if not usuarios_para_envio:
-            st.warning("⚠️ No hay usuarios con expedientes pendientes.")
-        else:
-            st.success(f"✅ {len(usuarios_para_envio)} usuarios con expedientes pendientes detectados.")
-    
-            st.subheader("👁️ Previsualización")
-            ejemplo = usuarios_para_envio[0]
-            col1, col2 = st.columns([1, 2])
+                st.info(f"ℹ️ Usuario {usuario} no tiene expedientes pendientes - No se enviará correo")
+        
+        if usuarios_para_envio:
+            st.success(f"✅ {len(usuarios_para_envio)} usuarios tienen expedientes pendientes para enviar")
+            
+            # Mostrar resumen
+            col1, col2, col3 = st.columns(3)
             with col1:
-                st.write("**Destinatario:**", ejemplo["email"])
-                st.write("**Asunto:**", ejemplo["asunto"])
-                st.write("**Expedientes:**", ejemplo["expedientes"])
+                st.metric("Usuarios activos", len(usuarios_activos))
             with col2:
-                st.text_area("Cuerpo del mensaje:", ejemplo["cuerpo"], height=220, key="preview")
-    
+                st.metric("Con expedientes", len(usuarios_para_envio))
+            with col3:
+                st.metric("Semana activa", f"Semana {num_semana}")
+            
+            # Mostrar tabla de usuarios para envío
+            with st.expander("📋 Ver detalles de usuarios para envío"):
+                df_envio = pd.DataFrame(usuarios_para_envio)
+                columnas_mostrar = ['usuario', 'resumen', 'email', 'expedientes', 'asunto']
+                st.dataframe(df_envio[columnas_mostrar], use_container_width=True)
+            
+            # Previsualización de correo
+            st.subheader("👁️ Previsualización del Correo")
+            
+            if usuarios_para_envio:
+                usuario_ejemplo = usuarios_para_envio[0]
+                col1, col2 = st.columns([1, 2])
+                
+                with col1:
+                    st.write("**Destinatario:**", usuario_ejemplo['email'])
+                    if usuario_ejemplo['cc']:
+                        st.write("**CC:**", usuario_ejemplo['cc'])
+                    if usuario_ejemplo['bcc']:
+                        st.write("**BCC:**", usuario_ejemplo['bcc'])
+                    st.write("**Asunto:**", usuario_ejemplo['asunto'])
+                    st.write("**Expedientes:**", usuario_ejemplo['expedientes'])
+                
+                with col2:
+                    st.text_area("**Cuerpo del Mensaje:**", usuario_ejemplo['cuerpo_mensaje'], height=200, key="preview_mensaje")
+            
+            # Botón de envío masivo
             st.markdown("---")
-            st.subheader("📦 Generar y descargar correos")
-    
+            st.subheader("🚀 Envío de Correos")
+            
             st.warning("""
-            ⚠️ Los correos se generarán en formato **.eml** con el PDF adjunto.
-            Ábrelos en Outlook para revisar y enviar manualmente.
+            **⚠️ Importante antes de enviar:**
+            - Se usará la cuenta de Outlook predeterminada
+            - No es necesario tener Outlook abierto
+            - Los correos se enviarán inmediatamente
+            - Se adjuntará el PDF individual de cada usuario
+            - **Verifica que los datos sean correctos**
             """)
-    
-            if st.button("📤 Generar correos .eml (ZIP descargable)", type="primary"):
-                progress = st.progress(0)
-                zip_buffer = io.BytesIO()
-                generados, fallidos = 0, 0
-    
-                with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zipf:
-                    for i, u in enumerate(usuarios_para_envio):
-                        pdf_data = generar_pdf_usuario(u["usuario"], df_pendientes, num_semana, fecha_max_str)
-                        if pdf_data:
-                            nombre_pdf = f"Expedientes_{u['usuario']}_Semana_{num_semana}.pdf"
-                            eml_bytes = generar_eml(
-                                destinatario=u["email"],
-                                asunto=u["asunto"],
-                                cuerpo_mensaje=u["cuerpo"],
-                                archivo_pdf=pdf_data,
-                                nombre_archivo=nombre_pdf,
-                                cc=u["cc"],
-                                bcc=u["bcc"]
-                            )
-                            if eml_bytes:
-                                zipf.writestr(f"{u['usuario']}.eml", eml_bytes)
-                                generados += 1
-                            else:
-                                fallidos += 1
+            
+            if st.button("📤 Enviar Correos a Todos los Usuarios", type="primary", key="enviar_correos"):
+                progress_bar = st.progress(0)
+                status_text = st.empty()
+                
+                correos_enviados = 0
+                correos_fallidos = 0
+                
+                for i, usuario_info in enumerate(usuarios_para_envio):
+                    status_text.text(f"📨 Enviando a: {usuario_info['usuario']} ({usuario_info['email']})")
+                    
+                    # Generar PDF usando la función reutilizable
+                    pdf_data = generar_pdf_usuario(usuario_info['usuario'], df_pendientes, num_semana, fecha_max_str)
+                    
+                    if pdf_data:
+                        # Enviar correo con Outlook
+                        nombre_archivo = f"Expedientes_Pendientes_{usuario_info['usuario']}_Semana_{num_semana}.pdf"
+                        
+                        exito = enviar_correo_outlook(
+                            destinatario=usuario_info['email'],
+                            asunto=usuario_info['asunto'],
+                            cuerpo_mensaje=usuario_info['cuerpo_mensaje'],
+                            archivo_pdf=pdf_data,
+                            nombre_archivo=nombre_archivo,
+                            cc=usuario_info.get('cc'),
+                            bcc=usuario_info.get('bcc')
+                        )
+                        
+                        if exito:
+                            correos_enviados += 1
+                            st.success(f"✅ Enviado a {usuario_info['usuario']}")
                         else:
-                            fallidos += 1
-                        progress.progress((i + 1) / len(usuarios_para_envio))
+                            correos_fallidos += 1
+                            st.error(f"❌ Falló envío a {usuario_info['usuario']}")
+                    else:
+                        st.warning(f"⚠️ No se pudo generar PDF para {usuario_info['usuario']}")
+                        correos_fallidos += 1
+                    
+                    progress_bar.progress((i + 1) / len(usuarios_para_envio))
+                
+                status_text.text("")
+                
+                # Mostrar resumen final
+                st.markdown("---")
+                st.subheader("📊 Resumen del Envío")
+                
+                col1, col2, col3 = st.columns(3)
+                with col1:
+                    st.metric("Total procesados", len(usuarios_para_envio))
+                with col2:
+                    st.metric("Correos enviados", correos_enviados, delta=f"+{correos_enviados}")
+                with col3:
+                    st.metric("Correos fallidos", correos_fallidos, delta=f"-{correos_fallidos}", delta_color="inverse")
+                
+                if correos_enviados > 0:
+                    st.balloons()
+                    st.success("🎉 ¡Envío de correos completado!")
+        
+        else:
+            st.warning("⚠️ No hay usuarios con expedientes pendientes para enviar")
     
-                zip_buffer.seek(0)
-                nombre_zip = f"Correos_RECTAUTO_Semana_{num_semana}.zip"
-                st.download_button(
-                    label=f"⬇️ Descargar {generados} correos .eml (ZIP)",
-                    data=zip_buffer.read(),
-                    file_name=nombre_zip,
-                    mime="application/zip"
-                )
-    
-                st.success(f"🎉 {generados} correos generados correctamente. Abre los .eml en Outlook y pulsa 'Enviar'.")
-
+    # Información de configuración
+    st.markdown("---")
+    with st.expander("⚙️ Configuración de Envío de Correos"):
+        st.info("""
+        **📋 Para que funcione el envío de correos:**
+        
+        1. **Outlook instalado** en el equipo
+        2. **Cuenta de correo predeterminada** configurada en Outlook
+        3. **Librería pywin32 instalada**: 
+           ```bash
+           pip install pywin32
+           ```
+        4. **Archivo USUARIOS.xlsx** con la estructura correcta
+        
+        **📋 Estructura del archivo USUARIOS.xlsx (Hoja Sheet1):**
+        - USUARIOS: Código del usuario (debe coincidir con RECTAUTO)
+        - ENVIAR: "SI" o "SÍ" (en mayúsculas)
+        - EMAIL: Dirección de correo
+        - ASUNTO: Puede usar &num_semana& y &fecha_max& como variables
+        - MENSAJE: Texto del mensaje
+        - CC, BCC: Opcionales (separar múltiples emails con ;)
+        - RESUMEN: Opcional (nombre completo del usuario)
+        - Otras columnas: Se pueden añadir sin afectar el funcionamiento
+        """)
 
 elif eleccion == "Indicadores clave (KPI)":
     # ... (el código de la sección KPI se mantiene igual)
@@ -1785,12 +2165,16 @@ elif eleccion == "Indicadores clave (KPI)":
 
     st.plotly_chart(fig, use_container_width=True)
     
-    # Mostrar tabla con datos históricos
+    # Mostrar tabla con datos históricos completos
     with st.expander("📋 Ver datos históricos completos"):
+        # Crear copia y formatear fecha
+        df_mostrar_kpi = df_kpis_semanales.copy()
+        df_mostrar_kpi['semana_fin'] = df_mostrar_kpi['semana_fin'].dt.strftime("%d/%m/%Y")
+        
         st.dataframe(
-            df_kpis_semanales.rename(columns={
+            df_mostrar_kpi.rename(columns={
                 'semana_numero': 'Semana',
-                'semana_str': 'Fecha Fin Semana',
+                'semana_fin': 'Fecha Fin Semana',  # Usar la columna formateada
                 'nuevos_expedientes': 'Nuevos Expedientes',
                 'expedientes_cerrados': 'Expedientes Cerrados',
                 'total_abiertos': 'Total Abiertos'
