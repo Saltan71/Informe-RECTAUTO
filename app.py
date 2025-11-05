@@ -11,18 +11,47 @@ import os
 import hashlib
 import tempfile
 import shutil
+import uuid
+import getpass
 
+# === NUEVA CLASE PARA ENTORNO DE USUARIO ===
+class UserEnvironment:
+    def __init__(self):
+        try:
+            self.username = getpass.getuser()
+        except:
+            self.username = "unknown_user"
+        self.session_id = f"{self.username}_{datetime.now().strftime('%Y%m%d_%H%M%S')}_{uuid.uuid4().hex[:8]}"
+        self.working_dir = os.path.join(tempfile.gettempdir(), f"rectauto_{self.session_id}")
+        os.makedirs(self.working_dir, exist_ok=True)
+        print(f"User environment created: {self.working_dir}")  # Para debugging
+        
+    def get_cache_key(self, base_key):
+        return f"{self.session_id}_{base_key}"
+    
+    def get_temp_path(self, filename):
+        return os.path.join(self.working_dir, filename)
+    
+    def cleanup(self):
+        """Limpia los archivos temporales (opcional)"""
+        try:
+            shutil.rmtree(self.working_dir)
+        except:
+            pass
 
-test_file = "test_write_access.tmp"
-with open(test_file, 'w') as f:
-    f.write("test")
-
+# Inicializar el entorno de usuario
+user_env = UserEnvironment()
 
 # Constantes
 FECHA_REFERENCIA = datetime(2022, 11, 1)
 HOJA = "Sheet1"
 ESTADOS_PENDIENTES = ["Abierto"]
 CACHE_TTL = 7200  # 2 horas en segundos
+
+# Test file en directorio único por usuario
+test_file = user_env.get_temp_path("test_write_access.tmp")
+with open(test_file, 'w') as f:
+    f.write("test")
 
 st.set_page_config(page_title="Informe Rectauto", layout="wide")
 st.title("📊 Seguimiento Equipo Regional RECTAUTO")
@@ -125,7 +154,7 @@ class PDF(FPDF):
 
 # Funciones optimizadas con cache
 @st.cache_data(ttl=CACHE_TTL, show_spinner="Procesando archivo Excel...")
-def cargar_y_procesar_rectauto(archivo):
+def cargar_y_procesar_rectauto(archivo, _user_key=user_env.session_id):
     """Carga y procesa el archivo RECTAUTO con cache de 2 horas"""
     df = pd.read_excel(
         archivo, 
@@ -141,7 +170,7 @@ def cargar_y_procesar_rectauto(archivo):
     return df
 
 @st.cache_data(ttl=CACHE_TTL)
-def cargar_y_procesar_notifica(archivo):
+def cargar_y_procesar_notifica(archivo, _user_key=user_env.session_id):
     """Carga y procesa el archivo NOTIFICA"""
     try:
         df = pd.read_excel(archivo, sheet_name=HOJA)
@@ -162,7 +191,7 @@ def cargar_y_procesar_notifica(archivo):
         return None
 
 @st.cache_data(ttl=CACHE_TTL)
-def cargar_y_procesar_triaje(archivo):
+def cargar_y_procesar_triaje(archivo, _user_key=user_env.session_id):
     """Carga y procesa el archivo TRIAJE"""
     try:
         df = pd.read_excel(archivo, sheet_name='Triaje')
@@ -197,7 +226,7 @@ def cargar_y_procesar_triaje(archivo):
         return None
 
 @st.cache_data(ttl=CACHE_TTL)
-def cargar_y_procesar_usuarios(archivo):
+def cargar_y_procesar_usuarios(archivo, _user_key=user_env.session_id):
     """Carga y procesa el archivo USUARIOS"""
     try:
         df = pd.read_excel(archivo, sheet_name=HOJA)
@@ -208,7 +237,7 @@ def cargar_y_procesar_usuarios(archivo):
         return None
 
 @st.cache_data(ttl=CACHE_TTL)
-def cargar_y_procesar_documentos(archivo):
+def cargar_y_procesar_documentos(archivo, _user_key=user_env.session_id):
     """Carga y procesa el archivo DOCUMENTOS"""
     try:
         # Cargar hoja DOCU para los valores del desplegable
@@ -231,8 +260,8 @@ def cargar_y_procesar_documentos(archivo):
 def guardar_documentos_actualizados(archivo_original, df_documentos_actualizado):
     """Guarda los datos actualizados en el archivo DOCUMENTOS.xlsx (compatible con Windows y Cloud)."""
     try:
-        # Crear archivo temporal (cerrado inmediatamente para evitar bloqueo en Windows)
-        tmp_file = tempfile.NamedTemporaryFile(delete=False, suffix=".xlsx")
+        # Usar directorio temporal único por usuario
+        tmp_file = tempfile.NamedTemporaryFile(delete=False, suffix=".xlsx", dir=user_env.working_dir)
         tmp_path = tmp_file.name
         tmp_file.close()  # 🔹 Muy importante: libera el archivo en Windows
 
@@ -261,7 +290,7 @@ def guardar_documentos_actualizados(archivo_original, df_documentos_actualizado)
 
 
 @st.cache_data(ttl=CACHE_TTL)
-def combinar_archivos(rectauto_df, notifica_df=None, triaje_df=None, usuarios_df=None, documentos_data=None):
+def combinar_archivos(rectauto_df, notifica_df=None, triaje_df=None, usuarios_df=None, documentos_data=None, _user_key=user_env.session_id):
     """Combina los archivos en un único DataFrame incluyendo DOCUM.INCORP."""
     df_combinado = rectauto_df.copy()
     
@@ -312,14 +341,13 @@ def combinar_archivos(rectauto_df, notifica_df=None, triaje_df=None, usuarios_df
     return df_combinado
 
 @st.cache_data(ttl=CACHE_TTL)
-def convertir_fechas(df):
+def convertir_fechas(df, _user_key=user_env.session_id):
     """Convierte columnas con 'FECHA' en el nombre a datetime"""
     for col in df.columns:
         if 'FECHA' in col:
             df[col] = pd.to_datetime(df[col], errors='coerce')
     return df
 
-@st.cache_data(ttl=CACHE_TTL)
 @st.cache_data(ttl=CACHE_TTL)
 def dataframe_to_pdf_bytes(df_mostrar, title, df_original):
     """Genera un PDF desde un DataFrame con formato condicional (compatible con fpdf2 y Windows)."""
@@ -642,15 +670,23 @@ st.sidebar.image("Logo Atrian.png", width=260)
 # Botón para limpiar cache
 with st.sidebar:
     st.markdown("---")
-    if st.button("🔄 Limpiar cache", help="Limpiar toda la cache y recargar"):
-        st.cache_data.clear()
-        # Mantener solo los datos esenciales
-        keys_to_keep = ['df_combinado', 'df_usuarios', 'archivos_hash', 'filtro_estado', 'filtro_equipo', 'filtro_usuario']
-        for key in list(st.session_state.keys()):
-            if key not in keys_to_keep:
-                del st.session_state[key]
-        st.success("Cache limpiada correctamente")
-        st.rerun()
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        if st.button("🔄 Limpiar cache", help="Limpiar toda la cache y recargar"):
+            st.cache_data.clear()
+            # Mantener solo los datos esenciales
+            keys_to_keep = ['df_combinado', 'df_usuarios', 'archivos_hash', 'filtro_estado', 'filtro_equipo', 'filtro_usuario']
+            for key in list(st.session_state.keys()):
+                if key not in keys_to_keep:
+                    del st.session_state[key]
+            st.success("Cache limpiada correctamente")
+            st.rerun()
+    
+    with col2:
+        if st.button("🧹 Limpiar temp", help="Limpiar archivos temporales"):
+            user_env.cleanup()
+            st.success("Archivos temporales limpiados")
 
 # NUEVA SECCIÓN: CARGA DE CINCO ARCHIVOS (incluyendo DOCUMENTOS)
 st.markdown("---")
@@ -1065,7 +1101,7 @@ def crear_grafico_dinamico(_conteo, columna, titulo):
 
 # Función para generar PDF de usuario (MEJORADA con ordenamiento)
 def generar_pdf_usuario(usuario, df_pendientes, num_semana, fecha_max_str):
-    """Genera el PDF para un usuario específico"""
+    """Genera el PDF para un usuario específico con nombre único"""
     df_user = df_pendientes[df_pendientes["USUARIO"] == usuario].copy()
     
     if df_user.empty:
@@ -1108,7 +1144,10 @@ def generar_pdf_usuario(usuario, df_pendientes, num_semana, fecha_max_str):
             )
 
     num_expedientes = len(df_pdf_mostrar)
-    titulo_pdf = f"{usuario} - Semana {num_semana} a {fecha_max_str} - Expedientes Pendientes ({num_expedientes})"
+    
+    # NOMBRE ÚNICO que incluye timestamp para evitar colisiones
+    timestamp = datetime.now().strftime("%H%M%S")
+    titulo_pdf = f"{usuario} - Semana {num_semana} a {fecha_max_str} - Expedientes Pendientes ({num_expedientes}) - {timestamp}"
     
     # Pasar el DataFrame ORIGINAL ORDENADO (con fechas datetime) para el formato condicional
     return dataframe_to_pdf_bytes(df_pdf_mostrar, titulo_pdf, df_original=df_user_ordenado)
@@ -1212,16 +1251,42 @@ if eleccion == "Principal":
         df_filtrado_temp = df_filtrado.copy()
         
         if mostrar_solo_amarillos:
-            # Filtrar solo RUE amarillos
+            # Filtrar solo RUE amarillos - CON TODAS LAS CONDICIONES
             mask_amarillo = pd.Series(False, index=df_filtrado_temp.index)
             for idx, row in df_filtrado_temp.iterrows():
                 try:
-                    if (str(row.get('ETIQ. PENÚLTIMO TRAM.', '')) == "80 PROPRES" and 
-                        pd.notna(row.get('FECHA NOTIFICACIÓN', None))):
-                        if isinstance(row['FECHA NOTIFICACIÓN'], (pd.Timestamp, datetime)):
-                            fecha_limite = row['FECHA NOTIFICACIÓN'] + timedelta(days=23)
-                            if datetime.now() > fecha_limite:
-                                mask_amarillo[idx] = True
+                    etiq_penultimo = row.get('ETIQ. PENÚLTIMO TRAM.', '')
+                    fecha_notif = row.get('FECHA NOTIFICACIÓN', None)
+                    docum_incorp = row.get('DOCUM.INCORP.', '')
+                    
+                    # CONDICIÓN 1: "80 PROPRES" con fecha límite superada
+                    if (str(etiq_penultimo).strip() == "80 PROPRES" and 
+                        pd.notna(fecha_notif) and 
+                        isinstance(fecha_notif, (pd.Timestamp, datetime))):
+                        
+                        fecha_limite = fecha_notif + timedelta(days=23)
+                        if datetime.now() > fecha_limite:
+                            mask_amarillo[idx] = True
+                    
+                    # CONDICIÓN 2: "50 REQUERIR" con fecha límite superada
+                    elif (str(etiq_penultimo).strip() == "50 REQUERIR" and 
+                        pd.notna(fecha_notif) and 
+                        isinstance(fecha_notif, (pd.Timestamp, datetime))):
+                        
+                        fecha_limite = fecha_notif + timedelta(days=23)
+                        if datetime.now() > fecha_limite:
+                            mask_amarillo[idx] = True
+                    
+                    # CONDICIÓN 3: "70 ALEGACI" o "60 CONTESTA"
+                    elif str(etiq_penultimo).strip() in ["70 ALEGACI", "60 CONTESTA"]:
+                        mask_amarillo[idx] = True
+                    
+                    # CONDICIÓN 4: DOCUM.INCORP. no vacío Y distinto de "SOLICITUD" o "REITERA SOLICITUD"
+                    elif (pd.notna(docum_incorp) and 
+                        str(docum_incorp).strip() != '' and
+                        str(docum_incorp).strip().upper() not in ["SOLICITUD", "REITERA SOLICITUD"]):
+                        mask_amarillo[idx] = True
+                        
                 except:
                     pass
             
@@ -1278,6 +1343,9 @@ if eleccion == "Principal":
 
     # Mostrar tabla principal SIN formato condicional pero CON fechas formateadas
     st.dataframe(df_mostrar, use_container_width=True, height=400)
+    registros_mostrados = f"{len(df_mostrar):,}".replace(",", ".")
+    registros_totales = f"{len(df):,}".replace(",", ".")
+    st.write(f"Mostrando {registros_mostrados} de {registros_totales} registros")
 
     # Sección de RESUMEN de formatos condicionales
     st.markdown("---")
@@ -1287,7 +1355,7 @@ if eleccion == "Principal":
     tab1, tab2, tab3 = st.tabs(["🟡 RUE Prioritarios", "🔴 USUARIO-CSV Discrepantes", "🔵 Con Documentación"])
 
     with tab1:
-        # RUE amarillos - CON NUEVAS CONDICIONES
+        # RUE amarillos - CON TODAS LAS CONDICIONES
         st.write("**Expedientes con RUE prioritario (amarillo):**")
         df_amarillos = df_filtrado.copy()
         mask_amarillo = pd.Series(False, index=df_amarillos.index)
@@ -1307,7 +1375,7 @@ if eleccion == "Principal":
                     if datetime.now() > fecha_limite:
                         mask_amarillo[idx] = True
                 
-                # NUEVA CONDICIÓN 2: "50 REQUERIR" con fecha límite superada
+                # CONDICIÓN 2: "50 REQUERIR" con fecha límite superada
                 elif (str(etiq_penultimo).strip() == "50 REQUERIR" and 
                     pd.notna(fecha_notif) and 
                     isinstance(fecha_notif, (pd.Timestamp, datetime))):
@@ -1316,11 +1384,11 @@ if eleccion == "Principal":
                     if datetime.now() > fecha_limite:
                         mask_amarillo[idx] = True
                 
-                # NUEVA CONDICIÓN 3: "70 ALEGACI" o "60 CONTESTA"
+                # CONDICIÓN 3: "70 ALEGACI" o "60 CONTESTA"
                 elif str(etiq_penultimo).strip() in ["70 ALEGACI", "60 CONTESTA"]:
                     mask_amarillo[idx] = True
                 
-                # NUEVA CONDICIÓN 4: DOCUM.INCORP. no vacío Y distinto de "SOLICITUD" o "REITERA SOLICITUD"
+                # CONDICIÓN 4: DOCUM.INCORP. no vacío Y distinto de "SOLICITUD" o "REITERA SOLICITUD"
                 elif (pd.notna(docum_incorp) and 
                     str(docum_incorp).strip() != '' and
                     str(docum_incorp).strip().upper() not in ["SOLICITUD", "REITERA SOLICITUD"]):
@@ -1328,6 +1396,18 @@ if eleccion == "Principal":
                     
             except:
                 pass
+        
+        # FILTRAR Y MOSTRAR EL DATAFRAME
+        if mask_amarillo.any():
+            df_temp = df_amarillos[mask_amarillo].copy()
+            # Formatear fechas para mostrar
+            for col in df_temp.select_dtypes(include='datetime').columns:
+                df_temp[col] = df_temp[col].dt.strftime("%d/%m/%Y")
+            
+            st.dataframe(df_temp, use_container_width=True)
+            st.warning(f"**Total: {mask_amarillo.sum()} expedientes prioritarios**")
+        else:
+            st.success("✅ No hay expedientes con RUE prioritario")
 
     with tab2:
         # USUARIO-CSV rojos
@@ -2039,7 +2119,7 @@ elif eleccion == "Indicadores clave (KPI)":
 
     # CALCULAR KPIs PARA TODAS LAS SEMANAS con cache de 2 horas
     @st.cache_data(ttl=CACHE_TTL, show_spinner="📊 Calculando KPIs históricos...")
-    def calcular_kpis_todas_semanas_optimizado(_df, _semanas, _fecha_referencia):
+    def calcular_kpis_todas_semanas_optimizado(_df, _semanas, _fecha_referencia, _user_key=user_env.session_id):
         datos_semanales = []
         
         for semana in _semanas:
@@ -2062,7 +2142,7 @@ elif eleccion == "Indicadores clave (KPI)":
 
     # Gráfico de evolución - SOLO CACHEAR LOS DATOS, NO EL GRÁFICO COMPLETO
     @st.cache_data(ttl=CACHE_TTL)
-    def obtener_datos_grafico_evolucion(_df_kpis):
+    def obtener_datos_grafico_evolucion(_df_kpis, _user_key=user_env.session_id):
         """Solo cachea los datos necesarios para el gráfico"""
         return _df_kpis.copy()
 
