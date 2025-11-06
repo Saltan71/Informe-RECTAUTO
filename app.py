@@ -2082,14 +2082,26 @@ elif eleccion == "Indicadores clave (KPI)":
             st.session_state.kpi_semana_index = len(semanas_disponibles) - 1
             st.rerun()
 
-    # Función para calcular KPIs por semana
-    def calcular_kpis_para_semana(_df, semana_fin):
-        inicio_semana = semana_fin - timedelta(days=6)
+    # Función para calcular KPIs por semana - MODIFICADA PARA DISTINGUIR SEMANA ACTUAL
+    def calcular_kpis_para_semana(_df, semana_fin, es_semana_actual=False):
+        # Si es la semana actual (última), incluir el día completo de fecha_max (viernes a viernes - 8 días)
+        if es_semana_actual:
+            inicio_semana = semana_fin - timedelta(days=7)  # Viernes anterior
+            fin_semana = semana_fin  # Viernes actual (fecha_max)
+            dias_semana = 8
+        else:
+            # Para semanas históricas: viernes a jueves (7 días)
+            inicio_semana = semana_fin - timedelta(days=6)  # Viernes anterior
+            fin_semana = semana_fin - timedelta(days=1)     # Jueves
+            dias_semana = 7
+        
+        # DEBUG: Mostrar rangos para verificación
+        # st.write(f"DEBUG: Semana {((semana_fin - FECHA_REFERENCIA).days) // 7 + 1} - Rango: {inicio_semana.strftime('%d/%m/%Y')} a {fin_semana.strftime('%d/%m/%Y')} ({dias_semana} días) - Es actual: {es_semana_actual}")
         
         if 'FECHA APERTURA' in _df.columns:
             nuevos_expedientes = _df[
                 (_df['FECHA APERTURA'] >= inicio_semana) & 
-                (_df['FECHA APERTURA'] <= semana_fin)
+                (_df['FECHA APERTURA'] <= fin_semana)
             ].shape[0]
         else:
             nuevos_expedientes = 0
@@ -2098,15 +2110,15 @@ elif eleccion == "Indicadores clave (KPI)":
             expedientes_cerrados = _df[
                 (_df['ESTADO'] == 'Cerrado') & 
                 (_df['FECHA ÚLTIMO TRAM.'] >= inicio_semana) & 
-                (_df['FECHA ÚLTIMO TRAM.'] <= semana_fin)
+                (_df['FECHA ÚLTIMO TRAM.'] <= fin_semana)
             ].shape[0]
         else:
             expedientes_cerrados = 0
 
         if 'FECHA CIERRE' in _df.columns and 'FECHA APERTURA' in _df.columns:
             total_abiertos = _df[
-                (_df['FECHA APERTURA'] <= semana_fin) & 
-                ((_df['FECHA CIERRE'] > semana_fin) | (_df['FECHA CIERRE'].isna()))
+                (_df['FECHA APERTURA'] <= fin_semana) & 
+                ((_df['FECHA CIERRE'] > fin_semana) | (_df['FECHA CIERRE'].isna()))
             ].shape[0]
         else:
             total_abiertos = 0
@@ -2114,16 +2126,23 @@ elif eleccion == "Indicadores clave (KPI)":
         return {
             'nuevos_expedientes': nuevos_expedientes,
             'expedientes_cerrados': expedientes_cerrados,
-            'total_abiertos': total_abiertos
+            'total_abiertos': total_abiertos,
+            'inicio_semana': inicio_semana,
+            'fin_semana': fin_semana,
+            'dias_semana': dias_semana,
+            'es_semana_actual': es_semana_actual
         }
 
-    # CALCULAR KPIs PARA TODAS LAS SEMANAS con cache de 2 horas
+    # CALCULAR KPIs PARA TODAS LAS SEMANAS con cache de 2 horas - ACTUALIZADA
     @st.cache_data(ttl=CACHE_TTL, show_spinner="📊 Calculando KPIs históricos...")
-    def calcular_kpis_todas_semanas_optimizado(_df, _semanas, _fecha_referencia, _user_key=user_env.session_id):
+    def calcular_kpis_todas_semanas_optimizado(_df, _semanas, _fecha_referencia, _fecha_max, _user_key=user_env.session_id):
         datos_semanales = []
         
-        for semana in _semanas:
-            kpis = calcular_kpis_para_semana(_df, semana)
+        for i, semana in enumerate(_semanas):
+            # Determinar si es la semana actual (la última)
+            es_semana_actual = (i == len(_semanas) - 1)  # Última semana en la lista
+            
+            kpis = calcular_kpis_para_semana(_df, semana, es_semana_actual)
             num_semana = ((semana - _fecha_referencia).days) // 7 + 1
             
             datos_semanales.append({
@@ -2132,13 +2151,17 @@ elif eleccion == "Indicadores clave (KPI)":
                 'semana_str': semana.strftime('%d/%m/%Y'),
                 'nuevos_expedientes': kpis['nuevos_expedientes'],
                 'expedientes_cerrados': kpis['expedientes_cerrados'],
-                'total_abiertos': kpis['total_abiertos']
+                'total_abiertos': kpis['total_abiertos'],
+                'inicio_semana': kpis['inicio_semana'],
+                'fin_semana': kpis['fin_semana'],
+                'dias_semana': kpis['dias_semana'],
+                'es_semana_actual': kpis['es_semana_actual']
             })
         
         return pd.DataFrame(datos_semanales)
 
     # Calcular KPIs para todas las semanas (usando cache)
-    df_kpis_semanales = calcular_kpis_todas_semanas_optimizado(df, semanas_disponibles, FECHA_REFERENCIA)
+    df_kpis_semanales = calcular_kpis_todas_semanas_optimizado(df, semanas_disponibles, FECHA_REFERENCIA, fecha_max)
 
     # Gráfico de evolución - SOLO CACHEAR LOS DATOS, NO EL GRÁFICO COMPLETO
     @st.cache_data(ttl=CACHE_TTL)
@@ -2146,11 +2169,24 @@ elif eleccion == "Indicadores clave (KPI)":
         """Solo cachea los datos necesarios para el gráfico"""
         return _df_kpis.copy()
 
+    # Actualizar también la función que muestra los KPI principales
     def mostrar_kpis_principales(_df_kpis, _semana_seleccionada, _num_semana):
         kpis_semana = _df_kpis[_df_kpis['semana_numero'] == _num_semana].iloc[0]
         
         fecha_str = _semana_seleccionada.strftime('%d/%m/%Y')
         st.header(f"📊 KPIs de la Semana: {fecha_str} (Semana {_num_semana})")
+        
+        # Mostrar el rango correcto de la semana
+        inicio_str = kpis_semana['inicio_semana'].strftime('%d/%m/%Y')
+        fin_str = kpis_semana['fin_semana'].strftime('%d/%m/%Y')
+        dias_semana = kpis_semana['dias_semana']
+        es_actual = kpis_semana['es_semana_actual']
+        
+        if es_actual:
+            st.info(f"**📅 Período de la semana (ACTUAL):** {inicio_str} (viernes) a {fin_str} (viernes) - {dias_semana} días")
+            st.warning("ℹ️ **Semana actual:** Incluye todos los expedientes hasta la fecha de actualización")
+        else:
+            st.info(f"**📅 Período de la semana:** {inicio_str} (viernes) a {fin_str} (jueves) - {dias_semana} días")
         
         col1, col2, col3 = st.columns(3)
         
@@ -2181,9 +2217,12 @@ elif eleccion == "Indicadores clave (KPI)":
         col1, col2 = st.columns(2)
         
         with col1:
-            periodo_inicio = (_semana_seleccionada - timedelta(days=6)).strftime('%d/%m/%Y')
-            periodo_fin = _semana_seleccionada.strftime('%d/%m/%Y')
-            st.write(f"**Período:** {periodo_inicio} a {periodo_fin}")
+            st.write(f"**Período:** {inicio_str} a {fin_str}")
+            st.write(f"**Días incluidos:** {dias_semana} días")
+            if es_actual:
+                st.write(f"**Tipo:** Semana actual (incluye fecha de actualización)")
+            else:
+                st.write(f"**Tipo:** Semana histórica")
         
         with col2:
             if kpis_semana['nuevos_expedientes'] > 0 and kpis_semana['expedientes_cerrados'] > 0:
