@@ -165,7 +165,7 @@ def cargar_y_procesar_rectauto(archivo, _user_key=user_env.session_id):
         engine="openpyxl" if archivo.name.endswith("xlsx") else "xlrd"
     )
     df.columns = [col.upper().strip() for col in df.columns]
-    columnas = [0, 1, 2, 3, 6, 12, 14, 15, 16, 17, 18, 20, 21, 23, 26, 27]
+    columnas = [0, 1, 2, 3, 4, 5, 6, 12, 14, 15, 16, 17, 18, 20, 21, 23, 26, 27]
     df = df.iloc[:, columnas]
     return df
 
@@ -1112,7 +1112,7 @@ def generar_pdf_usuario(usuario, df_pendientes, num_semana, fecha_max_str):
     
     # Procesar datos para PDF - mantener las columnas originales para el formato condicional
     indices_a_incluir = list(range(df_user_ordenado.shape[1]))
-    indices_a_excluir = {1, 4, 11}
+    indices_a_excluir = {1, 4, 5, 6, 13}
     
     # EXCLUIR también la columna "FECHA DE ACTUALIZACIÓN DATOS" si existe
     for idx, col_name in enumerate(df_user_ordenado.columns):
@@ -1156,7 +1156,7 @@ if eleccion == "Principal":
     # Usar df_combinado en lugar de df
     df = df_combinado
     
-    columna_fecha = df.columns[11]
+    columna_fecha = df.columns[13]
     df[columna_fecha] = pd.to_datetime(df[columna_fecha], errors='coerce')
     fecha_max = df[columna_fecha].max()
     dias_transcurridos = (fecha_max - FECHA_REFERENCIA).days
@@ -1989,7 +1989,7 @@ elif eleccion == "Indicadores clave (KPI)":
     st.subheader("Indicadores clave (KPI)")
     
     # Obtener fecha de referencia para cálculos
-    columna_fecha = df.columns[11]
+    columna_fecha = df.columns[13]
     df[columna_fecha] = pd.to_datetime(df[columna_fecha], errors='coerce')
     fecha_max = df[columna_fecha].max()
     
