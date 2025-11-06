@@ -258,7 +258,7 @@ def cargar_y_procesar_documentos(archivo, _user_key=user_env.session_id):
         return None
 
 def guardar_documentos_actualizados(archivo_original, df_documentos_actualizado):
-    """Guarda los datos actualizados en el archivo DOCUMENTOS.xlsx (compatible con Windows y Cloud)."""
+    """Guarda los datos actualizados en el archivo DOCUMENTOS.xlsx"""
     try:
         # Usar directorio temporal único por usuario
         tmp_file = tempfile.NamedTemporaryFile(delete=False, suffix=".xlsx", dir=user_env.working_dir)
@@ -267,10 +267,10 @@ def guardar_documentos_actualizados(archivo_original, df_documentos_actualizado)
 
         # Escribir las dos hojas en el archivo temporal
         with pd.ExcelWriter(tmp_path, engine="openpyxl") as writer:
-            # Hoja DOCUMENTOS actualizada
+            # Hoja DOCUMENTOS actualizada - SOLO los registros actuales
             df_documentos_actualizado.to_excel(writer, sheet_name="DOCUMENTOS", index=False)
 
-            # Hoja DOCU recargada del original
+            # Hoja DOCU - MANTENER las opciones del desplegable del original
             archivo_original.seek(0)
             df_docu_original = pd.read_excel(archivo_original, sheet_name="DOCU")
             df_docu_original.to_excel(writer, sheet_name="DOCU", index=False)
@@ -1622,14 +1622,15 @@ if eleccion == "Principal":
             col1, col2 = st.columns([3, 1])
             
             with col2:
+                # En la sección de guardar documentos, busca esta parte y actualízala:
                 if st.button("💾 Guardar Todos los Cambios en DOCUMENTOS.xlsx", type="primary", key="guardar_documentos"):
                     with st.spinner("Guardando cambios..."):
-                        # Crear DataFrame con todos los datos de documentación actualizados
+                        # Crear DataFrame SOLO con los registros que tienen DOCUM.INCORP. actualmente
                         df_documentos_actualizado = df_combinado[['RUE', 'DOCUM.INCORP.']].copy()
                         df_documentos_actualizado = df_documentos_actualizado.dropna(subset=['DOCUM.INCORP.'])
                         df_documentos_actualizado = df_documentos_actualizado[df_documentos_actualizado['DOCUM.INCORP.'] != '']
                         
-                        # Guardar en el archivo DOCUMENTOS.xlsx
+                        # Guardar en el archivo DOCUMENTOS.xlsx (esto reemplazará completamente el contenido anterior)
                         contenido_actualizado = guardar_documentos_actualizados(
                             archivo_documentos, 
                             df_documentos_actualizado
@@ -1982,7 +1983,6 @@ if eleccion == "Principal":
         """)
 
 elif eleccion == "Indicadores clave (KPI)":
-    # ... (el código de la sección KPI se mantiene igual)
     # Usar df_combinado en lugar de df
     df = df_combinado
     
@@ -1998,7 +1998,7 @@ elif eleccion == "Indicadores clave (KPI)":
         st.stop()
     
     # Crear rango de semanas disponibles
-    fecha_inicio = pd.to_datetime("2022-11-04")
+    fecha_inicio = pd.to_datetime("2022-11-01")
     semanas_disponibles = pd.date_range(
         start=fecha_inicio,
         end=fecha_max,
@@ -2082,7 +2082,7 @@ elif eleccion == "Indicadores clave (KPI)":
             st.session_state.kpi_semana_index = len(semanas_disponibles) - 1
             st.rerun()
 
-    # Función para calcular KPIs por semana - MODIFICADA PARA DISTINGUIR SEMANA ACTUAL
+    # Función para calcular KPIs por semana - MODIFICADA PARA LOS NUEVOS KPIs
     def calcular_kpis_para_semana(_df, semana_fin, es_semana_actual=False):
         # Si es la semana actual (última), incluir el día completo de fecha_max (viernes a viernes - 8 días)
         if es_semana_actual:
@@ -2091,30 +2091,107 @@ elif eleccion == "Indicadores clave (KPI)":
             dias_semana = 8
         else:
             # Para semanas históricas: viernes a jueves (7 días)
-            inicio_semana = semana_fin - timedelta(days=6)  # Viernes anterior
+            inicio_semana = semana_fin - timedelta(days=7)  # Viernes anterior
             fin_semana = semana_fin - timedelta(days=1)     # Jueves
             dias_semana = 7
         
-        # DEBUG: Mostrar rangos para verificación
-        # st.write(f"DEBUG: Semana {((semana_fin - FECHA_REFERENCIA).days) // 7 + 1} - Rango: {inicio_semana.strftime('%d/%m/%Y')} a {fin_semana.strftime('%d/%m/%Y')} ({dias_semana} días) - Es actual: {es_semana_actual}")
+        # Fecha de inicio para totales (01/11/2022)
+        fecha_inicio_totales = pd.to_datetime("2022-11-01")
         
+        # ===== NUEVOS EXPEDIENTES =====
         if 'FECHA APERTURA' in _df.columns:
             nuevos_expedientes = _df[
                 (_df['FECHA APERTURA'] >= inicio_semana) & 
                 (_df['FECHA APERTURA'] <= fin_semana)
             ].shape[0]
+            
+            nuevos_expedientes_totales = _df[
+                (_df['FECHA APERTURA'] >= fecha_inicio_totales) & 
+                (_df['FECHA APERTURA'] <= fin_semana)
+            ].shape[0]
         else:
             nuevos_expedientes = 0
-        
-        if 'ESTADO' in _df.columns and 'FECHA ÚLTIMO TRAM.' in _df.columns:
+            nuevos_expedientes_totales = 0
+
+        # ===== EXPEDIENTES DESPACHADOS =====
+        # FECHA RESOLUCIÓN distinta de 09/09/9999 más CERRADOS con FECHA RESOLUCIÓN 09/09/9999
+        if all(col in _df.columns for col in ['FECHA RESOLUCIÓN', 'ESTADO', 'FECHA CIERRE']):
+            # Convertir columnas de fecha a datetime
+            _df['FECHA RESOLUCIÓN'] = pd.to_datetime(_df['FECHA RESOLUCIÓN'], errors='coerce')
+            _df['FECHA CIERRE'] = pd.to_datetime(_df['FECHA CIERRE'], errors='coerce')
+
+            fecha_9999 = pd.to_datetime('9999-09-09', errors='coerce')
+
+            # 1️⃣ Expedientes con FECHA RESOLUCIÓN real (distinta de 9999 y no nula) dentro del rango semanal
+            despachados_cond1 = _df[
+                (_df['FECHA RESOLUCIÓN'].notna()) &
+                (_df['FECHA RESOLUCIÓN'] != fecha_9999) &
+                (_df['FECHA RESOLUCIÓN'] >= inicio_semana) &
+                (_df['FECHA RESOLUCIÓN'] <= fin_semana)
+            ]
+
+            # 2️⃣ Expedientes CERRADOS con FECHA RESOLUCIÓN = 9999-09-09 o vacía
+            #     y cuya FECHA CIERRE esté dentro del rango semanal
+            despachados_cond2 = _df[
+                (_df['ESTADO'] == 'Cerrado') &
+                (
+                    (_df['FECHA RESOLUCIÓN'].isna()) |
+                    (_df['FECHA RESOLUCIÓN'] == fecha_9999)
+                ) &
+                (_df['FECHA CIERRE'].notna()) &
+                (_df['FECHA CIERRE'] >= inicio_semana) &
+                (_df['FECHA CIERRE'] <= fin_semana)
+            ]
+
+            # 🔹 Despachados semana = reales + cerrados con 9999/vacía pero cierre en rango
+            despachados_semana = pd.concat([despachados_cond1, despachados_cond2]).drop_duplicates().shape[0]
+
+            # 3️⃣ Totales: igual pero usando fecha_inicio_totales
+            despachados_cond1_totales = _df[
+                (_df['FECHA RESOLUCIÓN'].notna()) &
+                (_df['FECHA RESOLUCIÓN'] != fecha_9999) &
+                (_df['FECHA RESOLUCIÓN'] >= fecha_inicio_totales) &
+                (_df['FECHA RESOLUCIÓN'] <= fin_semana)
+            ]
+
+            despachados_cond2_totales = _df[
+                (_df['ESTADO'] == 'Cerrado') &
+                (
+                    (_df['FECHA RESOLUCIÓN'].isna()) |
+                    (_df['FECHA RESOLUCIÓN'] == fecha_9999)
+                ) &
+                (_df['FECHA CIERRE'].notna()) &
+                (_df['FECHA CIERRE'] >= fecha_inicio_totales) &
+                (_df['FECHA CIERRE'] <= fin_semana)
+            ]
+
+            # 🔹 Despachados totales = reales + cerrados especiales (con cierre válido)
+            despachados_totales = pd.concat([despachados_cond1_totales, despachados_cond2_totales]).drop_duplicates().shape[0]
+
+        else:
+            despachados_semana = 0
+            despachados_totales = 0
+
+        # ===== COEFICIENTE DE ABSORCIÓN 1 (Despachados/Nuevos) =====
+        c_abs_despachados_sem = (despachados_semana / nuevos_expedientes * 100) if nuevos_expedientes > 0 else 0
+        c_abs_despachados_tot = (despachados_totales / nuevos_expedientes_totales * 100) if nuevos_expedientes_totales > 0 else 0
+
+        # ===== EXPEDIENTES CERRADOS =====
+        if 'FECHA CIERRE' in _df.columns:
             expedientes_cerrados = _df[
-                (_df['ESTADO'] == 'Cerrado') & 
-                (_df['FECHA ÚLTIMO TRAM.'] >= inicio_semana) & 
-                (_df['FECHA ÚLTIMO TRAM.'] <= fin_semana)
+                (_df['FECHA CIERRE'] >= inicio_semana) & 
+                (_df['FECHA CIERRE'] <= fin_semana)
+            ].shape[0]
+            
+            expedientes_cerrados_totales = _df[
+                (_df['FECHA CIERRE'] >= fecha_inicio_totales) & 
+                (_df['FECHA CIERRE'] <= fin_semana)
             ].shape[0]
         else:
             expedientes_cerrados = 0
+            expedientes_cerrados_totales = 0
 
+        # ===== EXPEDIENTES ABIERTOS =====
         if 'FECHA CIERRE' in _df.columns and 'FECHA APERTURA' in _df.columns:
             total_abiertos = _df[
                 (_df['FECHA APERTURA'] <= fin_semana) & 
@@ -2122,11 +2199,165 @@ elif eleccion == "Indicadores clave (KPI)":
             ].shape[0]
         else:
             total_abiertos = 0
+
+        # ===== COEFICIENTE DE ABSORCIÓN 2 (Cerrados/Asignados) =====
+        # Asumimos que "Asignados" son los Nuevos Expedientes
+        c_abs_cerrados_sem = (expedientes_cerrados / nuevos_expedientes * 100) if nuevos_expedientes > 0 else 0
+        c_abs_cerrados_tot = (expedientes_cerrados_totales / nuevos_expedientes_totales * 100) if nuevos_expedientes_totales > 0 else 0
+
+        # ===== EXPEDIENTES CON 029, 033, PRE o RSL =====
+        if 'ETIQ. PENÚLTIMO TRAM.' in _df.columns:
+            expedientes_especiales = _df[
+                (_df['ETIQ. PENÚLTIMO TRAM.'].notna()) & 
+                # INDICAMOS LOS QUE NO TIENEN EL PENÚLTIMO TRÁMITE 1 APERTURA Y 10 DATEXPTE, QUE NO SON COMPETENCIA DE LOS EQUIPOS RECTAUTO
+                (~_df['ETIQ. PENÚLTIMO TRAM.'].isin(['1 APERTURA', '10 DATEXPTE'])) &
+                #(_df['ETIQ. PENÚLTIMO TRAM.'].isin(['50 REQUERIR', '30 COMUNICA', '80 PROPRES', '140 DOCRESOL', '145 PENFIRMA', '150 DECISION', '60 CONTESTA', '70 ALEGA', '130 RESOLVER', '105 INADMISI'])) &
+                (_df['FECHA APERTURA'] <= fin_semana) & 
+                ((_df['FECHA CIERRE'] > fin_semana) | (_df['FECHA CIERRE'].isna()))
+            ].shape[0]
+            
+            porcentaje_especiales = (expedientes_especiales / total_abiertos * 100) if total_abiertos > 0 else 0
+        else:
+            expedientes_especiales = 0
+            porcentaje_especiales = 0
+
+        # ===== CÁLCULOS DE TIEMPOS =====
+        # Tiempos para expedientes Despachados
+        if all(col in _df.columns for col in ['FECHA RESOLUCIÓN', 'FECHA INICIO TRAMITACIÓN', 'ESTADO', 'FECHA CIERRE']):
+            # Convertir fechas
+            _df['FECHA RESOLUCIÓN'] = pd.to_datetime(_df['FECHA RESOLUCIÓN'], errors='coerce')
+            _df['FECHA INICIO TRAMITACIÓN'] = pd.to_datetime(_df['FECHA INICIO TRAMITACIÓN'], errors='coerce')
+            _df['FECHA CIERRE'] = pd.to_datetime(_df['FECHA CIERRE'], errors='coerce')
+
+            fecha_9999 = pd.to_datetime('9999-09-09', errors='coerce')
+
+            # 1️⃣ Expedientes con resolución real (fecha válida)
+            despachados_real = _df[
+                (_df['FECHA RESOLUCIÓN'].notna()) &
+                (_df['FECHA RESOLUCIÓN'] != fecha_9999) &
+                (_df['FECHA RESOLUCIÓN'] >= fecha_inicio_totales) &
+                (_df['FECHA RESOLUCIÓN'] <= fin_semana)
+            ].copy()
+
+            # 2️⃣ Expedientes cerrados con resolución vacía o 9999, pero con fecha de cierre válida
+            despachados_cerrados = _df[
+                (_df['ESTADO'] == 'Cerrado') &
+                (
+                    (_df['FECHA RESOLUCIÓN'].isna()) |
+                    (_df['FECHA RESOLUCIÓN'] == fecha_9999)
+                ) &
+                (_df['FECHA CIERRE'].notna()) &
+                (_df['FECHA CIERRE'] >= fecha_inicio_totales) &
+                (_df['FECHA CIERRE'] <= fin_semana)
+            ].copy()
+
+            # Unificar ambos conjuntos
+            despachados_tiempo = pd.concat([despachados_real, despachados_cerrados]).drop_duplicates().copy()
+
+            if not despachados_tiempo.empty:
+                # Crear columna de referencia de fecha final (resolución o cierre)
+                despachados_tiempo['FECHA_FINAL'] = despachados_tiempo.apply(
+                    lambda r: r['FECHA RESOLUCIÓN'] if pd.notna(r['FECHA RESOLUCIÓN']) and r['FECHA RESOLUCIÓN'] != fecha_9999 else r['FECHA CIERRE'],
+                    axis=1
+                )
+
+                # Calcular días de tramitación
+                despachados_tiempo['dias_tramitacion'] = (
+                    despachados_tiempo['FECHA_FINAL'] - despachados_tiempo['FECHA INICIO TRAMITACIÓN']
+                ).dt.days
+
+                # KPIs
+                tiempo_medio_despachados = despachados_tiempo['dias_tramitacion'].mean()
+                percentil_90_despachados = despachados_tiempo['dias_tramitacion'].quantile(0.9)
+                percentil_180_despachados = (despachados_tiempo['dias_tramitacion'] <= 180).mean() * 100
+                percentil_120_despachados = (despachados_tiempo['dias_tramitacion'] <= 120).mean() * 100
+            else:
+                tiempo_medio_despachados = 0
+                percentil_90_despachados = 0
+                percentil_180_despachados = 0
+                percentil_120_despachados = 0
+
+        else:
+            tiempo_medio_despachados = 0
+            percentil_90_despachados = 0
+            percentil_180_despachados = 0
+            percentil_120_despachados = 0
+
+        # Tiempos para expedientes Cerrados
+        if 'FECHA CIERRE' in _df.columns and 'FECHA INICIO TRAMITACIÓN' in _df.columns:
+            cerrados_tiempo = _df[
+                (_df['FECHA CIERRE'].notna()) &
+                (_df['FECHA CIERRE'] >= fecha_inicio_totales) & 
+                (_df['FECHA CIERRE'] <= fin_semana)
+            ].copy()
+            
+            if not cerrados_tiempo.empty:
+                cerrados_tiempo['dias_tramitacion'] = (cerrados_tiempo['FECHA CIERRE'] - cerrados_tiempo['FECHA INICIO TRAMITACIÓN']).dt.days
+                tiempo_medio_cerrados = cerrados_tiempo['dias_tramitacion'].mean()
+                percentil_90_cerrados = cerrados_tiempo['dias_tramitacion'].quantile(0.9)
+                
+                # Percentiles para 180 y 120 días
+                percentil_180_cerrados = (cerrados_tiempo['dias_tramitacion'] <= 180).mean() * 100
+                percentil_120_cerrados = (cerrados_tiempo['dias_tramitacion'] <= 120).mean() * 100
+            else:
+                tiempo_medio_cerrados = 0
+                percentil_90_cerrados = 0
+                percentil_180_cerrados = 0
+                percentil_120_cerrados = 0
+        else:
+            tiempo_medio_cerrados = 0
+            percentil_90_cerrados = 0
+            percentil_180_cerrados = 0
+            percentil_120_cerrados = 0
+
+        # Tiempos para expedientes Abiertos
+        if 'FECHA INICIO TRAMITACIÓN' in _df.columns:
+            abiertos_tiempo = _df[
+                (_df['FECHA APERTURA'] <= fin_semana) & 
+                ((_df['FECHA CIERRE'] > fin_semana) | (_df['FECHA CIERRE'].isna()))
+            ].copy()
+            
+            if not abiertos_tiempo.empty:
+                abiertos_tiempo['dias_tramitacion'] = (fin_semana - abiertos_tiempo['FECHA INICIO TRAMITACIÓN']).dt.days
+                percentil_90_abiertos = abiertos_tiempo['dias_tramitacion'].quantile(0.9)
+                
+                # Percentiles para 180 y 120 días
+                percentil_180_abiertos = (abiertos_tiempo['dias_tramitacion'] <= 180).mean() * 100
+                percentil_120_abiertos = (abiertos_tiempo['dias_tramitacion'] <= 120).mean() * 100
+            else:
+                percentil_90_abiertos = 0
+                percentil_180_abiertos = 0
+                percentil_120_abiertos = 0
+        else:
+            percentil_90_abiertos = 0
+            percentil_180_abiertos = 0
+            percentil_120_abiertos = 0
         
         return {
             'nuevos_expedientes': nuevos_expedientes,
+            'nuevos_expedientes_totales': nuevos_expedientes_totales,
+            'despachados_semana': despachados_semana,
+            'despachados_totales': despachados_totales,
+            'c_abs_despachados_sem': c_abs_despachados_sem,
+            'c_abs_despachados_tot': c_abs_despachados_tot,
             'expedientes_cerrados': expedientes_cerrados,
+            'expedientes_cerrados_totales': expedientes_cerrados_totales,
             'total_abiertos': total_abiertos,
+            'c_abs_cerrados_sem': c_abs_cerrados_sem,
+            'c_abs_cerrados_tot': c_abs_cerrados_tot,
+            'expedientes_especiales': expedientes_especiales,
+            'porcentaje_especiales': porcentaje_especiales,
+            'tiempo_medio_despachados': tiempo_medio_despachados,
+            'percentil_90_despachados': percentil_90_despachados,
+            'percentil_180_despachados': percentil_180_despachados,
+            'percentil_120_despachados': percentil_120_despachados,
+            'tiempo_medio_cerrados': tiempo_medio_cerrados,
+            'percentil_90_cerrados': percentil_90_cerrados,
+            'percentil_180_cerrados': percentil_180_cerrados,
+            'percentil_120_cerrados': percentil_120_cerrados,
+            'percentil_90_abiertos': percentil_90_abiertos,
+            'percentil_180_abiertos': percentil_180_abiertos,
+            'percentil_120_abiertos': percentil_120_abiertos,
             'inicio_semana': inicio_semana,
             'fin_semana': fin_semana,
             'dias_semana': dias_semana,
@@ -2150,8 +2381,29 @@ elif eleccion == "Indicadores clave (KPI)":
                 'semana_fin': semana,
                 'semana_str': semana.strftime('%d/%m/%Y'),
                 'nuevos_expedientes': kpis['nuevos_expedientes'],
+                'nuevos_expedientes_totales': kpis['nuevos_expedientes_totales'],
+                'despachados_semana': kpis['despachados_semana'],
+                'despachados_totales': kpis['despachados_totales'],
+                'c_abs_despachados_sem': kpis['c_abs_despachados_sem'],
+                'c_abs_despachados_tot': kpis['c_abs_despachados_tot'],
                 'expedientes_cerrados': kpis['expedientes_cerrados'],
+                'expedientes_cerrados_totales': kpis['expedientes_cerrados_totales'],
                 'total_abiertos': kpis['total_abiertos'],
+                'c_abs_cerrados_sem': kpis['c_abs_cerrados_sem'],
+                'c_abs_cerrados_tot': kpis['c_abs_cerrados_tot'],
+                'expedientes_especiales': kpis['expedientes_especiales'],
+                'porcentaje_especiales': kpis['porcentaje_especiales'],
+                'tiempo_medio_despachados': kpis['tiempo_medio_despachados'],
+                'percentil_90_despachados': kpis['percentil_90_despachados'],
+                'percentil_180_despachados': kpis['percentil_180_despachados'],
+                'percentil_120_despachados': kpis['percentil_120_despachados'],
+                'tiempo_medio_cerrados': kpis['tiempo_medio_cerrados'],
+                'percentil_90_cerrados': kpis['percentil_90_cerrados'],
+                'percentil_180_cerrados': kpis['percentil_180_cerrados'],
+                'percentil_120_cerrados': kpis['percentil_120_cerrados'],
+                'percentil_90_abiertos': kpis['percentil_90_abiertos'],
+                'percentil_180_abiertos': kpis['percentil_180_abiertos'],
+                'percentil_120_abiertos': kpis['percentil_120_abiertos'],
                 'inicio_semana': kpis['inicio_semana'],
                 'fin_semana': kpis['fin_semana'],
                 'dias_semana': kpis['dias_semana'],
@@ -2163,13 +2415,7 @@ elif eleccion == "Indicadores clave (KPI)":
     # Calcular KPIs para todas las semanas (usando cache)
     df_kpis_semanales = calcular_kpis_todas_semanas_optimizado(df, semanas_disponibles, FECHA_REFERENCIA, fecha_max)
 
-    # Gráfico de evolución - SOLO CACHEAR LOS DATOS, NO EL GRÁFICO COMPLETO
-    @st.cache_data(ttl=CACHE_TTL)
-    def obtener_datos_grafico_evolucion(_df_kpis, _user_key=user_env.session_id):
-        """Solo cachea los datos necesarios para el gráfico"""
-        return _df_kpis.copy()
-
-    # Actualizar también la función que muestra los KPI principales
+    # Función para mostrar los nuevos KPIs principales
     def mostrar_kpis_principales(_df_kpis, _semana_seleccionada, _num_semana):
         kpis_semana = _df_kpis[_df_kpis['semana_numero'] == _num_semana].iloc[0]
         
@@ -2188,115 +2434,344 @@ elif eleccion == "Indicadores clave (KPI)":
         else:
             st.info(f"**📅 Período de la semana:** {inicio_str} (viernes) a {fin_str} (jueves) - {dias_semana} días")
         
-        col1, col2, col3 = st.columns(3)
+        # PRIMERA FILA DE KPIs - DOS COLUMNAS (SEMANAL vs TOTALES)
+        st.subheader("📈 KPIs Principales")
+        col1, col2 = st.columns(2)
         
         with col1:
+            st.markdown("### Semanal")
             st.metric(
                 label="💰 Nuevos Expedientes",
-                value=f"{int(kpis_semana['nuevos_expedientes']):,}".replace(",", "."),
-                delta=None
+                value=f"{int(kpis_semana['nuevos_expedientes']):,}".replace(",", ".")
             )
-        
+            st.metric(
+                label="📤 Expedientes Despachados",
+                value=f"{int(kpis_semana['despachados_semana']):,}".replace(",", ".")
+            )
+            st.metric(
+                label="🎯 Coef. Absorción (Desp/Nuevos)",
+                value=f"{kpis_semana['c_abs_despachados_sem']:.2f}%".replace(".", ",")
+            )
+            st.metric(
+                label="🛒 Expedientes Cerrados",
+                value=f"{int(kpis_semana['expedientes_cerrados']):,}".replace(",", ".")
+            )
+            st.metric(
+                label="📊 Coef. Absorción (Cer/Asig)",
+                value=f"{kpis_semana['c_abs_cerrados_sem']:.2f}%".replace(".", ",")
+            )
+            st.metric(
+                label="👥 Expedientes Abiertos",
+                value=f"{int(kpis_semana['total_abiertos']):,}".replace(",", ".")
+            )
+
         with col2:
+            st.markdown("### Totales (desde 01/11/2022)")
             st.metric(
-                label="🛒 Expedientes cerrados",
-                value=f"{int(kpis_semana['expedientes_cerrados']):,}".replace(",", "."),
-                delta=None
+                label="💰 Nuevos Expedientes",
+                value=f"{int(kpis_semana['nuevos_expedientes_totales']):,}".replace(",", ".")
             )
-        
-        with col3:
             st.metric(
-                label="👥 Total expedientes abiertos",
-                value=f"{int(kpis_semana['total_abiertos']):,}".replace(",", "."),
-                delta=None
+                label="📤 Expedientes Despachados",
+                value=f"{int(kpis_semana['despachados_totales']):,}".replace(",", ".")
+            )
+            st.metric(
+                label="🎯 Coef. Absorción (Desp/Nuevos)",
+                value=f"{kpis_semana['c_abs_despachados_tot']:.2f}%".replace(".", ",")
+            )
+            st.metric(
+                label="🛒 Expedientes Cerrados",
+                value=f"{int(kpis_semana['expedientes_cerrados_totales']):,}".replace(",", ".")
+            )
+            # No hay totales para abiertos (es un snapshot)
+            st.metric(
+                label="📊 Coef. Absorción (Cer/Asig)",
+                value=f"{kpis_semana['c_abs_cerrados_tot']:.2f}%".replace(".", ",")
             )
         
         st.markdown("---")
         
-        st.subheader("Detalles de la Semana")
+        # SEGUNDA FILA - EXPEDIENTES ESPECIALES
+        st.subheader("📋 Expedientes con 029, 033, PRE, RSL, pendiente de firma, de decisión o de completar trámite")
         col1, col2 = st.columns(2)
         
         with col1:
-            st.write(f"**Período:** {inicio_str} a {fin_str}")
-            st.write(f"**Días incluidos:** {dias_semana} días")
-            if es_actual:
-                st.write(f"**Tipo:** Semana actual (incluye fecha de actualización)")
-            else:
-                st.write(f"**Tipo:** Semana histórica")
+            st.metric(
+                label="🔍 Expedientes Especiales",
+                value=f"{int(kpis_semana['expedientes_especiales']):,}".replace(",", ".")
+            )
         
         with col2:
-            if kpis_semana['nuevos_expedientes'] > 0 and kpis_semana['expedientes_cerrados'] > 0:
-                ratio_cierre = kpis_semana['expedientes_cerrados'] / kpis_semana['nuevos_expedientes']
-                st.write(f"**Ratio de cierre:** {ratio_cierre:.2%}")
+            st.metric(
+                label="📈 Porcentaje sobre Abiertos",
+                value=f"{kpis_semana['porcentaje_especiales']:.2f}%".replace(".", ",")
+            )
+        
+        st.markdown("---")
+        
+        # TERCERA FILA - TIEMPOS DE TRAMITACIÓN (TRES COLUMNAS)
+        st.subheader("⏱️ Tiempos de Tramitación (en días)")
+        
+        # Expedientes Despachados
+        st.markdown("#### 📤 Expedientes Despachados")
+        col1, col2, col3 = st.columns(3)
+        
+        with col1:
+            st.metric(
+                label="📊 Tiempo Medio",
+                value=f"{kpis_semana['tiempo_medio_despachados']:.0f}"
+            )
+        
+        with col2:
+            st.metric(
+                label="🎯 Percentil 90",
+                value=f"{kpis_semana['percentil_90_despachados']:.0f}"
+            )
+        
+        with col3:
+            col3a, col3b = st.columns(2)
+            with col3a:
+                st.metric(
+                    label="≤180 días",
+                    value=f"{kpis_semana['percentil_180_despachados']:.2f}%".replace(".", ",")
+                )
+            with col3b:
+                st.metric(
+                    label="≤120 días",
+                    value=f"{kpis_semana['percentil_120_despachados']:.2f}%".replace(".", ",")
+                )
+        
+        # Expedientes Cerrados
+        st.markdown("#### 📤 Expedientes Cerrados")
+        col1, col2, col3 = st.columns(3)
+        
+        with col1:
+            st.metric(
+                label="📊 Tiempo Medio",
+                value=f"{kpis_semana['tiempo_medio_cerrados']:.0f}"
+            )
+        
+        with col2:
+            st.metric(
+                label="🎯 Percentil 90",
+                value=f"{kpis_semana['percentil_90_cerrados']:.0f}"
+            )
+        
+        with col3:
+            col3a, col3b = st.columns(2)
+            with col3a:
+                st.metric(
+                    label="≤180 días",
+                    value=f"{kpis_semana['percentil_180_cerrados']:.2f}%".replace(".", ",")
+                )
+            with col3b:
+                st.metric(
+                    label="≤120 días",
+                    value=f"{kpis_semana['percentil_120_cerrados']:.2f}%".replace(".", ",")
+                )
+        
+        # Expedientes Abiertos
+        st.markdown("#### 📤 Expedientes Abiertos")
+        col1, col2, col3 = st.columns(3)
+        
+        #with col1:
+        #    st.metric(
+        #        label="📊 Tiempo Actual",
+        #        value="-"  # No hay tiempo medio para abiertos
+        #    )
+        
+        with col2:
+            st.metric(
+                label="🎯 Percentil 90",
+                value=f"{kpis_semana['percentil_90_abiertos']:.0f}"
+            )
+        
+        with col3:
+            col3a, col3b = st.columns(2)
+            with col3a:
+                st.metric(
+                    label="≤180 días",
+                    value=f"{kpis_semana['percentil_180_abiertos']:.2f}%".replace(".", ",")
+                )
+            with col3b:
+                st.metric(
+                    label="≤120 días",
+                    value=f"{kpis_semana['percentil_120_abiertos']:.2f}%".replace(".", ",")
+                )
 
     # Mostrar dashboard principal
     mostrar_kpis_principales(df_kpis_semanales, semana_seleccionada, num_semana_seleccionada)
 
     # GRÁFICO DE EVOLUCIÓN TEMPORAL (ACTUALIZADO) - CORREGIDO
     st.markdown("---")
-    st.subheader("📈 Evolución Temporal de KPIs")
+    st.subheader("📈 Evolución de KPIs Principales y Porcentajes")
 
-    # Obtener datos desde cache
-    datos_grafico = obtener_datos_grafico_evolucion(df_kpis_semanales)
-
-    # Crear gráfico completo con datos actualizados (SIEMPRE FRESCO)
-    fig = px.line(
-        datos_grafico,
-        x='semana_numero',
-        y=['nuevos_expedientes', 'expedientes_cerrados', 'total_abiertos'],
-        title='Evolución de KPIs a lo largo del tiempo',
-        labels={
-            'semana_numero': 'Número de Semana',
-            'value': 'Cantidad de Expedientes',
-            'variable': 'Tipo de KPI'
-        },
-        color_discrete_map={
-            'nuevos_expedientes': '#1f77b4',
-            'expedientes_cerrados': '#ff7f0e', 
-            'total_abiertos': '#2ca02c'
-        }
-    )
-
-    # Personalizar el gráfico
-    fig.update_layout(
-        xaxis_title='Semana',
-        yaxis_title='Cantidad de Expedientes',
-        legend_title='KPIs',
-        hovermode='x unified',
-        height=500
-    )
-
-    # Actualizar nombres de las leyendas
-    fig.for_each_trace(lambda t: t.update(name='Nuevos Expedientes' if t.name == 'nuevos_expedientes' else 
-                                         'Expedientes Cerrados' if t.name == 'expedientes_cerrados' else 
-                                         'Total Abiertos'))
-
-    # Añadir línea vertical para la semana seleccionada (SIEMPRE ACTUALIZADA)
+    datos_grafico = df_kpis_semanales.copy()
+    col1, col2, col3 = st.columns(3)
     num_semana_seleccionada = ((semana_seleccionada - FECHA_REFERENCIA).days) // 7 + 1
-    fig.add_vline(
-        x=num_semana_seleccionada, 
-        line_width=2, 
-        line_dash="dash", 
-        line_color="red",
-        annotation_text="Semana Seleccionada",
-        annotation_position="top left"
-    )
 
-    st.plotly_chart(fig, use_container_width=True)
-    
-    # Mostrar tabla con datos históricos completos
-    with st.expander("📋 Ver datos históricos completos"):
-        # Crear copia y formatear fecha
-        df_mostrar_kpi = df_kpis_semanales.copy()
-        df_mostrar_kpi['semana_fin'] = df_mostrar_kpi['semana_fin'].dt.strftime("%d/%m/%Y")
-        
-        st.dataframe(
-            df_mostrar_kpi.rename(columns={
-                'semana_numero': 'Semana',
-                'semana_fin': 'Fecha Fin Semana',  # Usar la columna formateada
-                'nuevos_expedientes': 'Nuevos Expedientes',
-                'expedientes_cerrados': 'Expedientes Cerrados',
-                'total_abiertos': 'Total Abiertos'
-            }),
-            use_container_width=True
+    # --- Gráfico 1: KPI principales (sin “Abiertos”) ---
+    with col1:
+        fig1 = px.line(
+            datos_grafico,
+            x='semana_numero',
+            y=['nuevos_expedientes', 'despachados_semana', 'expedientes_cerrados'],
+            title='Evolución de Expedientes (Nuevos, Despachados, Cerrados)',
+            labels={'semana_numero': 'Semana', 'value': 'Cantidad', 'variable': 'KPI'},
+            color_discrete_map={
+                'nuevos_expedientes': '#1f77b4',
+                'despachados_semana': '#ff7f0e',
+                'expedientes_cerrados': '#2ca02c'
+            }
         )
+        fig1.update_layout(
+            height=400,
+            hovermode="x unified",
+            legend_title="KPI",
+            legend=dict(orientation='h', yanchor='bottom', y=1.02, xanchor='center', x=0.5)
+        )
+        # Línea discontinua vertical indicando la semana seleccionada
+        fig1.add_vline(
+            x=num_semana_seleccionada,
+            line_dash="dash",
+            line_color="red",
+            annotation_text=f"Semana {num_semana_seleccionada}",
+            annotation_position="top left"
+        )
+        st.plotly_chart(fig1, use_container_width=True)
+
+    # --- Gráfico 2: Solo “Expedientes Abiertos” ---
+    with col2:
+        fig2 = px.line(
+            datos_grafico,
+            x='semana_numero',
+            y=['total_abiertos'],
+            title='Evolución de Expedientes Abiertos',
+            labels={'semana_numero': 'Semana', 'value': 'Cantidad', 'variable': 'KPI'},
+            color_discrete_map={'total_abiertos': '#d62728'}
+        )
+        fig2.update_layout(
+            height=400,
+            hovermode="x unified",
+            legend_title="KPI",
+            legend=dict(orientation='h', yanchor='bottom', y=1.02, xanchor='center', x=0.5)
+        )
+        # Línea discontinua vertical indicando la semana seleccionada
+        fig2.add_vline(
+            x=num_semana_seleccionada,
+            line_dash="dash",
+            line_color="red",
+            annotation_text=f"Semana {num_semana_seleccionada}",
+            annotation_position="top left"
+        )
+        st.plotly_chart(fig2, use_container_width=True)
+
+    # --- Gráfico 3: Porcentajes (4) ---
+    with col3:
+        fig3 = px.line(
+            datos_grafico,
+            x='semana_numero',
+            y=[
+                'c_abs_despachados_sem', 'c_abs_despachados_tot',
+                'c_abs_cerrados_sem', 'c_abs_cerrados_tot'
+            ],
+            title='Evolución de Coeficientes de Absorción (%)',
+            labels={'semana_numero': 'Semana', 'value': 'Porcentaje (%)', 'variable': 'Indicador'},
+            color_discrete_map={
+                'c_abs_despachados_sem': '#9467bd',
+                'c_abs_despachados_tot': '#c5b0d5',
+                'c_abs_cerrados_sem': '#8c564b',
+                'c_abs_cerrados_tot': '#c49c94'
+            }
+        )
+        fig3.update_layout(
+            height=400,
+            hovermode="x unified",
+            legend_title="Indicador",
+            legend=dict(orientation='h', yanchor='bottom', y=1.02, xanchor='center', x=0.5)
+        )
+        # Línea discontinua vertical indicando la semana seleccionada
+        fig3.add_vline(
+            x=num_semana_seleccionada,
+            line_dash="dash",
+            line_color="red",
+            annotation_text=f"Semana {num_semana_seleccionada}",
+            annotation_position="top left"
+        )
+        st.plotly_chart(fig3, use_container_width=True)
+
+    # -------------------------------------------------------------
+    # SEGUNDO BLOQUE: TIEMPOS DE TRAMITACIÓN
+    # -------------------------------------------------------------
+    st.markdown("---")
+    st.subheader("⏱️ Tiempos de Tramitación")
+
+    col1, col2 = st.columns(2)
+
+    # --- Gráfico 1: Tiempos medios y percentiles 90 ---
+    with col1:
+        fig_tiempo = px.line(
+            datos_grafico,
+            x='semana_numero',
+            y=[
+                'tiempo_medio_despachados', 'tiempo_medio_cerrados',
+                'percentil_90_despachados', 'percentil_90_cerrados'
+            ],
+            title='Tiempos Medios y Percentiles 90 (días)',
+            labels={'semana_numero': 'Semana', 'value': 'Días', 'variable': 'Indicador'},
+            color_discrete_map={
+                'tiempo_medio_despachados': '#ff7f0e',
+                'tiempo_medio_cerrados': '#2ca02c',
+                'percentil_90_despachados': '#ffbb78',
+                'percentil_90_cerrados': '#98df8a'
+            }
+        )
+        fig_tiempo.update_layout(
+            height=400,
+            hovermode="x unified",
+            legend_title="Indicador",
+            legend=dict(orientation='h', yanchor='bottom', y=1.02, xanchor='center', x=0.5)
+        )
+        # Línea discontinua vertical indicando la semana seleccionada
+        fig_tiempo.add_vline(
+            x=num_semana_seleccionada,
+            line_dash="dash",
+            line_color="red",
+            annotation_text=f"Semana {num_semana_seleccionada}",
+            annotation_position="top left"
+        )
+        st.plotly_chart(fig_tiempo, use_container_width=True)
+
+    # --- Gráfico 2: Porcentajes 120/180 ---
+    with col2:
+        fig_percentiles = px.line(
+            datos_grafico,
+            x='semana_numero',
+            y=[
+                'percentil_180_despachados', 'percentil_120_despachados',
+                'percentil_180_cerrados', 'percentil_120_cerrados'
+            ],
+            title='Porcentaje de Expedientes ≤120 y ≤180 días (%)',
+            labels={'semana_numero': 'Semana', 'value': 'Porcentaje (%)', 'variable': 'Indicador'},
+            color_discrete_map={
+                'percentil_180_despachados': '#ff7f0e',
+                'percentil_120_despachados': '#ffddaa',
+                'percentil_180_cerrados': '#2ca02c',
+                'percentil_120_cerrados': '#98df8a'
+            }
+        )
+        fig_percentiles.update_layout(
+            height=400,
+            hovermode="x unified",
+            legend_title="Indicador",
+            legend=dict(orientation='h', yanchor='bottom', y=1.02, xanchor='center', x=0.5)
+        )
+        # Línea discontinua vertical indicando la semana seleccionada
+        fig_percentiles.add_vline(
+            x=num_semana_seleccionada,
+            line_dash="dash",
+            line_color="red",
+            annotation_text=f"Semana {num_semana_seleccionada}",
+            annotation_position="top left"
+        )
+        st.plotly_chart(fig_percentiles, use_container_width=True)
