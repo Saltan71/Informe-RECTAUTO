@@ -691,12 +691,17 @@ def generar_pdf_resumen_kpi(df_kpis_semanales, num_semana, fecha_max_str, df_com
         # ===== NUEVA SECCIÓN: GRÁFICOS =====
         pdf.add_page()
         pdf.add_section_title("GRAFICOS DE EVOLUCION - SEMANA " + str(num_semana))
-        
+
         try:
+            # Verificar si kaleido está disponible
+            import plotly.io as pio
+            if not hasattr(pio, 'kaleido') or pio.kaleido.scope is None:
+                raise ImportError("Kaleido no disponible")
+            
             # Generar gráficos temporales
             datos_grafico = df_kpis_semanales.copy()
             
-            # Gráfico 1: Evolución de expedientes
+            # GRÁFICO 1: Evolución de expedientes principales
             fig1 = px.line(
                 datos_grafico,
                 x='semana_numero',
@@ -724,8 +729,30 @@ def generar_pdf_resumen_kpi(df_kpis_semanales, num_semana, fecha_max_str, df_com
             
             pdf.ln(5)
             
-            # Gráfico 2: Coeficientes de absorción
+            # GRÁFICO 2: Expedientes Abiertos
             fig2 = px.line(
+                datos_grafico,
+                x='semana_numero',
+                y=['total_abiertos'],
+                title=f'Expedientes Abiertos - Semana {num_semana}',
+                labels={'semana_numero': 'Semana', 'value': 'Cantidad'},
+                color_discrete_sequence=['#d62728']
+            )
+            fig2.update_layout(height=400, showlegend=False)
+            fig2.add_vline(x=num_semana, line_dash="dash", line_color="red")
+            
+            temp_chart2 = user_env.get_temp_path(f"chart2_{num_semana}.png")
+            fig2.write_image(temp_chart2)
+            
+            pdf.add_page()
+            pdf.set_font('Arial', 'B', 10)
+            pdf.cell(0, 8, "Evolucion de Expedientes Abiertos", 0, 1)
+            pdf.image(temp_chart2, x=10, w=190)
+            
+            pdf.ln(5)
+            
+            # GRÁFICO 3: Coeficientes de absorción
+            fig3 = px.line(
                 datos_grafico,
                 x='semana_numero',
                 y=['c_abs_despachados_sem', 'c_abs_cerrados_sem'],
@@ -736,28 +763,116 @@ def generar_pdf_resumen_kpi(df_kpis_semanales, num_semana, fecha_max_str, df_com
                     'c_abs_cerrados_sem': '#8c564b'
                 }
             )
-            fig2.update_layout(height=400, showlegend=True)
-            fig2.add_vline(x=num_semana, line_dash="dash", line_color="red")
+            fig3.update_layout(height=400, showlegend=True)
+            fig3.add_vline(x=num_semana, line_dash="dash", line_color="red")
             
-            temp_chart2 = user_env.get_temp_path(f"chart2_{num_semana}.png")
-            fig2.write_image(temp_chart2)
+            temp_chart3 = user_env.get_temp_path(f"chart3_{num_semana}.png")
+            fig3.write_image(temp_chart3)
             
             pdf.add_page()
             pdf.set_font('Arial', 'B', 10)
             pdf.cell(0, 8, "Coeficientes de Absorcion Semanales (%)", 0, 1)
-            pdf.image(temp_chart2, x=10, w=190)
+            pdf.image(temp_chart3, x=10, w=190)
+            
+            pdf.ln(5)
+            
+            # GRÁFICO 4: Tiempos de tramitación
+            fig4 = px.line(
+                datos_grafico,
+                x='semana_numero',
+                y=['tiempo_medio_despachados', 'tiempo_medio_cerrados', 'percentil_90_despachados', 'percentil_90_cerrados'],
+                title=f'Tiempos de Tramitacion - Semana {num_semana}',
+                labels={'semana_numero': 'Semana', 'value': 'Dias', 'variable': 'Indicador'},
+                color_discrete_map={
+                    'tiempo_medio_despachados': '#ff7f0e',
+                    'tiempo_medio_cerrados': '#2ca02c',
+                    'percentil_90_despachados': '#ffbb78',
+                    'percentil_90_cerrados': '#98df8a'
+                }
+            )
+            fig4.update_layout(height=400, showlegend=True)
+            fig4.add_vline(x=num_semana, line_dash="dash", line_color="red")
+            
+            temp_chart4 = user_env.get_temp_path(f"chart4_{num_semana}.png")
+            fig4.write_image(temp_chart4)
+            
+            pdf.add_page()
+            pdf.set_font('Arial', 'B', 10)
+            pdf.cell(0, 8, "Tiempos de Tramitacion (Medios y Percentil 90)", 0, 1)
+            pdf.image(temp_chart4, x=10, w=190)
+            
+            pdf.ln(5)
+            
+            # GRÁFICO 5: Porcentajes 120/180 días
+            fig5 = px.line(
+                datos_grafico,
+                x='semana_numero',
+                y=['percentil_180_despachados', 'percentil_120_despachados', 'percentil_180_cerrados', 'percentil_120_cerrados'],
+                title=f'Expedientes dentro de Plazos - Semana {num_semana}',
+                labels={'semana_numero': 'Semana', 'value': 'Porcentaje (%)', 'variable': 'Indicador'},
+                color_discrete_map={
+                    'percentil_180_despachados': '#ff7f0e',
+                    'percentil_120_despachados': '#ffddaa',
+                    'percentil_180_cerrados': '#2ca02c',
+                    'percentil_120_cerrados': '#98df8a'
+                }
+            )
+            fig5.update_layout(height=400, showlegend=True)
+            fig5.add_vline(x=num_semana, line_dash="dash", line_color="red")
+            
+            temp_chart5 = user_env.get_temp_path(f"chart5_{num_semana}.png")
+            fig5.write_image(temp_chart5)
+            
+            pdf.add_page()
+            pdf.set_font('Arial', 'B', 10)
+            pdf.cell(0, 8, "Porcentaje de Expedientes dentro de Plazos (120/180 dias)", 0, 1)
+            pdf.image(temp_chart5, x=10, w=190)
             
             # Limpiar archivos temporales
             try:
                 os.remove(temp_chart1)
                 os.remove(temp_chart2)
+                os.remove(temp_chart3)
+                os.remove(temp_chart4)
+                os.remove(temp_chart5)
             except:
                 pass
                 
         except Exception as chart_error:
             pdf.ln(5)
             pdf.set_font('Arial', 'I', 8)
-            pdf.cell(0, 5, f"Nota: No se pudieron incluir los graficos por error: {str(chart_error)}", 0, 1)
+            pdf.cell(0, 5, f"Nota: No se pudieron incluir los graficos. Error: {str(chart_error)}", 0, 1)
+            pdf.cell(0, 5, "Instale Kaleido: pip install kaleido", 0, 1)
+            
+            # Agregar tabla de datos como alternativa
+            pdf.ln(3)
+            pdf.set_font('Arial', 'B', 9)
+            pdf.cell(0, 6, "Datos de evolucion (ultimas 8 semanas):", 0, 1)
+            
+            # Mostrar tabla con datos numéricos
+            datos_tabla = datos_grafico.tail(8)[[
+                'semana_numero', 'nuevos_expedientes', 'despachados_semana', 
+                'expedientes_cerrados', 'total_abiertos', 'c_abs_despachados_sem'
+            ]]
+            pdf.set_font('Arial', '', 6)
+            
+            # Encabezados de tabla
+            headers = ["Sem", "Nuevos", "Despach", "Cerrad", "Abiert", "CoefAbs%"]
+            widths = [12, 15, 15, 15, 15, 15]
+            
+            for i, header in enumerate(headers):
+                pdf.cell(widths[i], 5, header, 1)
+            pdf.ln()
+            
+            # Datos
+            for _, row in datos_tabla.iterrows():
+                pdf.cell(widths[0], 5, str(int(row['semana_numero'])), 1)
+                pdf.cell(widths[1], 5, str(int(row['nuevos_expedientes'])), 1)
+                pdf.cell(widths[2], 5, str(int(row['despachados_semana'])), 1)
+                pdf.cell(widths[3], 5, str(int(row['expedientes_cerrados'])), 1)
+                pdf.cell(widths[4], 5, str(int(row['total_abiertos'])), 1)
+                pdf.cell(widths[5], 5, f"{row['c_abs_despachados_sem']:.1f}%", 1)
+                pdf.ln()
         
         # Exportar a bytes
         pdf_output = pdf.output(dest='S')
