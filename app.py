@@ -1398,7 +1398,7 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # Logo
-st.sidebar.image("Logo Atrian.png", use_column_width=True)  # Ajusta el ancho a la columna
+st.sidebar.image("Logo Atrian.png", width=260)
 
 # Botón para limpiar cache
 with st.sidebar:
