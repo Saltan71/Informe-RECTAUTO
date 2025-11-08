@@ -12,7 +12,7 @@ import hashlib
 import tempfile
 import shutil
 import uuid
-import getpasspip install Pillow
+import getpasspip
 from PIL import Image
 
 
