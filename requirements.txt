@@ -7,4 +7,5 @@ openpyxl
 jinja2
 fpdf2
 matplotlib
-kaleido
+pywin32
+pillow
