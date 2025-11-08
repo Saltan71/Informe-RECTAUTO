@@ -12,7 +12,7 @@ import hashlib
 import tempfile
 import shutil
 import uuid
-import getpasspip
+import getpass
 from PIL import Image
 
 
