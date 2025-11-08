@@ -56,7 +56,6 @@ with open(test_file, 'w') as f:
     f.write("test")
 
 st.set_page_config(page_title="Informe Rectauto", layout="wide", page_icon=Image.open("icono.ico"))
-st.logo("icono.png", icon_image="icono.ico", url="https://informes-rectauto.streamlit.app/")
 st.title("📊 Seguimiento Equipo Regional RECTAUTO")
 
 # Inicializar variables de sesión para documentación
@@ -1399,7 +1398,7 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # Logo
-st.sidebar.image("Logo Atrian.png", width=260)
+st.sidebar.image("Logo Atrian.png", use_column_width=True)  # Ajusta el ancho a la columna
 
 # Botón para limpiar cache
 with st.sidebar:
