@@ -12,7 +12,9 @@ import hashlib
 import tempfile
 import shutil
 import uuid
-import getpass
+import getpasspip install Pillow
+from PIL import Image
+
 
 # === NUEVA CLASE PARA ENTORNO DE USUARIO ===
 class UserEnvironment:
@@ -53,7 +55,8 @@ test_file = user_env.get_temp_path("test_write_access.tmp")
 with open(test_file, 'w') as f:
     f.write("test")
 
-st.set_page_config(page_title="Informe Rectauto", layout="wide")
+st.set_page_config(page_title="Informe Rectauto", layout="wide", page_icon=Image.open("icono.ico"))
+st.logo("icono.png", icon_image="icono.ico", url="https://informes-rectauto.streamlit.app/")
 st.title("📊 Seguimiento Equipo Regional RECTAUTO")
 
 # Inicializar variables de sesión para documentación
