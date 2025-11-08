@@ -1233,6 +1233,89 @@ def obtener_hash_archivo(archivo):
     archivo.seek(0)
     return file_hash
 
+def enviar_correo_outlook(destinatario, asunto, cuerpo_mensaje, archivos_adjuntos, cc=None, bcc=None):
+    """
+    Envía correo usando MAPI - versión específicamente corregida para el resumen
+    """
+    try:
+        import win32com.client
+        import pythoncom
+        import os
+        import tempfile
+        
+        # Forzar inicialización COM
+        pythoncom.CoInitialize()
+        
+        try:
+            outlook = win32com.client.Dispatch("Outlook.Application")
+            mail = outlook.CreateItem(0)
+            
+            mail.To = destinatario
+            mail.Subject = asunto
+            mail.Body = cuerpo_mensaje
+
+            if cc and pd.notna(cc) and str(cc).strip():
+                mail.CC = str(cc)
+            if bcc and pd.notna(bcc) and str(bcc).strip():
+                mail.BCC = str(bcc)
+
+            # Adjuntar archivos - SOLUCIÓN ESPECÍFICA PARA RESUMEN
+            for nombre_archivo, datos_archivo in archivos_adjuntos:
+                try:
+                    # Crear archivo temporal con el nombre EXACTO que queremos
+                    temp_path = os.path.join(user_env.working_dir, nombre_archivo)
+                    
+                    # Escribir el archivo con el nombre correcto
+                    with open(temp_path, 'wb') as temp_file:
+                        temp_file.write(datos_archivo)
+                    
+                    # Adjuntar el archivo - método simple y directo
+                    mail.Attachments.Add(temp_path)
+                    
+                    # 🔥 SOLUCIÓN ESPECÍFICA: Forzar el cierre del archivo antes de enviar
+                    del temp_file  # Liberar el handle del archivo
+                    
+                except Exception as attach_error:
+                    st.error(f"Error adjuntando archivo {nombre_archivo}: {attach_error}")
+                    # Continuar con otros archivos
+
+            # Enviar correo
+            mail.Send()
+            
+            # Limpiar archivos temporales después del envío
+            for nombre_archivo, datos_archivo in archivos_adjuntos:
+                try:
+                    temp_path = os.path.join(user_env.working_dir, nombre_archivo)
+                    if os.path.exists(temp_path):
+                        os.unlink(temp_path)
+                except:
+                    pass  # Ignorar errores de limpieza
+            
+            return True
+            
+        except Exception as e:
+            st.error(f"❌ Error Outlook al enviar a {destinatario}: {e}")
+            return False
+        finally:
+            # Liberar objetos COM
+            try:
+                if 'mail' in locals():
+                    del mail
+                if 'outlook' in locals():
+                    del outlook
+            except:
+                pass
+            
+    except Exception as e:
+        st.error(f"❌ Error general al enviar a {destinatario}: {e}")
+        return False
+    finally:
+        # Siempre desinicializar COM
+        try:
+            pythoncom.CoUninitialize()
+        except:
+            pass
+
 # CSS ACTUALIZADO CON ESTILOS PARA BOTONES Y MENÚS DESPLEGABLES
 st.markdown("""
 <style>
@@ -1917,70 +2000,142 @@ if eleccion == "Principal":
     fecha_max_str = fecha_max.strftime("%d/%m/%Y") if pd.notna(fecha_max) else "Sin fecha"
     st.subheader(f"📅 Semana {num_semana} a {fecha_max_str}")
 
-    # Sidebar para filtros
-    st.sidebar.header("Filtros")
+    # =============================================
+    # FILTROS DINÁMICOS INTERCONECTADOS - VERSIÓN CORREGIDA
+    # =============================================
+    
+    st.sidebar.header("Filtros Interconectados")
 
+    # Inicializar variables de sesión si no existen
     if 'filtro_estado' not in st.session_state:
         st.session_state.filtro_estado = ['Abierto'] if 'Abierto' in df['ESTADO'].values else []
 
     if 'filtro_equipo' not in st.session_state:
-        st.session_state.filtro_equipo = sorted(df['EQUIPO'].dropna().unique())
+        st.session_state.filtro_equipo = []
 
     if 'filtro_usuario' not in st.session_state:
-        st.session_state.filtro_usuario = sorted(df['USUARIO'].dropna().unique())
+        st.session_state.filtro_usuario = []
 
-    if st.sidebar.button("Mostrar todos / Resetear filtros"):
+    # Botón para resetear filtros
+    if st.sidebar.button("🔄 Mostrar todos / Resetear filtros", use_container_width=True):
         st.session_state.filtro_estado = sorted(df['ESTADO'].dropna().unique())
         st.session_state.filtro_equipo = sorted(df['EQUIPO'].dropna().unique())
         st.session_state.filtro_usuario = sorted(df['USUARIO'].dropna().unique())
         st.rerun()
 
-    opciones_estado = sorted(df['ESTADO'].dropna().unique())
-    opciones_equipo = sorted(df['EQUIPO'].dropna().unique())
-    opciones_usuario = sorted(df['USUARIO'].dropna().unique())
+    # 1. Primero aplicar filtros secuencialmente para calcular opciones disponibles
+    df_filtrado_temp = df.copy()
 
+    # Aplicar filtro de ESTADO primero
+    if st.session_state.filtro_estado:
+        df_filtrado_temp = df_filtrado_temp[df_filtrado_temp['ESTADO'].isin(st.session_state.filtro_estado)]
+
+    # Calcular EQUIPOS disponibles basados en el filtro de ESTADO
+    equipos_disponibles = sorted(df_filtrado_temp['EQUIPO'].dropna().unique())
+
+    # Aplicar filtro de EQUIPO (si hay selección)
+    equipos_seleccionados = [eq for eq in st.session_state.filtro_equipo if eq in equipos_disponibles]
+    if equipos_seleccionados:
+        df_filtrado_temp = df_filtrado_temp[df_filtrado_temp['EQUIPO'].isin(equipos_seleccionados)]
+
+    # Calcular USUARIOS disponibles basados en filtros de ESTADO y EQUIPO
+    usuarios_disponibles = sorted(df_filtrado_temp['USUARIO'].dropna().unique())
+
+    # Aplicar filtro de USUARIO (si hay selección)
+    usuarios_seleccionados = [us for us in st.session_state.filtro_usuario if us in usuarios_disponibles]
+    if usuarios_seleccionados:
+        df_filtrado_temp = df_filtrado_temp[df_filtrado_temp['USUARIO'].isin(usuarios_seleccionados)]
+
+    # 2. Ahora crear los widgets de filtro con opciones actualizadas
+    st.sidebar.markdown("---")
+    st.sidebar.subheader("Filtros Activos")
+
+    # FILTRO DE ESTADO (siempre muestra todas las opciones)
+    opciones_estado = sorted(df['ESTADO'].dropna().unique())
     estado_sel = st.sidebar.multiselect(
-        "Selecciona Estado:",
+        "🔘 Selecciona Estado:",
         options=opciones_estado,
         default=st.session_state.filtro_estado,
-        key='filtro_estado'
+        key='filtro_estado_selector'
     )
 
+    # FILTRO DE EQUIPO (se actualiza según estado seleccionado)
     equipo_sel = st.sidebar.multiselect(
-        "Selecciona Equipo:",
-        options=opciones_equipo,
-        default=st.session_state.filtro_equipo,
-        key='filtro_equipo'
+        "👥 Selecciona Equipo:",
+        options=equipos_disponibles,
+        default=equipos_seleccionados,
+        key='filtro_equipo_selector'
     )
 
+    # FILTRO DE USUARIO (se actualiza según estado y equipo seleccionados)
     usuario_sel = st.sidebar.multiselect(
-        "Selecciona Usuario:",
-        options=opciones_usuario,
-        default=st.session_state.filtro_usuario,
-        key='filtro_usuario'
+        "👤 Selecciona Usuario:",
+        options=usuarios_disponibles,
+        default=usuarios_seleccionados,
+        key='filtro_usuario_selector'
     )
 
-    # Aplicar filtros al DataFrame
+    # 3. Actualizar session_state cuando cambian los filtros
+    if estado_sel != st.session_state.filtro_estado:
+        st.session_state.filtro_estado = estado_sel
+        # Cuando cambia el estado, resetear equipo y usuario para evitar inconsistencias
+        st.session_state.filtro_equipo = []
+        st.session_state.filtro_usuario = []
+        st.rerun()
+
+    if equipo_sel != st.session_state.filtro_equipo:
+        st.session_state.filtro_equipo = equipo_sel
+        # Cuando cambia el equipo, resetear usuario
+        st.session_state.filtro_usuario = []
+        st.rerun()
+
+    if usuario_sel != st.session_state.filtro_usuario:
+        st.session_state.filtro_usuario = usuario_sel
+        st.rerun()
+
+    # 4. Aplicar filtros finales al DataFrame principal
     df_filtrado = df.copy()
 
-    if estado_sel:
-        df_filtrado = df_filtrado[df_filtrado['ESTADO'].isin(estado_sel)]
+    if st.session_state.filtro_estado:
+        df_filtrado = df_filtrado[df_filtrado['ESTADO'].isin(st.session_state.filtro_estado)]
 
-    if equipo_sel:
-        df_filtrado = df_filtrado[df_filtrado['EQUIPO'].isin(equipo_sel)]
+    if st.session_state.filtro_equipo:
+        df_filtrado = df_filtrado[df_filtrado['EQUIPO'].isin(st.session_state.filtro_equipo)]
 
-    if usuario_sel:
-        df_filtrado = df_filtrado[df_filtrado['USUARIO'].isin(usuario_sel)]
+    if st.session_state.filtro_usuario:
+        df_filtrado = df_filtrado[df_filtrado['USUARIO'].isin(st.session_state.filtro_usuario)]
 
-    # Mostrar filtros activos
+    # Mostrar resumen de filtros activos
     st.sidebar.markdown("---")
-    st.sidebar.subheader("Filtros activos")
-    if estado_sel:
-        st.sidebar.write(f"Estados: {', '.join(estado_sel)}")
-    if equipo_sel:
-        st.sidebar.write(f"Equipos: {len(equipo_sel)} seleccionados")
-    if usuario_sel:
-        st.sidebar.write(f"Usuarios: {len(usuario_sel)} seleccionados")
+    st.sidebar.subheader("📊 Resumen Filtros")
+    
+    if st.session_state.filtro_estado:
+        st.sidebar.write(f"**Estados:** {len(st.session_state.filtro_estado)} seleccionados")
+    
+    if st.session_state.filtro_equipo:
+        st.sidebar.write(f"**Equipos:** {len(st.session_state.filtro_equipo)} seleccionados")
+    
+    if st.session_state.filtro_usuario:
+        st.sidebar.write(f"**Usuarios:** {len(st.session_state.filtro_usuario)} seleccionados")
+    
+    st.sidebar.write(f"**Registros:** {len(df_filtrado):,}".replace(",", "."))
+
+    # Mostrar detalles de filtros activos en un expander
+    with st.sidebar.expander("📋 Ver detalles de filtros"):
+        if st.session_state.filtro_estado:
+            st.write("**Estados seleccionados:**")
+            for estado in st.session_state.filtro_estado:
+                st.write(f"- {estado}")
+        
+        if st.session_state.filtro_equipo:
+            st.write("**Equipos seleccionados:**")
+            for equipo in st.session_state.filtro_equipo:
+                st.write(f"- {equipo}")
+        
+        if st.session_state.filtro_usuario:
+            st.write("**Usuarios seleccionados:**")
+            for usuario in st.session_state.filtro_usuario:
+                st.write(f"- {usuario}")
 
     # NUEVO: Opciones de ordenamiento y auto-filtros
     st.sidebar.markdown("---")
@@ -2507,399 +2662,403 @@ if eleccion == "Principal":
                 key='pdf_download_button_completo'
             )
 
-    # SECCIÓN: ENVÍO DE CORREOS INTEGRADA
-    st.markdown("---")
-    st.header("📧 Envío de Correos")
-    
-    # Verificar que estamos usando la última semana
-    st.info(f"**📅 Semana activa para envío:** {num_semana} (Última semana disponible - {fecha_max_str})")
+# SECCIÓN: ENVÍO DE CORREOS INTEGRADA - VERSIÓN CORREGIDA
+# CORRECCIÓN: Filtrar usuarios activos de forma más robusta
+try:
+    if df_usuarios is None or df_usuarios.empty:
+        st.error("❌ No se ha cargado el archivo USUARIOS o está vacío")
+        st.stop()
 
-    # Definir si está disponible el envío de resumen
-    envio_resumen_disponible = 'ENVÍO RESUMEN' in df_usuarios.columns
-    if envio_resumen_disponible:
-        st.info("✅ **Envío de resumen KPI disponible** - Los usuarios con 'ENVÍO RESUMEN = SÍ' recibirán el resumen")
-    else:
-        st.info("ℹ️ **Envío de resumen KPI no disponible** - La columna 'ENVÍO RESUMEN' no existe en USUARIOS.xlsx")
-    
-    # Verificar si el archivo USUARIOS está cargado
-    if df_usuarios is None:
-        st.error("❌ No se ha cargado el archivo USUARIOS. Por favor, cárgalo en la sección de arriba.")
+    df_usuarios = df_usuarios.copy()
+
+    # Normalizar campos de control
+    for col in ['ENVIAR', 'ENVÍO RESUMEN']:
+        if col not in df_usuarios.columns:
+            df_usuarios[col] = ""
+        df_usuarios[col] = df_usuarios[col].astype(str).str.upper().str.strip()
+
+    valores_si = ['SÍ', 'SI', 'S', 'YES', 'Y', 'TRUE', '1', 'VERDADERO']
+
+    # Usuarios que reciben su listado individual
+    usuarios_enviar = df_usuarios[df_usuarios['ENVIAR'].isin(valores_si)]
+
+    # Usuarios que reciben resumen KPI
+    usuarios_resumen = df_usuarios[df_usuarios['ENVÍO RESUMEN'].isin(valores_si)]
+
+    st.success(f"✅ {len(usuarios_enviar)} usuarios recibirán expedientes individuales")
+    st.success(f"📊 {len(usuarios_resumen)} usuarios recibirán resumen KPI")
+
+    if usuarios_enviar.empty and usuarios_resumen.empty:
+        st.warning("⚠️ No hay usuarios con ENVIAR o ENVÍO RESUMEN = 'SÍ'")
         st.stop()
-        envio_resumen_disponible = False
-    
-    # Verificar columnas requeridas en USUARIOS
-    columnas_requeridas = ['USUARIOS', 'ENVIAR', 'EMAIL', 'ASUNTO', 'MENSAJE1']
-    columnas_faltantes = [col for col in columnas_requeridas if col not in df_usuarios.columns]
-    
-    if columnas_faltantes:
-        st.error(f"❌ Faltan columnas en el archivo USUARIOS: {', '.join(columnas_faltantes)}")
-        st.stop()
-    
-    # NUEVO: Verificar columna para envío de resumen
-    def verificar_envio_resumen(usuario_row):
-        """Verifica si el usuario debe recibir resumen KPI de forma segura"""
-        try:
-            # Verificar si la columna existe y tiene valor
-            if 'ENVÍO RESUMEN' not in usuario_row.index or pd.isna(usuario_row['ENVÍO RESUMEN']):
-                return False
-            
-            valor = str(usuario_row['ENVÍO RESUMEN']).strip().upper()
-            return valor in ['SÍ', 'SI', 'S', 'YES', 'Y', 'TRUE', '1']
-        except:
+
+except Exception as e:
+    st.error(f"❌ Error procesando usuarios: {e}")
+    st.stop()
+
+# SI LLEGAMOS AQUÍ, HAY USUARIOS ACTIVOS - CONTINUAR CON EL PROCESAMIENTO
+
+# AÑADIR ESTA LÍNEA FALTANTE - DEFINIR usuarios_activos
+usuarios_activos = pd.concat([usuarios_enviar, usuarios_resumen]).drop_duplicates(subset=['USUARIOS', 'EMAIL'])
+
+# Función para verificar envío de resumen - MÁS ROBUSTA
+def verificar_envio_resumen(usuario_row):
+    """Verifica si el usuario debe recibir resumen KPI"""
+    try:
+        if 'ENVÍO RESUMEN' not in usuario_row.index:
             return False
+        
+        valor = str(usuario_row['ENVÍO RESUMEN']).upper().strip() if pd.notna(usuario_row['ENVÍO RESUMEN']) else ""
+        valores_positivos = ['SÍ', 'SI', 'S', 'YES', 'Y', 'TRUE', '1', 'VERDADERO', 'OK', 'X', '✔', '✅']
+        return valor in valores_positivos
+    except:
+        return False
 
-    # Filtrar usuarios activos
-    usuarios_activos = df_usuarios[
-        (df_usuarios['ENVIAR'].str.upper() == 'SÍ') | 
-        (df_usuarios['ENVIAR'].str.upper() == 'SI')
-    ]
-    
-    if usuarios_activos.empty:
-        st.warning("⚠️ No hay usuarios activos para envío (ENVIAR = 'SÍ' o 'SI')")
+# Procesar usuarios para envío - SEPARAR CLARAMENTE LOS DOS GRUPOS
+usuarios_para_envio_individual = []  # Usuarios con expedientes que reciben su PDF
+usuarios_para_resumen_solo = []       # Usuarios que solo reciben resumen (jefes sin expedientes)
+
+# INICIALIZAR Y DEFINIR usuarios_con_pendientes DE FORMA SEGURA
+usuarios_con_pendientes = []
+try:
+    # Primero, identificar todos los usuarios con expedientes pendientes
+    if not df_pendientes.empty and 'USUARIO' in df_pendientes.columns:
+        usuarios_con_pendientes = df_pendientes['USUARIO'].dropna().unique().tolist()
+        st.info(f"📋 {len(usuarios_con_pendientes)} usuarios tienen expedientes pendientes")
     else:
-        # Función para generar el cuerpo del mensaje dinámicamente
-        def generar_cuerpo_mensaje(mensaje_base):
-            """Genera el cuerpo del mensaje con saludo según la hora"""
-            from datetime import datetime
-            
-            hora_actual = datetime.now().hour
-            saludo = "Buenos días" if hora_actual < 14 else "Buenas tardes"
-            
-            cuerpo_mensaje = f"{saludo},\n\n{mensaje_base}"
-            return cuerpo_mensaje
+        st.warning("ℹ️ No se encontraron expedientes pendientes o falta la columna 'USUARIO'")
+        usuarios_con_pendientes = []
+except Exception as e:
+    st.error(f"❌ Error al obtener usuarios con expedientes pendientes: {e}")
+    usuarios_con_pendientes = []
+
+# VERIFICAR COLUMNAS REQUERIDAS EN EL ARCHIVO DE USUARIOS
+columnas_requeridas = ['USUARIOS', 'EMAIL']
+columnas_faltantes = [col for col in columnas_requeridas if col not in df_usuarios.columns]
+
+if columnas_faltantes:
+    st.error(f"❌ Faltan columnas requeridas en el archivo USUARIOS: {', '.join(columnas_faltantes)}")
+    st.stop()
+
+# DEBUG: Mostrar información para verificar
+st.markdown("---")
+st.subheader("🔍 Información de Depuración")
+st.write(f"Usuarios activos: {len(usuarios_activos)}")
+st.write(f"Usuarios con expedientes pendientes: {len(usuarios_con_pendientes)}")
+
+if not usuarios_activos.empty:
+    st.write("Primeros 5 usuarios activos:")
+    st.dataframe(usuarios_activos[['USUARIOS', 'EMAIL', 'ENVIAR', 'ENVÍO RESUMEN']].head())
+
+if usuarios_con_pendientes:
+    st.write("Primeros 10 usuarios con expedientes pendientes:")
+    for usuario in usuarios_con_pendientes[:10]:
+        st.write(f"- {usuario}")
+
+# PROCESAR CADA USUARIO ACTIVO - CORRECCIÓN IMPORTANTE
+for _, usuario_row in usuarios_activos.iterrows():
+    try:
+        usuario_nombre = usuario_row['USUARIOS']  # Del archivo USUARIOS
+        usuario_email = usuario_row['EMAIL']
         
-        # Función para procesar el asunto con variables
-        def procesar_asunto(asunto_template, num_semana, fecha_max_str):
-            """Reemplaza variables en el asunto del correo"""
-            asunto_procesado = asunto_template.replace("&num_semana&", str(num_semana))
-            asunto_procesado = asunto_procesado.replace("&fecha_max&", fecha_max_str)
-            return asunto_procesado
+        # Verificar datos básicos
+        if pd.isna(usuario_nombre) or pd.isna(usuario_email):
+            st.warning(f"⚠️ Usuario con nombre o email vacío: {usuario_nombre}")
+            continue
+            
+        # Normalizar para comparación
+        usuario_normalizado = str(usuario_nombre).strip().upper()
         
-        # Función para enviar correos con Outlook (funciona con Outlook cerrado)
-        def enviar_correo_outlook(destinatario, asunto, cuerpo_mensaje, archivos_adjuntos, cc=None, bcc=None):
-            """
-            Envía correo usando Outlook local con múltiples adjuntos.
-            archivos_adjuntos: lista de tuplas (nombre_archivo, datos_archivo)
-            """
+        # Verificar si tiene expedientes - COMPARAR CON 'USUARIO' de df_pendientes
+        tiene_expedientes = False
+        num_expedientes = 0
+        
+        # CORREGIDO: Verificar de forma segura si usuarios_con_pendientes está definido y no está vacío
+        if usuarios_con_pendientes and len(usuarios_con_pendientes) > 0:
             try:
-                import win32com.client
-                import os
-                import tempfile
-                import shutil
-
-                outlook = win32com.client.Dispatch("Outlook.Application")
-                mail = outlook.CreateItem(0)  # 0 = olMailItem
-
-                mail.To = destinatario
-                mail.Subject = asunto
-                mail.Body = cuerpo_mensaje
-
-                if cc and pd.notna(cc) and str(cc).strip():
-                    mail.CC = str(cc)
-                if bcc and pd.notna(bcc) and str(bcc).strip():
-                    mail.BCC = str(bcc)
-
-                # Adjuntar archivos
-                rutas_temporales = []
-                for nombre_archivo, datos_archivo in archivos_adjuntos:
-                    # Crear archivo temporal
-                    with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as temp_file:
-                        temp_file.write(datos_archivo)
-                        temp_path = temp_file.name
-                    
-                    # Crear copia con nombre real
-                    carpeta_temp = tempfile.gettempdir()
-                    ruta_final = os.path.join(carpeta_temp, nombre_archivo)
-                    
-                    # Asegurar extensión .pdf
-                    if not ruta_final.lower().endswith(".pdf"):
-                        ruta_final += ".pdf"
-                    
-                    shutil.copy(temp_path, ruta_final)
-                    rutas_temporales.append((temp_path, ruta_final))
-                    
-                    # Adjuntar el archivo
-                    mail.Attachments.Add(Source=ruta_final)
-
-                # Enviar correo
-                mail.Send()
-
-                # Limpieza
-                for temp_path, ruta_final in rutas_temporales:
-                    try:
-                        os.remove(temp_path)
-                        os.remove(ruta_final)
-                    except:
-                        pass
-
-                return True
-
-            except ImportError:
-                st.error("❌ Error: win32com.client no está disponible. Instala pywin32: pip install pywin32")
-                return False
+                # CORREGIDO: Comparar con 'USUARIO' de los expedientes pendientes
+                tiene_expedientes = any(
+                    str(user_pendiente).strip().upper() == usuario_normalizado 
+                    for user_pendiente in usuarios_con_pendientes
+                )
+                
+                if tiene_expedientes:
+                    # Contar expedientes del usuario - USANDO 'USUARIO' de df_pendientes
+                    num_expedientes = len(df_pendientes[
+                        df_pendientes['USUARIO'].apply(
+                            lambda x: str(x).strip().upper() if pd.notna(x) else ''
+                        ) == usuario_normalizado
+                    ])
             except Exception as e:
-                st.error(f"❌ Error al enviar correo a {destinatario}: {e}")
-                return False
+                st.error(f"❌ Error al verificar expedientes para {usuario_nombre}: {e}")
+                tiene_expedientes = False
+                num_expedientes = 0
         
-        # Verificar usuarios con expedientes pendientes
-        usuarios_con_pendientes = df_pendientes['USUARIO'].dropna().unique()
-        usuarios_para_envio = []
+        # Verificar si debe recibir resumen - CORRECCIÓN IMPORTANTE
+        # Usamos la función verificar_envio_resumen para determinar esto
+        recibir_resumen = verificar_envio_resumen(usuario_row)
         
-        # === FUNCIÓN AUXILIAR - COLOCAR ANTES DEL BUCLE ===
-        def verificar_envio_resumen(usuario_row):
-            """Verifica si el usuario debe recibir resumen KPI de forma segura"""
-            try:
-                # Verificar si la columna existe y tiene valor
-                if 'ENVÍO RESUMEN' not in usuario_row.index or pd.isna(usuario_row['ENVÍO RESUMEN']):
-                    return False
-                
-                valor = str(usuario_row['ENVÍO RESUMEN']).strip().upper()
-                return valor in ['SÍ', 'SI', 'S', 'YES', 'Y', 'TRUE', '1']
-            except:
-                return False
-        # DEBUG: Mostrar información de depuración
-        st.sidebar.markdown("---")
-        st.sidebar.subheader("🔍 Depuración Envío Correos")
-        st.sidebar.write(f"Usuarios activos: {len(usuarios_activos)}")
-        st.sidebar.write(f"Usuarios con pendientes: {len(usuarios_con_pendientes)}")
-        st.sidebar.write(f"Ejemplo usuarios activos: {list(usuarios_activos['USUARIOS'].head(3))}")
-        st.sidebar.write(f"Ejemplo usuarios con pendientes: {list(usuarios_con_pendientes[:3])}")
-
-        # === BUCLE CORREGIDO ===
-        for _, usuario_row in usuarios_activos.iterrows():
-            usuario = usuario_row['USUARIOS']
-            # VERIFICACIÓN MÁS ROBUSTA - compara normalizando strings
-            usuario_encontrado = False
-            for usuario_pendiente in usuarios_con_pendientes:
-                if str(usuario).strip().upper() == str(usuario_pendiente).strip().upper():
-                    usuario_encontrado = True
-                    break
-            
-            if usuario_encontrado:
-                num_expedientes = len(df_pendientes[
-                    df_pendientes['USUARIO'].apply(lambda x: str(x).strip().upper() if pd.notna(x) else '') == str(usuario).strip().upper()
-                ])
-                
-                # Procesar asunto con variables
-                asunto_template = usuario_row['ASUNTO'] if pd.notna(usuario_row['ASUNTO']) else f"Situación RECTAUTO asignados en la semana {num_semana} a {fecha_max_str}"
-                asunto_procesado = procesar_asunto(asunto_template, num_semana, fecha_max_str)
-                
-                # Generar cuerpo del mensaje
-                mensaje_base = f"{usuario_row['MENSAJE1']} \n\n {usuario_row['MENSAJE2']} \n\n {usuario_row['MENSAJE3']} \n\n {usuario_row['DESPEDIDA']} \n\n __________________ \n\n Equipo RECTAUTO." if pd.notna(usuario_row['MENSAJE1']) else "Se adjunta informe de expedientes pendientes."
-                cuerpo_mensaje = generar_cuerpo_mensaje(mensaje_base)
-                
-                # Verificar si debe recibir resumen
-                # Definir envio_resumen_disponible basado en si existe la columna ENVÍO RESUMEN
-                envio_resumen_disponible = 'ENVÍO RESUMEN' in df_usuarios.columns
-                recibir_resumen = verificar_envio_resumen(usuario_row) if envio_resumen_disponible else False
-                
-                usuarios_para_envio.append({
-                    'usuario': usuario,
-                    'resumen': usuario_row.get('RESUMEN', ''),
-                    'email': usuario_row['EMAIL'],
-                    'cc': usuario_row.get('CC', ''),
-                    'bcc': usuario_row.get('BCC', ''),
-                    'expedientes': num_expedientes,
-                    'asunto': asunto_procesado,
-                    'mensaje': mensaje_base,
-                    'cuerpo_mensaje': cuerpo_mensaje,
-                    'recibir_resumen': recibir_resumen
-                })
-            else:
-                st.sidebar.warning(f"Usuario {usuario} no encontrado en pendientes")
-
-        # MOSTRAR MÁS INFORMACIÓN DE DEPURACIÓN
-        if not usuarios_para_envio:
-            st.error("❌ DEPURACIÓN: No se encontraron coincidencias entre usuarios activos y pendientes")
-            st.write("**Usuarios activos:**", list(usuarios_activos['USUARIOS'].values))
-            st.write("**Usuarios con pendientes:**", list(usuarios_con_pendientes))
-        else:
-            st.success(f"✅ Se encontraron {len(usuarios_para_envio)} usuarios para envío")
+        # Procesar asunto y mensaje
+        asunto_template = usuario_row['ASUNTO'] if pd.notna(usuario_row.get('ASUNTO', '')) else f"Situación RECTAUTO asignados en la semana {num_semana} a {fecha_max_str}"
+        asunto_procesado = asunto_template.replace("&num_semana&", str(num_semana)).replace("&fecha_max&", fecha_max_str)
         
-        if usuarios_para_envio:
-            st.success(f"✅ {len(usuarios_para_envio)} usuarios tienen expedientes pendientes para enviar")
-            
-            # Mostrar resumen
-            col1, col2, col3 = st.columns(3)
-            with col1:
-                st.metric("Usuarios activos", len(usuarios_activos))
-            with col2:
-                st.metric("Con expedientes", len(usuarios_para_envio))
-            with col3:
-                st.metric("Semana activa", f"Semana {num_semana}")
-            
-            # Mostrar tabla de usuarios para envío
-            with st.expander("📋 Ver detalles de usuarios para envío"):
-                df_envio = pd.DataFrame(usuarios_para_envio)
-                columnas_mostrar = ['usuario', 'resumen', 'email', 'expedientes', 'asunto', 'recibir_resumen']
-                st.dataframe(df_envio[columnas_mostrar], use_container_width=True)
-            
-            # Previsualización de correo
-            st.subheader("👁️ Previsualización del Correo")
-            
-            if usuarios_para_envio:
-                usuario_ejemplo = usuarios_para_envio[0]
-                col1, col2 = st.columns([1, 2])
-                
-                with col1:
-                    st.write("**Destinatario:**", usuario_ejemplo['email'])
-                    if usuario_ejemplo['cc']:
-                        st.write("**CC:**", usuario_ejemplo['cc'])
-                    if usuario_ejemplo['bcc']:
-                        st.write("**BCC:**", usuario_ejemplo['bcc'])
-                    st.write("**Asunto:**", usuario_ejemplo['asunto'])
-                    st.write("**Expedientes:**", usuario_ejemplo['expedientes'])
-                    st.write("**Recibir resumen:**", "✅ Sí" if usuario_ejemplo['recibir_resumen'] else "❌ No")
-                
-                with col2:
-                    st.text_area("**Cuerpo del Mensaje:**", usuario_ejemplo['cuerpo_mensaje'], height=200, key="preview_mensaje")
-            
-            # Botón de envío masivo
-            st.markdown("---")
-            st.subheader("🚀 Envío de Correos")
-            
-            st.warning("""
-            **⚠️ Importante antes de enviar:**
-            - Se usará la cuenta de Outlook predeterminada
-            - No es necesario tener Outlook abierto
-            - Los correos se enviarán inmediatamente
-            - Se adjuntará el PDF individual de cada usuario
-            - **Los que tengan 'ENVÍO RESUMEN = SÍ' recibirán también el resumen KPI**
-            - **Verifica que los datos sean correctos**
-            """)
-            
-            if st.button("📤 Enviar Correos a Todos los Usuarios", type="primary", key="enviar_correos"):
-                progress_bar = st.progress(0)
-                status_text = st.empty()
-                
-                correos_enviados = 0
-                correos_fallidos = 0
-                
-                # Generar PDF de resumen KPI (una sola vez para todos)
-                pdf_resumen = None
-                if envio_resumen_disponible:
-                    # Calcular KPIs para la semana actual
-                    columna_fecha = df.columns[13]
-                    df[columna_fecha] = pd.to_datetime(df[columna_fecha], errors='coerce')
-                    fecha_max = df[columna_fecha].max()
-                    
-                    fecha_inicio = pd.to_datetime("2022-11-01")
-                    semanas_disponibles = pd.date_range(
-                        start=fecha_inicio,
-                        end=fecha_max,
-                        freq='W-FRI'
-                    ).tolist()
-                    
-                    df_kpis_semanales = calcular_kpis_todas_semanas_optimizado(df, semanas_disponibles, FECHA_REFERENCIA, fecha_max)
-                    pdf_resumen = generar_pdf_resumen_kpi(
-                        df_kpis_semanales, 
-                        num_semana, 
-                        fecha_max_str, 
-                        df_combinado, 
-                        semanas_disponibles, 
-                        FECHA_REFERENCIA, 
-                        fecha_max
-                    )
-                
-                for i, usuario_info in enumerate(usuarios_para_envio):
-                    status_text.text(f"📨 Enviando a: {usuario_info['usuario']} ({usuario_info['email']})")
-                    
-                    # Generar PDF individual usando la función reutilizable
-                    pdf_individual = generar_pdf_usuario(usuario_info['usuario'], df_pendientes, num_semana, fecha_max_str)
-                    
-                    if pdf_individual:
-                        # Preparar archivos adjuntos
-                        archivos_adjuntos = []
-                        
-                        # 1. PDF individual del usuario
-                        nombre_individual = f"Expedientes_Pendientes_{usuario_info['usuario']}_Semana_{num_semana}.pdf"
-                        archivos_adjuntos.append((nombre_individual, pdf_individual))
-                        
-                        # 2. PDF de resumen KPI (si corresponde)
-                        if usuario_info['recibir_resumen'] and pdf_resumen:
-                            nombre_resumen = f"Resumen_KPI_Semana_{num_semana}.pdf"
-                            archivos_adjuntos.append((nombre_resumen, pdf_resumen))
-                        
-                        # Enviar correo con Outlook
-                        exito = enviar_correo_outlook(
-                            destinatario=usuario_info['email'],
-                            asunto=usuario_info['asunto'],
-                            cuerpo_mensaje=usuario_info['cuerpo_mensaje'],
-                            archivos_adjuntos=archivos_adjuntos,
-                            cc=usuario_info.get('cc'),
-                            bcc=usuario_info.get('bcc')
-                        )
-                        
-                        if exito:
-                            correos_enviados += 1
-                            st.success(f"✅ Enviado a {usuario_info['usuario']}" + 
-                                      (" + Resumen KPI" if usuario_info['recibir_resumen'] and pdf_resumen else ""))
-                        else:
-                            correos_fallidos += 1
-                            st.error(f"❌ Falló envío a {usuario_info['usuario']}")
-                    else:
-                        st.warning(f"⚠️ No se pudo generar PDF para {usuario_info['usuario']}")
-                        correos_fallidos += 1
-                    
-                    progress_bar.progress((i + 1) / len(usuarios_para_envio))
-                
-                status_text.text("")
-                
-                # Mostrar resumen final
-                st.markdown("---")
-                st.subheader("📊 Resumen del Envío")
-                
-                col1, col2, col3 = st.columns(3)
-                with col1:
-                    st.metric("Total procesados", len(usuarios_para_envio))
-                with col2:
-                    st.metric("Correos enviados", correos_enviados, delta=f"+{correos_enviados}")
-                with col3:
-                    st.metric("Correos fallidos", correos_fallidos, delta=f"-{correos_fallidos}", delta_color="inverse")
-                
-                # Verificación segura con valor por defecto
-                if 'envio_resumen_disponible' in locals() or 'envio_resumen_disponible' in globals():
-                    if envio_resumen_disponible:
-                        resumenes_enviados = sum(1 for u in usuarios_para_envio if u.get('recibir_resumen', False))
-                        st.info(f"📊 Resúmenes KPI enviados: {resumenes_enviados} de {len(usuarios_para_envio)} usuarios")
-                else:
-                    # Si por alguna razón la variable no existe
-                    resumenes_enviados = sum(1 for u in usuarios_para_envio if u.get('recibir_resumen', False))
-                    if resumenes_enviados > 0:
-                        st.info(f"📊 Resúmenes KPI enviados: {resumenes_enviados} de {len(usuarios_para_envio)} usuarios")
-                
-                if correos_enviados > 0:
-                    st.balloons()
-                    st.success("🎉 ¡Envío de correos completado!")
+        # Generar cuerpo del mensaje
+        mensaje_base = ""
+        if pd.notna(usuario_row.get('MENSAJE1', '')):
+            mensaje_base += f"{usuario_row['MENSAJE1']}\n\n"
+        if pd.notna(usuario_row.get('MENSAJE2', '')):
+            mensaje_base += f"{usuario_row['MENSAJE2']}\n\n"
+        if pd.notna(usuario_row.get('MENSAJE3', '')):
+            mensaje_base += f"{usuario_row['MENSAJE3']}\n\n"
+        if pd.notna(usuario_row.get('DESPEDIDA', '')):
+            mensaje_base += f"{usuario_row['DESPEDIDA']}\n\n"
+        
+        if not mensaje_base.strip():
+            mensaje_base = "Se adjunta informe de expedientes pendientes."
+        
+        mensaje_base += "__________________\n\nEquipo RECTAUTO."
+        cuerpo_mensaje = f"Buenos días,\n\n{mensaje_base}"
+        
+        # CORRECCIÓN CRÍTICA: DETERMINAR A QUÉ LISTA PERTENECE
+        # Primero verificar si el usuario está marcado para recibir resumen
+        debe_recibir_resumen = verificar_envio_resumen(usuario_row)
+        
+        # Ahora determinar a qué lista va
+        if tiene_expedientes:
+            # Usuario con expedientes: va a la lista de envío individual
+            usuarios_para_envio_individual.append({
+                'usuario': usuario_nombre,
+                'email': usuario_email,
+                'cc': usuario_row.get('CC', ''),
+                'bcc': usuario_row.get('BCC', ''),
+                'expedientes': num_expedientes,
+                'asunto': asunto_procesado,
+                'cuerpo_mensaje': cuerpo_mensaje,
+                'recibir_resumen': debe_recibir_resumen  # Puede que también reciba resumen
+            })
+            st.success(f"✅ {usuario_nombre} - Tiene {num_expedientes} expedientes" + 
+                      (" y recibirá resumen" if debe_recibir_resumen else ""))
+        
+        # CORRECCIÓN: Usuarios que NO tienen expedientes pero SÍ deben recibir resumen
+        elif debe_recibir_resumen:
+            # Usuario sin expedientes pero que debe recibir resumen
+            usuarios_para_resumen_solo.append({
+                'usuario': usuario_nombre,
+                'email': usuario_email,
+                'cc': usuario_row.get('CC', ''),
+                'bcc': usuario_row.get('BCC', ''),
+                'asunto': f"Resumen KPI Semana {num_semana} - {fecha_max_str}",
+                'cuerpo_mensaje': f"Buenos días,\n\nSe adjunta el resumen de KPIs de la semana {num_semana} y los listados de expedientes prioritarios de todos los equipos.\n\n__________________\n\nEquipo RECTAUTO.",
+                'recibir_resumen': True
+            })
+            st.info(f"📊 {usuario_nombre} - Recibirá resumen KPI + expedientes prioritarios de todos los equipos")
         
         else:
-            st.warning("⚠️ No hay usuarios con expedientes pendientes para enviar")
+            # Usuario sin expedientes y sin marcar para resumen
+            st.warning(f"⚠️ {usuario_nombre} - No tiene expedientes ni está marcado para resumen")
+            
+    except Exception as e:
+        st.error(f"❌ Error procesando usuario {usuario_row.get('USUARIOS', 'Desconocido')}: {e}")
+        continue
+
+# MOSTRAR RESUMEN DE LO QUE SE VA A ENVIAR
+st.markdown("---")
+st.subheader("📋 Resumen de Envíos Programados")
+
+if usuarios_para_envio_individual:
+    st.success(f"✅ {len(usuarios_para_envio_individual)} usuarios recibirán sus expedientes pendientes")
+    with st.expander("📋 Ver usuarios con expedientes"):
+        df_envio = pd.DataFrame(usuarios_para_envio_individual)
+        st.dataframe(df_envio[['usuario', 'email', 'expedientes', 'recibir_resumen']], use_container_width=True)
+
+if usuarios_para_resumen_solo:
+    st.success(f"📊 {len(usuarios_para_resumen_solo)} usuarios recibirán solo el resumen KPI")
+    with st.expander("📋 Ver usuarios para resumen"):
+        df_resumen = pd.DataFrame(usuarios_para_resumen_solo)
+        st.dataframe(df_resumen[['usuario', 'email']], use_container_width=True)
+
+if not usuarios_para_envio_individual and not usuarios_para_resumen_solo:
+    st.warning("⚠️ No hay usuarios para enviar correos")
+    st.stop()
+
+# BOTÓN DE ENVÍO - SIEMPRE VISIBLE SI HAY USUARIOS EN ALGUNA LISTA
+st.markdown("---")
+st.subheader("🚀 Envío de Correos")
+
+st.warning("""
+**⚠️ Importante antes de enviar:**
+- Se usará la cuenta de Outlook predeterminada
+- No es necesario tener Outlook abierto
+- Los correos se enviarán inmediatamente
+- **Usuarios con expedientes pendientes:** Recibirán su PDF individual
+- **Usuarios Gerente y Jefes de Equipo:** Recibirán el resumen KPI y los Expedientes Prioritarios de todos los equipos
+- **Verifica que los datos sean correctos**
+""")
+
+if st.button("📤 Enviar Todos los Correos", type="primary", key="enviar_correos"):
+    progress_bar = st.progress(0)
+    status_text = st.empty()
+    results_container = st.container()
     
-    # Información de configuración
+    correos_enviados = 0
+    correos_fallidos = 0
+    
+    # Generar PDF de resumen KPI (una sola vez para todos)
+    pdf_resumen = None
+    with st.spinner("Generando resumen KPI..."):
+        # Calcular KPIs para la semana actual
+        columna_fecha = df.columns[13]
+        df[columna_fecha] = pd.to_datetime(df[columna_fecha], errors='coerce')
+        fecha_max = df[columna_fecha].max()
+        
+        fecha_inicio = pd.to_datetime("2022-11-01")
+        semanas_disponibles = pd.date_range(
+            start=fecha_inicio,
+            end=fecha_max,
+            freq='W-FRI'
+        ).tolist()
+        
+        df_kpis_semanales = calcular_kpis_todas_semanas_optimizado(df, semanas_disponibles, FECHA_REFERENCIA, fecha_max)
+        pdf_resumen = generar_pdf_resumen_kpi(
+            df_kpis_semanales, 
+            num_semana, 
+            fecha_max_str, 
+            df_combinado, 
+            semanas_disponibles, 
+            FECHA_REFERENCIA, 
+            fecha_max
+        )
+    
+    total_a_procesar = len(usuarios_para_envio_individual) + len(usuarios_para_resumen_solo)
+    
+    # PRIMERO: Enviar a usuarios con expedientes
+    for i, usuario_info in enumerate(usuarios_para_envio_individual):
+        status_text.text(f"📨 Enviando a: {usuario_info['usuario']}")
+        
+        # Generar PDF individual
+        pdf_individual = generar_pdf_usuario(usuario_info['usuario'], df_pendientes, num_semana, fecha_max_str)
+        
+        if pdf_individual:
+            archivos_adjuntos = []
+            
+            # 1. PDF individual
+            nombre_individual = f"Expedientes_Pendientes_{usuario_info['usuario']}_Semana_{num_semana}.pdf"
+            archivos_adjuntos.append((nombre_individual, pdf_individual))
+            
+            # 2. Resumen KPI si corresponde
+            if usuario_info['recibir_resumen'] and pdf_resumen:
+                nombre_resumen = f"Resumen_KPI_Semana_{num_semana}.pdf"
+                archivos_adjuntos.append((nombre_resumen, pdf_resumen))
+            
+            # Enviar correo
+            exito = enviar_correo_outlook(
+                destinatario=usuario_info['email'],
+                asunto=usuario_info['asunto'],
+                cuerpo_mensaje=usuario_info['cuerpo_mensaje'],
+                archivos_adjuntos=archivos_adjuntos,
+                cc=usuario_info.get('cc'),
+                bcc=usuario_info.get('bcc')
+            )
+            
+            if exito:
+                correos_enviados += 1
+                with results_container:
+                    st.success(f"✅ {usuario_info['usuario']} - Expedientes" + 
+                              (" + Resumen" if usuario_info['recibir_resumen'] and pdf_resumen else ""))
+            else:
+                correos_fallidos += 1
+                with results_container:
+                    st.error(f"❌ Falló: {usuario_info['usuario']}")
+        else:
+            correos_fallidos += 1
+            with results_container:
+                st.error(f"❌ No se pudo generar PDF para {usuario_info['usuario']}")
+        
+        progress_bar.progress((i + 1) / total_a_procesar)
+    
+    # SEGUNDO: Enviar solo resúmenes a usuarios sin expedientes - CON EXPEDIENTES PRIORITARIOS DE TODOS LOS EQUIPOS
+    for i, usuario_info in enumerate(usuarios_para_resumen_solo):
+        status_text.text(f"📊 Enviando resumen a: {usuario_info['usuario']}")
+        
+        # Crear lista de adjuntos FRESCA para cada usuario
+        archivos_adjuntos = []
+        
+        if pdf_resumen:
+            # 1. Adjuntar resumen KPI
+            nombre_resumen = f"Resumen_KPI_Semana_{num_semana}.pdf"
+            archivos_adjuntos.append((nombre_resumen, pdf_resumen))
+            
+            # 🔥 NUEVO: Adjuntar expedientes prioritarios de TODOS los equipos
+            # Obtener la lista de equipos únicos con expedientes pendientes
+            equipos = df_pendientes['EQUIPO'].dropna().unique()
+            
+            for equipo in equipos:
+                with st.spinner(f"Generando expedientes prioritarios para {equipo}..."):
+                    pdf_prioritarios_equipo = generar_pdf_equipo_prioritarios(
+                        equipo, 
+                        df_pendientes, 
+                        num_semana, 
+                        fecha_max_str
+                    )
+                    
+                    if pdf_prioritarios_equipo:
+                        nombre_prioritarios = f"Expedientes_Prioritarios_{equipo}_Semana_{num_semana}.pdf"
+                        archivos_adjuntos.append((nombre_prioritarios, pdf_prioritarios_equipo))
+                        st.success(f"✅ Expedientes prioritarios de {equipo} generados")
+                    else:
+                        st.warning(f"⚠️ No hay expedientes prioritarios para el equipo {equipo}")
+            
+            # Actualizar el cuerpo del mensaje para reflejar los nuevos adjuntos
+            cuerpo_mensaje_actualizado = f"Buenos días,\n\nSe adjunta el resumen de KPIs de la semana {num_semana} y los listados de expedientes prioritarios de todos los equipos.\n\n__________________\n\nEquipo RECTAUTO."
+            
+            # Enviar correo con todos los adjuntos
+            exito = enviar_correo_outlook(
+                destinatario=usuario_info['email'],
+                asunto=usuario_info['asunto'],
+                cuerpo_mensaje=cuerpo_mensaje_actualizado,
+                archivos_adjuntos=archivos_adjuntos,
+                cc=usuario_info.get('cc'),
+                bcc=usuario_info.get('bcc')
+            )
+            
+            if exito:
+                correos_enviados += 1
+                with results_container:
+                    st.success(f"📊 Resumen KPI y {len(equipos)} equipos de expedientes prioritarios enviados a {usuario_info['usuario']}")
+            else:
+                correos_fallidos += 1
+                with results_container:
+                    st.error(f"❌ Falló resumen: {usuario_info['usuario']}")
+        else:
+            correos_fallidos += 1
+            with results_container:
+                st.error(f"❌ No hay resumen para {usuario_info['usuario']}")
+        
+        progress_bar.progress((len(usuarios_para_envio_individual) + i + 1) / total_a_procesar)
+    
+    status_text.text("")
+    
+    # RESUMEN FINAL
     st.markdown("---")
-    with st.expander("⚙️ Configuración de Envío de Correos"):
-        st.info("""
-        **📋 Para que funcione el envío de correos:**
-        
-        1. **Outlook instalado** en el equipo
-        2. **Cuenta de correo predeterminada** configurada en Outlook
-        3. **Librería pywin32 instalada**: 
-           ```bash
-           pip install pywin32
-           ```
-        4. **Archivo USUARIOS.xlsx** con la estructura correcta
-        
-        **📋 Estructura del archivo USUARIOS.xlsx (Hoja Sheet1):**
-        - USUARIOS: Código del usuario (debe coincidir con RECTAUTO)
-        - ENVIAR: "SI" o "SÍ" (en mayúsculas)
-        - ENVÍO RESUMEN: "SI" o "SÍ" para recibir resumen KPI (opcional)
-        - EMAIL: Dirección de correo
-        - ASUNTO: Puede usar &num_semana& y &fecha_max& como variables
-        - MENSAJE1, MENSAJE2, MENSAJE3, DESPEDIDA: Texto del mensaje
-        - CC, BCC: Opcionales (separar múltiples emails con ;)
-        - RESUMEN: Opcional (nombre completo del usuario)
-        - Otras columnas: Se pueden añadir sin afectar el funcionamiento
-        """)
+    st.subheader("📊 Resumen del Envío")
+    
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        st.metric("Total procesados", total_a_procesar)
+    with col2:
+        st.metric("Correos enviados", correos_enviados)
+    with col3:
+        st.metric("Correos fallidos", correos_fallidos)
+    
+    # Calcular resúmenes enviados
+    resumenes_enviados = sum(1 for u in usuarios_para_envio_individual if u.get('recibir_resumen', False))
+    resumenes_enviados += len(usuarios_para_resumen_solo)
+    
+    st.info(f"📊 Resúmenes KPI enviados: {resumenes_enviados}")
+    
+    if correos_enviados > 0:
+        st.balloons()
+        st.success("🎉 ¡Envío de correos completado!")
 
 elif eleccion == "Indicadores clave (KPI)":
     # ... (el código existente de la sección KPI se mantiene igual)
