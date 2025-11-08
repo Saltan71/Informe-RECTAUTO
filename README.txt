@@ -13,6 +13,9 @@ INSTRUCCIONES PARA EJECUTAR LA APLICACIÓN WEB CON STREAMLIT CLOUD
          - USUARIOS, hoja de cálculo que requiere mantenimiento cuando haya
             que modificar datos de los usuarios (altas, bajas, IT de larga
             duración).
+         - TRIAJE, hoja de cálculo  mantenida en local con las asignaciones
+            semanales (solo el último archivo, ya que todos los expedientes
+            actualmente abiertos, están en esa hoja.
          - DOCUMENTOS, hoja de cálculo cuyo mantenimiento se realiza en la
             misma app-web, ya que grabamos los datos actualizados de esos
             expedientes, y descargamos el fichero que se utilizará la siguien-
