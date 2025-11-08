@@ -9,4 +9,4 @@ fpdf2
 matplotlib
 kaleido
 Pillow
-
+chromium-chromedriver
