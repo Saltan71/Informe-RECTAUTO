@@ -49,6 +49,9 @@ FECHA_REFERENCIA = datetime(2022, 11, 1)
 HOJA = "Sheet1"
 ESTADOS_PENDIENTES = ["Abierto"]
 CACHE_TTL = 7200  # 2 horas en segundos
+CACHE_TTL_STATIC = 86400  # 24 horas para datos estáticos
+CACHE_TTL_DYNAMIC = 3600  # 1 hora para datos dinámicos
+COL_WIDTHS_OPTIMIZED = [28, 11, 11, 8, 16, 11, 11, 16, 11, 20, 20, 9, 18, 11, 14, 9, 24, 20, 11]
 
 # Test file en directorio único por usuario
 test_file = user_env.get_temp_path("test_write_access.tmp")
@@ -199,6 +202,8 @@ class PDFResumenKPI(FPDF):
             self.cell(0, 4, explanation_safe, 0, 1)
             self.ln(1)
 
+# === FUNCIONES OPTIMIZADAS ===
+
 # Funciones optimizadas con cache
 @st.cache_data(ttl=CACHE_TTL, show_spinner="Procesando archivo Excel...")
 def cargar_y_procesar_rectauto(archivo, _user_key=user_env.session_id):
@@ -304,6 +309,41 @@ def cargar_y_procesar_documentos(archivo, _user_key=user_env.session_id):
         st.error(f"Error procesando DOCUMENTOS: {e}")
         return None
 
+@st.cache_data(ttl=CACHE_TTL, show_spinner="Procesando archivos...")
+def procesar_archivos_combinado(archivos_dict, _user_key=user_env.session_id):
+    """Procesa todos los archivos en una sola función optimizada"""
+    try:
+        # Cargar RECTAUTO primero
+        df_rectauto = cargar_y_procesar_rectauto(archivos_dict['rectauto'])
+        
+        # Cargar otros archivos en paralelo (si están disponibles)
+        resultados = {}
+        for nombre, archivo in archivos_dict.items():
+            if archivo and nombre != 'rectauto':
+                if nombre == 'notifica':
+                    resultados['notifica'] = cargar_y_procesar_notifica(archivo)
+                elif nombre == 'triaje':
+                    resultados['triaje'] = cargar_y_procesar_triaje(archivo)
+                elif nombre == 'usuarios':
+                    resultados['usuarios'] = cargar_y_procesar_usuarios(archivo)
+                elif nombre == 'documentos':
+                    resultados['documentos'] = cargar_y_procesar_documentos(archivo)
+        
+        # Combinar todo
+        df_combinado = combinar_archivos(
+            df_rectauto, 
+            resultados.get('notifica'),
+            resultados.get('triaje'), 
+            resultados.get('usuarios'),
+            resultados.get('documentos')
+        )
+        
+        return df_combinado, resultados.get('usuarios'), resultados.get('documentos')
+        
+    except Exception as e:
+        st.error(f"Error en procesamiento combinado: {e}")
+        return df_rectauto, None, None
+
 def guardar_documentos_actualizados(archivo_original, df_documentos_actualizado):
     """Guarda los datos actualizados en el archivo DOCUMENTOS.xlsx"""
     try:
@@ -390,31 +430,450 @@ def combinar_archivos(rectauto_df, notifica_df=None, triaje_df=None, usuarios_df
 def convertir_fechas(df, _user_key=user_env.session_id):
     """Convierte columnas con 'FECHA' en el nombre a datetime"""
     for col in df.columns:
-        if 'FECHA' in col:
+        if 'FECHA' in col.upper():
             df[col] = pd.to_datetime(df[col], errors='coerce')
     return df
 
-@st.cache_data(ttl=CACHE_TTL)
-def dataframe_to_pdf_bytes(df_mostrar, title, df_original):
-    """Genera un PDF desde un DataFrame con formato condicional (compatible con fpdf2 y Windows)."""
+# === FUNCIONES DE CÁLCULO OPTIMIZADAS ===
+
+def calcular_despachados_optimizado(_df, inicio_semana, fin_semana, fecha_inicio_totales):
+    """Calcula despachados de forma optimizada usando operaciones vectorizadas"""
+    if not all(col in _df.columns for col in ['FECHA RESOLUCIÓN', 'ESTADO', 'FECHA CIERRE']):
+        return 0, 0
+
+    fecha_9999 = pd.to_datetime('9999-09-09', errors='coerce')
+
+    # Expedientes con FECHA RESOLUCIÓN real (distinta de 9999 y no nula) dentro del rango semanal
+    mask_despachados_semana_reales = (
+        _df['FECHA RESOLUCIÓN'].notna() & 
+        (_df['FECHA RESOLUCIÓN'] != fecha_9999) &
+        (_df['FECHA RESOLUCIÓN'] >= inicio_semana) &
+        (_df['FECHA RESOLUCIÓN'] <= fin_semana)
+    )
+
+    # Expedientes CERRADOS con FECHA RESOLUCIÓN = 9999-09-09 o vacía
+    mask_despachados_semana_cerrados = (
+        (_df['ESTADO'] == 'Cerrado') &
+        (_df['FECHA RESOLUCIÓN'].isna() | (_df['FECHA RESOLUCIÓN'] == fecha_9999)) &
+        _df['FECHA CIERRE'].notna() &
+        (_df['FECHA CIERRE'] >= inicio_semana) &
+        (_df['FECHA CIERRE'] <= fin_semana)
+    )
+
+    mask_despachados_semana = mask_despachados_semana_reales | mask_despachados_semana_cerrados
+    despachados_semana = _df[mask_despachados_semana].shape[0]
+
+    # Totales: igual pero usando fecha_inicio_totales
+    mask_despachados_totales_reales = (
+        _df['FECHA RESOLUCIÓN'].notna() & 
+        (_df['FECHA RESOLUCIÓN'] != fecha_9999) &
+        (_df['FECHA RESOLUCIÓN'] >= fecha_inicio_totales) &
+        (_df['FECHA RESOLUCIÓN'] <= fin_semana)
+    )
+
+    mask_despachados_totales_cerrados = (
+        (_df['ESTADO'] == 'Cerrado') &
+        (_df['FECHA RESOLUCIÓN'].isna() | (_df['FECHA RESOLUCIÓN'] == fecha_9999)) &
+        _df['FECHA CIERRE'].notna() &
+        (_df['FECHA CIERRE'] >= fecha_inicio_totales) &
+        (_df['FECHA CIERRE'] <= fin_semana)
+    )
+
+    mask_despachados_totales = mask_despachados_totales_reales | mask_despachados_totales_cerrados
+    despachados_totales = _df[mask_despachados_totales].shape[0]
+
+    return despachados_semana, despachados_totales
+
+# === FUNCIÓN AUXILIAR OPTIMIZADA PARA CÁLCULO DE TIEMPOS ===
+def calcular_tiempos_optimizado(_df, fecha_inicio_totales, fin_semana):
+    """Calcula los tiempos de tramitación de forma optimizada - VERSIÓN COMPLETAMENTE CORREGIDA"""
+    
+    # Inicializar resultados por defecto
+    resultados = {
+        'tiempo_medio_despachados': 0,
+        'percentil_90_despachados': 0,
+        'percentil_180_despachados': 0,
+        'percentil_120_despachados': 0,
+        'tiempo_medio_cerrados': 0,
+        'percentil_90_cerrados': 0,
+        'percentil_180_cerrados': 0,
+        'percentil_120_cerrados': 0,
+        'percentil_90_abiertos': 0,
+        'percentil_180_abiertos': 0,
+        'percentil_120_abiertos': 0
+    }
+    
     try:
-        # Crear el PDF usando tu clase personalizada (hereda de FPDF)
+        # Asegurarse de que las fechas son datetime
+        fecha_inicio_totales = pd.to_datetime(fecha_inicio_totales)
+        fin_semana = pd.to_datetime(fin_semana)
+        
+        # Crear copia para no modificar el original
+        df_temp = _df.copy()
+        
+        # DEBUG: Verificar columnas disponibles
+        print(f"Columnas disponibles: {list(df_temp.columns)}")
+        
+        # Convertir columnas de fecha necesarias
+        columnas_fecha = ['FECHA RESOLUCIÓN', 'FECHA INICIO TRAMITACIÓN', 'FECHA CIERRE', 'FECHA APERTURA']
+        for col in columnas_fecha:
+            if col in df_temp.columns:
+                df_temp[col] = pd.to_datetime(df_temp[col], errors='coerce')
+                print(f"Columna {col} convertida, valores no nulos: {df_temp[col].notna().sum()}")
+        
+        fecha_9999 = pd.to_datetime('9999-09-09', errors='coerce')
+        
+        # ===== TIEMPOS PARA EXPEDIENTES DESPACHADOS =====
+        if all(col in df_temp.columns for col in ['FECHA RESOLUCIÓN', 'FECHA INICIO TRAMITACIÓN', 'ESTADO', 'FECHA CIERRE']):
+            print("Calculando tiempos para expedientes despachados...")
+            
+            # Crear máscaras vectorizadas para ambos tipos de despachados
+            mask_despachados_reales = (
+                df_temp['FECHA RESOLUCIÓN'].notna() & 
+                (df_temp['FECHA RESOLUCIÓN'] != fecha_9999) &
+                (df_temp['FECHA RESOLUCIÓN'] >= fecha_inicio_totales) &
+                (df_temp['FECHA RESOLUCIÓN'] <= fin_semana)
+            )
+            
+            mask_despachados_cerrados = (
+                (df_temp['ESTADO'] == 'Cerrado') &
+                (df_temp['FECHA RESOLUCIÓN'].isna() | (df_temp['FECHA RESOLUCIÓN'] == fecha_9999)) &
+                df_temp['FECHA CIERRE'].notna() &
+                (df_temp['FECHA CIERRE'] >= fecha_inicio_totales) &
+                (df_temp['FECHA CIERRE'] <= fin_semana)
+            )
+            
+            # Combinar máscaras
+            mask_despachados_tiempo = mask_despachados_reales | mask_despachados_cerrados
+            
+            print(f"Expedientes despachados encontrados: {mask_despachados_tiempo.sum()}")
+            
+            if mask_despachados_tiempo.any():
+                despachados_tiempo = df_temp[mask_despachados_tiempo].copy()
+                
+                # Calcular fecha final
+                condiciones = [
+                    despachados_tiempo['FECHA RESOLUCIÓN'].notna() & 
+                    (despachados_tiempo['FECHA RESOLUCIÓN'] != fecha_9999)
+                ]
+                opciones = [despachados_tiempo['FECHA RESOLUCIÓN']]
+                
+                despachados_tiempo['FECHA_FINAL'] = np.select(
+                    condiciones, 
+                    opciones, 
+                    default=despachados_tiempo['FECHA CIERRE']
+                )
+                
+                # Calcular días de tramitación
+                despachados_tiempo['dias_tramitacion'] = (
+                    despachados_tiempo['FECHA_FINAL'] - despachados_tiempo['FECHA INICIO TRAMITACIÓN']
+                ).dt.days
+                
+                # Filtrar valores válidos (mayores o iguales a 0)
+                dias_validos = despachados_tiempo['dias_tramitacion'][despachados_tiempo['dias_tramitacion'] >= 0]
+                
+                print(f"Días válidos para despachados: {len(dias_validos)}")
+                
+                if not dias_validos.empty and len(dias_validos) > 0:
+                    resultados['tiempo_medio_despachados'] = round(dias_validos.mean(), 1)
+                    resultados['percentil_90_despachados'] = round(dias_validos.quantile(0.9), 1)
+                    resultados['percentil_180_despachados'] = round((dias_validos <= 180).mean() * 100, 1)
+                    resultados['percentil_120_despachados'] = round((dias_validos <= 120).mean() * 100, 1)
+        
+        # ===== TIEMPOS PARA EXPEDIENTES CERRADOS =====
+        if all(col in df_temp.columns for col in ['FECHA CIERRE', 'FECHA INICIO TRAMITACIÓN']):
+            print("Calculando tiempos para expedientes cerrados...")
+            
+            # Crear máscara vectorizada para expedientes cerrados
+            mask_cerrados_tiempo = (
+                df_temp['FECHA CIERRE'].notna() &
+                (df_temp['FECHA CIERRE'] >= fecha_inicio_totales) & 
+                (df_temp['FECHA CIERRE'] <= fin_semana)
+            )
+            
+            print(f"Expedientes cerrados encontrados: {mask_cerrados_tiempo.sum()}")
+            
+            if mask_cerrados_tiempo.any():
+                cerrados_tiempo = df_temp[mask_cerrados_tiempo].copy()
+                
+                # Calcular días de tramitación
+                cerrados_tiempo['dias_tramitacion'] = (
+                    cerrados_tiempo['FECHA CIERRE'] - cerrados_tiempo['FECHA INICIO TRAMITACIÓN']
+                ).dt.days
+                
+                # Filtrar valores válidos
+                dias_validos_cerrados = cerrados_tiempo['dias_tramitacion'][cerrados_tiempo['dias_tramitacion'] >= 0]
+                
+                print(f"Días válidos para cerrados: {len(dias_validos_cerrados)}")
+                
+                if not dias_validos_cerrados.empty and len(dias_validos_cerrados) > 0:
+                    resultados['tiempo_medio_cerrados'] = round(dias_validos_cerrados.mean(), 1)
+                    resultados['percentil_90_cerrados'] = round(dias_validos_cerrados.quantile(0.9), 1)
+                    resultados['percentil_180_cerrados'] = round((dias_validos_cerrados <= 180).mean() * 100, 1)
+                    resultados['percentil_120_cerrados'] = round((dias_validos_cerrados <= 120).mean() * 100, 1)
+        
+        # ===== TIEMPOS PARA EXPEDIENTES ABIERTOS =====
+        if all(col in df_temp.columns for col in ['FECHA INICIO TRAMITACIÓN', 'FECHA APERTURA', 'FECHA CIERRE']):
+            print("Calculando tiempos para expedientes abiertos...")
+            
+            # Crear máscara vectorizada para expedientes abiertos
+            mask_abiertos_tiempo = (
+                (df_temp['FECHA APERTURA'] <= fin_semana) & 
+                ((df_temp['FECHA CIERRE'] > fin_semana) | (df_temp['FECHA CIERRE'].isna()))
+            )
+            
+            print(f"Expedientes abiertos encontrados: {mask_abiertos_tiempo.sum()}")
+            
+            if mask_abiertos_tiempo.any():
+                abiertos_tiempo = df_temp[mask_abiertos_tiempo].copy()
+                
+                # Calcular días de tramitación (hasta fin_semana)
+                abiertos_tiempo['dias_tramitacion'] = (
+                    fin_semana - abiertos_tiempo['FECHA INICIO TRAMITACIÓN']
+                ).dt.days
+                
+                # Filtrar valores válidos
+                dias_validos_abiertos = abiertos_tiempo['dias_tramitacion'][abiertos_tiempo['dias_tramitacion'] >= 0]
+                
+                print(f"Días válidos para abiertos: {len(dias_validos_abiertos)}")
+                
+                if not dias_validos_abiertos.empty and len(dias_validos_abiertos) > 0:
+                    resultados['percentil_90_abiertos'] = round(dias_validos_abiertos.quantile(0.9), 1)
+                    resultados['percentil_180_abiertos'] = round((dias_validos_abiertos <= 180).mean() * 100, 1)
+                    resultados['percentil_120_abiertos'] = round((dias_validos_abiertos <= 120).mean() * 100, 1)
+        
+        print(f"Resultados finales: {resultados}")
+        
+    except Exception as e:
+        print(f"ERROR en calcular_tiempos_optimizado: {e}")
+        import traceback
+        print(f"Detalle del error: {traceback.format_exc()}")
+    
+    return resultados
+
+def calcular_kpis_para_semana(_df, semana_fin, es_semana_actual=False):
+    """Versión optimizada del cálculo de KPIs con tiempos optimizados"""
+    # Determinar rango de fechas
+    if es_semana_actual:
+        inicio_semana = semana_fin - timedelta(days=7)
+        fin_semana = semana_fin
+        dias_semana = 8
+    else:
+        inicio_semana = semana_fin - timedelta(days=7)
+        fin_semana = semana_fin - timedelta(days=1)
+        dias_semana = 7
+    
+    # 🔥 CORRECCIÓN: DEFINIR EXPLÍCITAMENTE fecha_inicio_totales
+    fecha_inicio_totales = datetime(2022, 11, 1)  # Fecha de referencia explícita
+    
+    # Asegurar que las fechas son datetime
+    inicio_semana = pd.to_datetime(inicio_semana)
+    fin_semana = pd.to_datetime(fin_semana)
+    
+    # PRE-CALCULAR máscaras reutilizables
+    if 'FECHA APERTURA' in _df.columns:
+        mask_semana = (_df['FECHA APERTURA'] >= inicio_semana) & (_df['FECHA APERTURA'] <= fin_semana)
+        mask_totales = (_df['FECHA APERTURA'] >= fecha_inicio_totales) & (_df['FECHA APERTURA'] <= fin_semana)
+        
+        nuevos_expedientes = _df.loc[mask_semana].shape[0]
+        nuevos_expedientes_totales = _df.loc[mask_totales].shape[0]
+    else:
+        nuevos_expedientes = 0
+        nuevos_expedientes_totales = 0
+
+    # EXPEDIENTES DESPACHADOS - lógica optimizada
+    despachados_semana, despachados_totales = calcular_despachados_optimizado(_df, inicio_semana, fin_semana, fecha_inicio_totales)
+
+    # COEFICIENTE DE ABSORCIÓN 1 (Despachados/Nuevos)
+    c_abs_despachados_sem = (despachados_semana / nuevos_expedientes * 100) if nuevos_expedientes > 0 else 0
+    c_abs_despachados_tot = (despachados_totales / nuevos_expedientes_totales * 100) if nuevos_expedientes_totales > 0 else 0
+
+    # EXPEDIENTES CERRADOS
+    if 'FECHA CIERRE' in _df.columns:
+        mask_cerrados_semana = (_df['FECHA CIERRE'] >= inicio_semana) & (_df['FECHA CIERRE'] <= fin_semana)
+        mask_cerrados_totales = (_df['FECHA CIERRE'] >= fecha_inicio_totales) & (_df['FECHA CIERRE'] <= fin_semana)
+        
+        expedientes_cerrados = _df.loc[mask_cerrados_semana].shape[0]
+        expedientes_cerrados_totales = _df.loc[mask_cerrados_totales].shape[0]
+    else:
+        expedientes_cerrados = 0
+        expedientes_cerrados_totales = 0
+
+    # EXPEDIENTES ABIERTOS
+    if 'FECHA CIERRE' in _df.columns and 'FECHA APERTURA' in _df.columns:
+        mask_abiertos = (_df['FECHA APERTURA'] <= fin_semana) & ((_df['FECHA CIERRE'] > fin_semana) | (_df['FECHA CIERRE'].isna()))
+        total_abiertos = _df.loc[mask_abiertos].shape[0]
+    else:
+        total_abiertos = 0
+
+    # COEFICIENTE DE ABSORCIÓN 2 (Cerrados/Asignados)
+    c_abs_cerrados_sem = (expedientes_cerrados / nuevos_expedientes * 100) if nuevos_expedientes > 0 else 0
+    c_abs_cerrados_tot = (expedientes_cerrados_totales / nuevos_expedientes_totales * 100) if nuevos_expedientes_totales > 0 else 0
+
+    # EXPEDIENTES CON 029, 033, PRE o RSL
+    if 'ETIQ. PENÚLTIMO TRAM.' in _df.columns:
+        mask_especiales = (
+            _df['ETIQ. PENÚLTIMO TRAM.'].notna() & 
+            (~_df['ETIQ. PENÚLTIMO TRAM.'].isin(['1 APERTURA', '10 DATEXPTE'])) &
+            (_df['FECHA APERTURA'] <= fin_semana) & 
+            ((_df['FECHA CIERRE'] > fin_semana) | (_df['FECHA CIERRE'].isna()))
+        )
+        expedientes_especiales = _df.loc[mask_especiales].shape[0]
+        porcentaje_especiales = (expedientes_especiales / total_abiertos * 100) if total_abiertos > 0 else 0
+    else:
+        expedientes_especiales = 0
+        porcentaje_especiales = 0
+
+    # ===== CÁLCULOS DE TIEMPOS OPTIMIZADOS =====
+    tiempos = calcular_tiempos_optimizado(_df, fecha_inicio_totales, fin_semana)
+    
+    return {
+        'nuevos_expedientes': nuevos_expedientes,
+        'nuevos_expedientes_totales': nuevos_expedientes_totales,
+        'despachados_semana': despachados_semana,
+        'despachados_totales': despachados_totales,
+        'c_abs_despachados_sem': c_abs_despachados_sem,
+        'c_abs_despachados_tot': c_abs_despachados_tot,
+        'expedientes_cerrados': expedientes_cerrados,
+        'expedientes_cerrados_totales': expedientes_cerrados_totales,
+        'total_abiertos': total_abiertos,
+        'c_abs_cerrados_sem': c_abs_cerrados_sem,
+        'c_abs_cerrados_tot': c_abs_cerrados_tot,
+        'expedientes_especiales': expedientes_especiales,
+        'porcentaje_especiales': porcentaje_especiales,
+        'tiempo_medio_despachados': tiempos['tiempo_medio_despachados'],
+        'percentil_90_despachados': tiempos['percentil_90_despachados'],
+        'percentil_180_despachados': tiempos['percentil_180_despachados'],
+        'percentil_120_despachados': tiempos['percentil_120_despachados'],
+        'tiempo_medio_cerrados': tiempos['tiempo_medio_cerrados'],
+        'percentil_90_cerrados': tiempos['percentil_90_cerrados'],
+        'percentil_180_cerrados': tiempos['percentil_180_cerrados'],
+        'percentil_120_cerrados': tiempos['percentil_120_cerrados'],
+        'percentil_90_abiertos': tiempos['percentil_90_abiertos'],
+        'percentil_180_abiertos': tiempos['percentil_180_abiertos'],
+        'percentil_120_abiertos': tiempos['percentil_120_abiertos'],
+        'inicio_semana': inicio_semana,
+        'fin_semana': fin_semana,
+        'dias_semana': dias_semana,
+        'es_semana_actual': es_semana_actual
+    }
+
+def identificar_filas_prioritarias(df):
+    """Versión optimizada usando operaciones vectorizadas - MEJORADA"""
+    try:
+        # Crear copia para no modificar el original
+        df_priorizado = df.copy(deep=True)
+        
+        # Inicializar todas las prioridades como 0
+        df_priorizado['_prioridad'] = 0
+        
+        # Verificar que las columnas necesarias existen
+        columnas_necesarias = ['ETIQ. PENÚLTIMO TRAM.', 'FECHA NOTIFICACIÓN', 'DOCUM.INCORP.']
+        if not all(col in df_priorizado.columns for col in columnas_necesarias):
+            return df_priorizado
+        
+        # Crear máscaras vectorizadas para cada condición
+        etiq_penultimo = df_priorizado['ETIQ. PENÚLTIMO TRAM.'].astype(str).str.strip()
+        fecha_notif = pd.to_datetime(df_priorizado['FECHA NOTIFICACIÓN'], errors='coerce')
+        docum_incorp = df_priorizado['DOCUM.INCORP.'].astype(str).str.strip()
+        
+        # Inicializar máscara de prioritarios
+        mask_prioritarios = pd.Series(False, index=df_priorizado.index)
+        
+        # CONDICIÓN 1: "80 PROPRES" con fecha límite superada
+        mask_80_propres = (etiq_penultimo == "80 PROPRES")
+        if mask_80_propres.any():
+            fechas_limite_80 = fecha_notif[mask_80_propres] + timedelta(days=23)
+            mask_80_vencido = mask_80_propres & (datetime.now() > fechas_limite_80)
+            mask_prioritarios = mask_prioritarios | mask_80_vencido
+        
+        # CONDICIÓN 2: "50 REQUERIR" con fecha límite superada  
+        mask_50_requerir = (etiq_penultimo == "50 REQUERIR")
+        if mask_50_requerir.any():
+            fechas_limite_50 = fecha_notif[mask_50_requerir] + timedelta(days=23)
+            mask_50_vencido = mask_50_requerir & (datetime.now() > fechas_limite_50)
+            mask_prioritarios = mask_prioritarios | mask_50_vencido
+        
+        # CONDICIÓN 3: "70 ALEGACI" o "60 CONTESTA"
+        mask_alegaci_contesta = etiq_penultimo.isin(["70 ALEGACI", "60 CONTESTA"])
+        mask_prioritarios = mask_prioritarios | mask_alegaci_contesta
+        
+        # CONDICIÓN 4: DOCUM.INCORP. válido
+        mask_docum_valido = (
+            docum_incorp.notna() & 
+            (docum_incorp != '') &
+            (docum_incorp != 'nan') &
+            (~docum_incorp.str.upper().isin(["SOLICITUD", "REITERA SOLICITUD"]))
+        )
+        mask_prioritarios = mask_prioritarios | mask_docum_valido
+        
+        # Asignar prioridad 1 a los que cumplen alguna condición
+        df_priorizado.loc[mask_prioritarios, '_prioridad'] = 1
+        
+        return df_priorizado
+    
+    except Exception as e:
+        st.error(f"❌ Error al identificar filas prioritarias: {e}")
+        # En caso de error, devolver DataFrame con prioridad 0
+        df['_prioridad'] = 0
+        return df
+
+def actualizar_filtros_optimizados(df, estado_sel, equipo_sel, usuario_sel):
+    """Versión optimizada del filtrado interconectado"""
+    # Pre-calcular opciones disponibles
+    opciones_base = {
+        'estados': sorted(df['ESTADO'].dropna().unique()),
+        'equipos': sorted(df['EQUIPO'].dropna().unique()),
+        'usuarios': sorted(df['USUARIO'].dropna().unique())
+    }
+    
+    # Aplicar filtros secuencialmente de forma vectorizada
+    mask_actual = pd.Series(True, index=df.index)
+    
+    if estado_sel:
+        mask_actual &= df['ESTADO'].isin(estado_sel)
+    
+    # Calcular equipos disponibles basado en estado
+    equipos_disponibles = df.loc[mask_actual, 'EQUIPO'].dropna().unique()
+    equipos_disponibles = sorted(equipos_disponibles)
+    
+    if equipo_sel:
+        equipos_seleccionados = [eq for eq in equipo_sel if eq in equipos_disponibles]
+        mask_actual &= df['EQUIPO'].isin(equipos_seleccionados) if equipos_seleccionados else mask_actual
+    
+    # Calcular usuarios disponibles basado en estado y equipo
+    usuarios_disponibles = df.loc[mask_actual, 'USUARIO'].dropna().unique()
+    usuarios_disponibles = sorted(usuarios_disponibles)
+    
+    if usuario_sel:
+        usuarios_seleccionados = [us for us in usuario_sel if us in usuarios_disponibles]
+        mask_actual &= df['USUARIO'].isin(usuarios_seleccionados) if usuarios_seleccionados else mask_actual
+    
+    return df[mask_actual].copy(), equipos_disponibles, usuarios_disponibles
+
+@st.cache_data(ttl=3600)
+def dataframe_to_pdf_bytes(df_mostrar, title, df_original):
+    """Versión optimizada de generación de PDFs"""
+    try:
         pdf = PDF('L', 'mm', 'A4')
         pdf.add_page()
+        
         pdf.set_font("Arial", "B", 8)
         pdf.cell(0, 5, title, 0, 1, 'C')
         pdf.ln(5)
 
-        # --- Definición de columnas REDUCIDAS ---
-        # Anchos reducidos para ETIQ. PENÚLTIMO TRAM. y ETIQ. ÚLTIMO TRAM.
-        # Eliminada FECHA DE ACTUALIZACIÓN DATOS
-        col_widths = [28, 11, 11, 8, 16, 11, 11, 16, 11, 20, 20, 9, 18, 11, 14, 9, 24, 20, 11]  # 19 columnas en lugar de 20
+        # PRE-CALCULAR estructura de columnas
+        columnas_a_excluir = {
+            idx for idx, col_name in enumerate(df_mostrar.columns) 
+            if "FECHA DE ACTUALIZACIÓN DATOS" in col_name.upper()
+        }
         
-        # Ajustar si hay menos columnas
-        if len(df_mostrar.columns) < len(col_widths):
-            col_widths = col_widths[:len(df_mostrar.columns)]
-        elif len(df_mostrar.columns) > len(col_widths):
-            col_widths.extend([18] * (len(df_mostrar.columns) - len(col_widths)))
+        # Filtrar columnas una sola vez
+        columnas_visibles = [
+            (idx, col_name, col_width) 
+            for idx, (col_name, col_width) in enumerate(zip(df_mostrar.columns, COL_WIDTHS_OPTIMIZED))
+            if idx not in columnas_a_excluir
+        ]
 
         ALTURA_ENCABEZADO = 13
         ALTURA_LINEA = 3
@@ -433,22 +892,22 @@ def dataframe_to_pdf_bytes(df_mostrar, title, df_original):
                     
                 x = pdf.get_x()
                 y = pdf.get_y()
-                pdf.cell(col_widths[i], ALTURA_ENCABEZADO, "", 1, 0, 'C', True)
+                pdf.cell(COL_WIDTHS_OPTIMIZED[i], ALTURA_ENCABEZADO, "", 1, 0, 'C', True)
                 pdf.set_xy(x, y)
 
                 texto = str(header)
                 ancho_texto = pdf.get_string_width(texto)
 
-                if ancho_texto <= col_widths[i] - 2:
+                if ancho_texto <= COL_WIDTHS_OPTIMIZED[i] - 2:
                     altura_texto = 3
                     y_pos = y + (ALTURA_ENCABEZADO - altura_texto) / 2
                     pdf.set_xy(x, y_pos)
-                    pdf.cell(col_widths[i], altura_texto, texto, 0, 0, 'C')
+                    pdf.cell(COL_WIDTHS_OPTIMIZED[i], altura_texto, texto, 0, 0, 'C')
                 else:
                     pdf.set_xy(x, y + 1)
-                    pdf.multi_cell(col_widths[i], 2.5, texto, 0, 'C')
+                    pdf.multi_cell(COL_WIDTHS_OPTIMIZED[i], 2.5, texto, 0, 'C')
 
-                pdf.set_xy(x + col_widths[i], y)
+                pdf.set_xy(x + COL_WIDTHS_OPTIMIZED[i], y)
 
             pdf.set_xy(pdf.l_margin, y_inicio + ALTURA_ENCABEZADO)
 
@@ -470,7 +929,7 @@ def dataframe_to_pdf_bytes(df_mostrar, title, df_original):
                     
                 if not texto.strip():
                     continue
-                ancho_disponible = min(col_widths) - 2
+                ancho_disponible = min(COL_WIDTHS_OPTIMIZED) - 2
                 ancho_texto = pdf.get_string_width(texto)
                 if ancho_texto > ancho_disponible:
                     lineas_necesarias = max(1, int(ancho_texto / ancho_disponible) + 1)
@@ -491,8 +950,8 @@ def dataframe_to_pdf_bytes(df_mostrar, title, df_original):
             for i, col_name in enumerate(df_mostrar.columns):
                 if "FECHA DE ACTUALIZACIÓN DATOS" in col_name.upper():
                     continue
-                ancho_total += col_widths[i]
-                pdf.rect(x_inicio + sum(col_widths[:i]), y_inicio, col_widths[i], altura_fila)
+                ancho_total += COL_WIDTHS_OPTIMIZED[i]
+                pdf.rect(x_inicio + sum(COL_WIDTHS_OPTIMIZED[:i]), y_inicio, COL_WIDTHS_OPTIMIZED[i], altura_fila)
 
             # Contenido con formato condicional (excluyendo FECHA DE ACTUALIZACIÓN DATOS)
             col_idx_visible = 0
@@ -506,15 +965,15 @@ def dataframe_to_pdf_bytes(df_mostrar, title, df_original):
                 if texto.lower() == "nan" or texto.strip() == "":
                     texto = ""
                     
-                x_celda = x_inicio + sum(col_widths[:col_idx_visible])
+                x_celda = x_inicio + sum(COL_WIDTHS_OPTIMIZED[:col_idx_visible])
                 y_celda = y_inicio
 
                 pdf.aplicar_formato_condicional_pdf(
-                    df_original, idx, col_name, col_widths[col_idx_visible], altura_fila, x_celda, y_celda
+                    df_original, idx, col_name, COL_WIDTHS_OPTIMIZED[col_idx_visible], altura_fila, x_celda, y_celda
                 )
 
                 pdf.set_xy(x_celda, y_celda)
-                pdf.multi_cell(col_widths[col_idx_visible], ALTURA_LINEA, texto, 0, 'L')
+                pdf.multi_cell(COL_WIDTHS_OPTIMIZED[col_idx_visible], ALTURA_LINEA, texto, 0, 'L')
                 
                 col_idx_visible += 1
 
@@ -537,17 +996,142 @@ def dataframe_to_pdf_bytes(df_mostrar, title, df_original):
         st.error(f"Error generando PDF: {e}")
         return None
 
-# NUEVA FUNCIÓN: Generar PDF por EQUIPO solo con expedientes prioritarios
+# === FUNCIONES ORIGINALES (MANTENIDAS POR COMPATIBILIDAD) ===
+
+def ordenar_dataframe_por_prioridad_y_antiguedad(df):
+    """Ordena el DataFrame: RUE amarillos primero, luego por antigüedad descendente - CORREGIDA DEFINITIVAMENTE"""
+    try:
+        # Crear una COPIA PROFUNDA para no modificar el original
+        df_priorizado = df.copy(deep=True)
+        
+        # Identificar filas prioritarias en la copia
+        df_priorizado = identificar_filas_prioritarias(df_priorizado)
+        
+        # Buscar la columna de antigüedad
+        columnas_antiguedad = [col for col in df_priorizado.columns if 'ANTIGÜEDAD' in col.upper() or 'DÍAS' in col.upper()]
+        
+        if columnas_antiguedad:
+            columna_antiguedad = columnas_antiguedad[0]
+            # 🔥 CORRECCIÓN CRÍTICA: NO MODIFICAR LA COLUMNA DE ANTIGÜEDAD
+            # Solo asegurarnos de que es numérica para ordenar, pero sin cambiar los valores
+            if not pd.api.types.is_numeric_dtype(df_priorizado[columna_antiguedad]):
+                # Si no es numérica, convertir temporalmente solo para ordenar
+                df_priorizado['_antiguedad_temp'] = pd.to_numeric(
+                    df_priorizado[columna_antiguedad], 
+                    errors='coerce'
+                ).fillna(0)
+                columna_para_ordenar = '_antiguedad_temp'
+            else:
+                columna_para_ordenar = columna_antiguedad
+        else:
+            st.warning("⚠️ No se encontró columna de antigüedad, usando orden por prioridad solamente")
+            columna_para_ordenar = None
+        
+        # Ordenar por prioridad (True primero) y luego por antigüedad descendente si existe
+        if columna_para_ordenar:
+            df_ordenado = df_priorizado.sort_values(
+                ['_prioridad', columna_para_ordenar], 
+                ascending=[False, False]
+            )
+            # Eliminar columna temporal si se creó
+            if '_antiguedad_temp' in df_ordenado.columns:
+                df_ordenado = df_ordenado.drop('_antiguedad_temp', axis=1)
+        else:
+            df_ordenado = df_priorizado.sort_values('_prioridad', ascending=False)
+        
+        # Eliminar columna temporal de prioridad
+        if '_prioridad' in df_ordenado.columns:
+            df_ordenado = df_ordenado.drop('_prioridad', axis=1)
+        
+        return df_ordenado
+    
+    except Exception as e:
+        st.error(f"❌ Error al ordenar DataFrame: {e}")
+        return df
+
+def generar_pdf_usuario(usuario, df_pendientes, num_semana, fecha_max_str):
+    """Genera el PDF para un usuario específico con nombre único - CORREGIDA PARA DECIMALES"""
+    # Crear copia para no modificar el original
+    df_user = df_pendientes[df_pendientes["USUARIO"] == usuario].copy(deep=True)
+    
+    if df_user.empty:
+        return None
+    
+    # ORDENAR el DataFrame: RUE amarillos primero Y luego por antigüedad
+    df_user_ordenado = ordenar_dataframe_por_prioridad_y_antiguedad(df_user)
+    
+    # Procesar datos para PDF - mantener las columnas originales para el formato condicional
+    indices_a_incluir = list(range(df_user_ordenado.shape[1]))
+    indices_a_excluir = {1, 4, 5, 6, 13}
+    
+    # EXCLUIR también la columna "FECHA DE ACTUALIZACIÓN DATOS" si existe
+    for idx, col_name in enumerate(df_user_ordenado.columns):
+        if "FECHA DE ACTUALIZACIÓN DATOS" in col_name.upper():
+            indices_a_excluir.add(idx)
+    
+    indices_finales = [i for i in indices_a_incluir if i not in indices_a_excluir]
+    NOMBRES_COLUMNAS_PDF = df_user_ordenado.columns[indices_finales].tolist()
+
+    # 🔥 CORRECCIÓN: Identificar columna de antigüedad
+    columnas_antiguedad = [col for col in NOMBRES_COLUMNAS_PDF if 'ANTIGÜEDAD' in col.upper() or 'DÍAS' in col.upper()]
+    
+    # Crear DataFrame para mostrar (SOLO para visualización)
+    df_pdf_mostrar = df_user_ordenado[NOMBRES_COLUMNAS_PDF].copy()
+    
+    # Formatear para visualización - CORREGIDO PARA DECIMALES
+    for col in df_pdf_mostrar.columns:
+        if df_pdf_mostrar[col].dtype == 'object':
+            df_pdf_mostrar[col] = df_pdf_mostrar[col].apply(
+                lambda x: "" if pd.isna(x) or str(x).lower() in ["nan", "nat", "none"] else str(x)
+            )
+        elif 'fecha' in col.lower():
+            df_pdf_mostrar[col] = df_pdf_mostrar[col].apply(
+                lambda x: x.strftime("%d/%m/%Y") if pd.notna(x) else ""
+            )
+        # 🔥 CORRECCIÓN DEFINITIVA: REDONDEAR EN LUGAR DE TRUNCAR
+        elif df_pdf_mostrar[col].dtype in ['float64', 'float32']:
+            # Para columnas flotantes (como antigüedad con decimales), REDONDEAR
+            if col in columnas_antiguedad:
+                df_pdf_mostrar[col] = df_pdf_mostrar[col].apply(
+                    lambda x: str(round(x)) if pd.notna(x) else "0"
+                )
+            else:
+                df_pdf_mostrar[col] = df_pdf_mostrar[col].apply(
+                    lambda x: str(round(x)) if pd.notna(x) else "0"
+                )
+        elif df_pdf_mostrar[col].dtype in ['int64', 'int32']:
+            # Para columnas enteras, mostrar normalmente
+            df_pdf_mostrar[col] = df_pdf_mostrar[col].apply(
+                lambda x: str(int(x)) if pd.notna(x) else "0"
+            )
+
+    num_expedientes = len(df_pdf_mostrar)
+    
+    titulo_pdf = f"{usuario} - Semana {num_semana} a {fecha_max_str} - Expedientes Pendientes ({num_expedientes})"
+    
+    return dataframe_to_pdf_bytes(df_pdf_mostrar, titulo_pdf, df_original=df_user_ordenado)
+
+# === FUNCIONES AUXILIARES ===
+
+def obtener_hash_archivo(archivo):
+    """Genera un hash único del archivo para detectar cambios"""
+    if archivo is None:
+        return None
+    archivo.seek(0)
+    file_hash = hashlib.md5(archivo.read()).hexdigest()
+    archivo.seek(0)
+    return file_hash
+
 @st.cache_data(ttl=CACHE_TTL)
 def generar_pdf_equipo_prioritarios(equipo, df_pendientes, num_semana, fecha_max_str):
-    """Genera el PDF para un equipo específico solo con expedientes prioritarios"""
-    # Filtrar por equipo
-    df_equipo = df_pendientes[df_pendientes["EQUIPO"] == equipo].copy()
+    """Genera el PDF para un equipo específico solo con expedientes prioritarios - CORREGIDA PARA DECIMALES"""
+    # Crear copia para no modificar el original
+    df_equipo = df_pendientes[df_pendientes["EQUIPO"] == equipo].copy(deep=True)
     
     if df_equipo.empty:
         return None
     
-    # Filtrar solo expedientes prioritarios (RUE amarillos)
+    # CORRECCIÓN: Usar la función de identificación de prioritarios
     df_prioritarios = identificar_filas_prioritarias(df_equipo)
     df_prioritarios = df_prioritarios[df_prioritarios['_prioridad'] == 1].copy()
     
@@ -557,13 +1141,8 @@ def generar_pdf_equipo_prioritarios(equipo, df_pendientes, num_semana, fecha_max
     # Eliminar columna temporal de prioridad
     df_prioritarios = df_prioritarios.drop('_prioridad', axis=1)
     
-    # 🔥 CORRECCIÓN: ORDENAR POR ANTIGÜEDAD DESCENDENTE
-    # Buscar columna de antigüedad
-    columnas_antiguedad = [col for col in df_prioritarios.columns if 'ANTIGÜEDAD' in col.upper() or 'DÍAS' in col.upper()]
-    if columnas_antiguedad:
-        columna_antiguedad = columnas_antiguedad[0]
-        df_prioritarios[columna_antiguedad] = pd.to_numeric(df_prioritarios[columna_antiguedad], errors='coerce').fillna(0).astype(int)
-        df_prioritarios = df_prioritarios.sort_values(columna_antiguedad, ascending=False)
+    # 🔥 CORRECCIÓN: ORDENAR POR PRIORIDAD Y ANTIGÜEDAD
+    df_prioritarios = ordenar_dataframe_por_prioridad_y_antiguedad(df_prioritarios)
     
     # Procesar datos para PDF
     indices_a_incluir = list(range(df_prioritarios.shape[1]))
@@ -577,29 +1156,41 @@ def generar_pdf_equipo_prioritarios(equipo, df_pendientes, num_semana, fecha_max
     indices_finales = [i for i in indices_a_incluir if i not in indices_a_excluir]
     NOMBRES_COLUMNAS_PDF = df_prioritarios.columns[indices_finales].tolist()
 
-    # Crear DataFrame para mostrar (con fechas formateadas y "nan" reemplazados)
+    # 🔥 CORRECCIÓN: Identificar columna de antigüedad
+    columnas_antiguedad = [col for col in NOMBRES_COLUMNAS_PDF if 'ANTIGÜEDAD' in col.upper() or 'DÍAS' in col.upper()]
+    
+    # Crear DataFrame para mostrar (SOLO para visualización)
     df_pdf_mostrar = df_prioritarios[NOMBRES_COLUMNAS_PDF].copy()
     
-    # Formatear fechas y reemplazar "nan" - Y ASEGURAR ANTIGÜEDAD COMO ENTERO
+    # Formatear para visualización - CORREGIDO PARA DECIMALES
     for col in df_pdf_mostrar.columns:
         if df_pdf_mostrar[col].dtype == 'object':
             df_pdf_mostrar[col] = df_pdf_mostrar[col].apply(
-                lambda x: "" if pd.isna(x) or str(x).lower() == "nan" else x
+                lambda x: "" if pd.isna(x) or str(x).lower() in ["nan", "nat", "none"] else str(x)
             )
         elif 'fecha' in col.lower():
             df_pdf_mostrar[col] = df_pdf_mostrar[col].apply(
                 lambda x: x.strftime("%d/%m/%Y") if pd.notna(x) else ""
             )
-        # 🔥 CORRECCIÓN: FORZAR COLUMNAS NUMÉRICAS A ENTEROS SIN DECIMALES
-        elif df_pdf_mostrar[col].dtype in ['float64', 'float32', 'int64', 'int32']:
+        # 🔥 CORRECCIÓN DEFINITIVA: REDONDEAR EN LUGAR DE TRUNCAR
+        elif df_pdf_mostrar[col].dtype in ['float64', 'float32']:
+            # Para columnas flotantes (como antigüedad con decimales), REDONDEAR
+            if col in columnas_antiguedad:
+                df_pdf_mostrar[col] = df_pdf_mostrar[col].apply(
+                    lambda x: str(round(x)) if pd.notna(x) else "0"
+                )
+            else:
+                df_pdf_mostrar[col] = df_pdf_mostrar[col].apply(
+                    lambda x: str(round(x)) if pd.notna(x) else "0"
+                )
+        elif df_pdf_mostrar[col].dtype in ['int64', 'int32']:
+            # Para columnas enteras, mostrar normalmente
             df_pdf_mostrar[col] = df_pdf_mostrar[col].apply(
-                lambda x: f"{int(x):,}".replace(",", ".") if pd.notna(x) else "0"
+                lambda x: str(int(x)) if pd.notna(x) else "0"
             )
 
     num_expedientes = len(df_pdf_mostrar)
     
-    # Nombre único con timestamp
-    timestamp = datetime.now().strftime("%H%M%S")
     titulo_pdf = f"{equipo} - Semana {num_semana} a {fecha_max_str} - Expedientes Prioritarios ({num_expedientes})"
     
     return dataframe_to_pdf_bytes(df_pdf_mostrar, titulo_pdf, df_original=df_prioritarios)
@@ -898,289 +1489,6 @@ def generar_pdf_resumen_kpi(df_kpis_semanales, num_semana, fecha_max_str, df_com
         st.error(f"Detalle del error: {traceback.format_exc()}")
         return None
 
-# NUEVA FUNCIÓN: Calcular KPIs para una semana específica
-@st.cache_data(ttl=CACHE_TTL)
-def calcular_kpis_para_semana(_df, semana_fin, es_semana_actual=False):
-    """Calcula los KPIs para una semana específica"""
-    # Si es la semana actual (última), incluir el día completo de fecha_max (viernes a viernes - 8 días)
-    if es_semana_actual:
-        inicio_semana = semana_fin - timedelta(days=7)  # Viernes anterior
-        fin_semana = semana_fin  # Viernes actual (fecha_max)
-        dias_semana = 8
-    else:
-        # Para semanas históricas: viernes a jueves (7 días)
-        inicio_semana = semana_fin - timedelta(days=7)  # Viernes anterior
-        fin_semana = semana_fin - timedelta(days=1)     # Jueves
-        dias_semana = 7
-    
-    # Fecha de inicio para totales (01/11/2022)
-    fecha_inicio_totales = pd.to_datetime("2022-11-01")
-    
-    # ===== NUEVOS EXPEDIENTES =====
-    if 'FECHA APERTURA' in _df.columns:
-        nuevos_expedientes = _df[
-            (_df['FECHA APERTURA'] >= inicio_semana) & 
-            (_df['FECHA APERTURA'] <= fin_semana)
-        ].shape[0]
-        
-        nuevos_expedientes_totales = _df[
-            (_df['FECHA APERTURA'] >= fecha_inicio_totales) & 
-            (_df['FECHA APERTURA'] <= fin_semana)
-        ].shape[0]
-    else:
-        nuevos_expedientes = 0
-        nuevos_expedientes_totales = 0
-
-    # ===== EXPEDIENTES DESPACHADOS =====
-    # FECHA RESOLUCIÓN distinta de 09/09/9999 más CERRADOS con FECHA RESOLUCIÓN 09/09/9999
-    if all(col in _df.columns for col in ['FECHA RESOLUCIÓN', 'ESTADO', 'FECHA CIERRE']):
-        # Convertir columnas de fecha a datetime
-        _df['FECHA RESOLUCIÓN'] = pd.to_datetime(_df['FECHA RESOLUCIÓN'], errors='coerce')
-        _df['FECHA CIERRE'] = pd.to_datetime(_df['FECHA CIERRE'], errors='coerce')
-
-        fecha_9999 = pd.to_datetime('9999-09-09', errors='coerce')
-
-        # 1️⃣ Expedientes con FECHA RESOLUCIÓN real (distinta de 9999 y no nula) dentro del rango semanal
-        despachados_cond1 = _df[
-            (_df['FECHA RESOLUCIÓN'].notna()) &
-            (_df['FECHA RESOLUCIÓN'] != fecha_9999) &
-            (_df['FECHA RESOLUCIÓN'] >= inicio_semana) &
-            (_df['FECHA RESOLUCIÓN'] <= fin_semana)
-        ]
-
-        # 2️⃣ Expedientes CERRADOS con FECHA RESOLUCIÓN = 9999-09-09 o vacía
-        #     y cuya FECHA CIERRE esté dentro del rango semanal
-        despachados_cond2 = _df[
-            (_df['ESTADO'] == 'Cerrado') &
-            (
-                (_df['FECHA RESOLUCIÓN'].isna()) |
-                (_df['FECHA RESOLUCIÓN'] == fecha_9999)
-            ) &
-            (_df['FECHA CIERRE'].notna()) &
-            (_df['FECHA CIERRE'] >= inicio_semana) &
-            (_df['FECHA CIERRE'] <= fin_semana)
-        ]
-
-        # 🔹 Despachados semana = reales + cerrados con 9999/vacía pero cierre en rango
-        despachados_semana = pd.concat([despachados_cond1, despachados_cond2]).drop_duplicates().shape[0]
-
-        # 3️⃣ Totales: igual pero usando fecha_inicio_totales
-        despachados_cond1_totales = _df[
-            (_df['FECHA RESOLUCIÓN'].notna()) &
-            (_df['FECHA RESOLUCIÓN'] != fecha_9999) &
-            (_df['FECHA RESOLUCIÓN'] >= fecha_inicio_totales) &
-            (_df['FECHA RESOLUCIÓN'] <= fin_semana)
-        ]
-
-        despachados_cond2_totales = _df[
-            (_df['ESTADO'] == 'Cerrado') &
-            (
-                (_df['FECHA RESOLUCIÓN'].isna()) |
-                (_df['FECHA RESOLUCIÓN'] == fecha_9999)
-            ) &
-            (_df['FECHA CIERRE'].notna()) &
-            (_df['FECHA CIERRE'] >= fecha_inicio_totales) &
-            (_df['FECHA CIERRE'] <= fin_semana)
-        ]
-
-        # 🔹 Despachados totales = reales + cerrados especiales (con cierre válido)
-        despachados_totales = pd.concat([despachados_cond1_totales, despachados_cond2_totales]).drop_duplicates().shape[0]
-
-    else:
-        despachados_semana = 0
-        despachados_totales = 0
-
-    # ===== COEFICIENTE DE ABSORCIÓN 1 (Despachados/Nuevos) =====
-    c_abs_despachados_sem = (despachados_semana / nuevos_expedientes * 100) if nuevos_expedientes > 0 else 0
-    c_abs_despachados_tot = (despachados_totales / nuevos_expedientes_totales * 100) if nuevos_expedientes_totales > 0 else 0
-
-    # ===== EXPEDIENTES CERRADOS =====
-    if 'FECHA CIERRE' in _df.columns:
-        expedientes_cerrados = _df[
-            (_df['FECHA CIERRE'] >= inicio_semana) & 
-            (_df['FECHA CIERRE'] <= fin_semana)
-        ].shape[0]
-        
-        expedientes_cerrados_totales = _df[
-            (_df['FECHA CIERRE'] >= fecha_inicio_totales) & 
-            (_df['FECHA CIERRE'] <= fin_semana)
-        ].shape[0]
-    else:
-        expedientes_cerrados = 0
-        expedientes_cerrados_totales = 0
-
-    # ===== EXPEDIENTES ABIERTOS =====
-    if 'FECHA CIERRE' in _df.columns and 'FECHA APERTURA' in _df.columns:
-        total_abiertos = _df[
-            (_df['FECHA APERTURA'] <= fin_semana) & 
-            ((_df['FECHA CIERRE'] > fin_semana) | (_df['FECHA CIERRE'].isna()))
-        ].shape[0]
-    else:
-        total_abiertos = 0
-
-    # ===== COEFICIENTE DE ABSORCIÓN 2 (Cerrados/Asignados) =====
-    # Asumimos que "Asignados" son los Nuevos Expedientes
-    c_abs_cerrados_sem = (expedientes_cerrados / nuevos_expedientes * 100) if nuevos_expedientes > 0 else 0
-    c_abs_cerrados_tot = (expedientes_cerrados_totales / nuevos_expedientes_totales * 100) if nuevos_expedientes_totales > 0 else 0
-
-    # ===== EXPEDIENTES CON 029, 033, PRE o RSL =====
-    if 'ETIQ. PENÚLTIMO TRAM.' in _df.columns:
-        expedientes_especiales = _df[
-            (_df['ETIQ. PENÚLTIMO TRAM.'].notna()) & 
-            # INDICAMOS LOS QUE NO TIENEN EL PENÚLTIMO TRÁMITE 1 APERTURA Y 10 DATEXPTE, QUE NO SON COMPETENCIA DE LOS EQUIPOS RECTAUTO
-            (~_df['ETIQ. PENÚLTIMO TRAM.'].isin(['1 APERTURA', '10 DATEXPTE'])) &
-            (_df['FECHA APERTURA'] <= fin_semana) & 
-            ((_df['FECHA CIERRE'] > fin_semana) | (_df['FECHA CIERRE'].isna()))
-        ].shape[0]
-        
-        porcentaje_especiales = (expedientes_especiales / total_abiertos * 100) if total_abiertos > 0 else 0
-    else:
-        expedientes_especiales = 0
-        porcentaje_especiales = 0
-
-    # ===== CÁLCULOS DE TIEMPOS =====
-    # Tiempos para expedientes Despachados
-    if all(col in _df.columns for col in ['FECHA RESOLUCIÓN', 'FECHA INICIO TRAMITACIÓN', 'ESTADO', 'FECHA CIERRE']):
-        # Convertir fechas
-        _df['FECHA RESOLUCIÓN'] = pd.to_datetime(_df['FECHA RESOLUCIÓN'], errors='coerce')
-        _df['FECHA INICIO TRAMITACIÓN'] = pd.to_datetime(_df['FECHA INICIO TRAMITACIÓN'], errors='coerce')
-        _df['FECHA CIERRE'] = pd.to_datetime(_df['FECHA CIERRE'], errors='coerce')
-
-        fecha_9999 = pd.to_datetime('9999-09-09', errors='coerce')
-
-        # 1️⃣ Expedientes con resolución real (fecha válida)
-        despachados_real = _df[
-            (_df['FECHA RESOLUCIÓN'].notna()) &
-            (_df['FECHA RESOLUCIÓN'] != fecha_9999) &
-            (_df['FECHA RESOLUCIÓN'] >= fecha_inicio_totales) &
-            (_df['FECHA RESOLUCIÓN'] <= fin_semana)
-        ].copy()
-
-        # 2️⃣ Expedientes cerrados con resolución vacía o 9999, pero con fecha de cierre válida
-        despachados_cerrados = _df[
-            (_df['ESTADO'] == 'Cerrado') &
-            (
-                (_df['FECHA RESOLUCIÓN'].isna()) |
-                (_df['FECHA RESOLUCIÓN'] == fecha_9999)
-            ) &
-            (_df['FECHA CIERRE'].notna()) &
-            (_df['FECHA CIERRE'] >= fecha_inicio_totales) &
-            (_df['FECHA CIERRE'] <= fin_semana)
-        ].copy()
-
-        # Unificar ambos conjuntos
-        despachados_tiempo = pd.concat([despachados_real, despachados_cerrados]).drop_duplicates().copy()
-
-        if not despachados_tiempo.empty:
-            # Crear columna de referencia de fecha final (resolución o cierre)
-            despachados_tiempo['FECHA_FINAL'] = despachados_tiempo.apply(
-                lambda r: r['FECHA RESOLUCIÓN'] if pd.notna(r['FECHA RESOLUCIÓN']) and r['FECHA RESOLUCIÓN'] != fecha_9999 else r['FECHA CIERRE'],
-                axis=1
-            )
-
-            # Calcular días de tramitación
-            despachados_tiempo['dias_tramitacion'] = (
-                despachados_tiempo['FECHA_FINAL'] - despachados_tiempo['FECHA INICIO TRAMITACIÓN']
-            ).dt.days
-
-            # KPIs
-            tiempo_medio_despachados = despachados_tiempo['dias_tramitacion'].mean()
-            percentil_90_despachados = despachados_tiempo['dias_tramitacion'].quantile(0.9)
-            percentil_180_despachados = (despachados_tiempo['dias_tramitacion'] <= 180).mean() * 100
-            percentil_120_despachados = (despachados_tiempo['dias_tramitacion'] <= 120).mean() * 100
-        else:
-            tiempo_medio_despachados = 0
-            percentil_90_despachados = 0
-            percentil_180_despachados = 0
-            percentil_120_despachados = 0
-
-    else:
-        tiempo_medio_despachados = 0
-        percentil_90_despachados = 0
-        percentil_180_despachados = 0
-        percentil_120_despachados = 0
-
-    # Tiempos para expedientes Cerrados
-    if 'FECHA CIERRE' in _df.columns and 'FECHA INICIO TRAMITACIÓN' in _df.columns:
-        cerrados_tiempo = _df[
-            (_df['FECHA CIERRE'].notna()) &
-            (_df['FECHA CIERRE'] >= fecha_inicio_totales) & 
-            (_df['FECHA CIERRE'] <= fin_semana)
-        ].copy()
-        
-        if not cerrados_tiempo.empty:
-            cerrados_tiempo['dias_tramitacion'] = (cerrados_tiempo['FECHA CIERRE'] - cerrados_tiempo['FECHA INICIO TRAMITACIÓN']).dt.days
-            tiempo_medio_cerrados = cerrados_tiempo['dias_tramitacion'].mean()
-            percentil_90_cerrados = cerrados_tiempo['dias_tramitacion'].quantile(0.9)
-            
-            # Percentiles para 180 y 120 días
-            percentil_180_cerrados = (cerrados_tiempo['dias_tramitacion'] <= 180).mean() * 100
-            percentil_120_cerrados = (cerrados_tiempo['dias_tramitacion'] <= 120).mean() * 100
-        else:
-            tiempo_medio_cerrados = 0
-            percentil_90_cerrados = 0
-            percentil_180_cerrados = 0
-            percentil_120_cerrados = 0
-    else:
-        tiempo_medio_cerrados = 0
-        percentil_90_cerrados = 0
-        percentil_180_cerrados = 0
-        percentil_120_cerrados = 0
-
-    # Tiempos para expedientes Abiertos
-    if 'FECHA INICIO TRAMITACIÓN' in _df.columns:
-        abiertos_tiempo = _df[
-            (_df['FECHA APERTURA'] <= fin_semana) & 
-            ((_df['FECHA CIERRE'] > fin_semana) | (_df['FECHA CIERRE'].isna()))
-        ].copy()
-        
-        if not abiertos_tiempo.empty:
-            abiertos_tiempo['dias_tramitacion'] = (fin_semana - abiertos_tiempo['FECHA INICIO TRAMITACIÓN']).dt.days
-            percentil_90_abiertos = abiertos_tiempo['dias_tramitacion'].quantile(0.9)
-            
-            # Percentiles para 180 y 120 días
-            percentil_180_abiertos = (abiertos_tiempo['dias_tramitacion'] <= 180).mean() * 100
-            percentil_120_abiertos = (abiertos_tiempo['dias_tramitacion'] <= 120).mean() * 100
-        else:
-            percentil_90_abiertos = 0
-            percentil_180_abiertos = 0
-            percentil_120_abiertos = 0
-    else:
-        percentil_90_abiertos = 0
-        percentil_180_abiertos = 0
-        percentil_120_abiertos = 0
-    
-    return {
-        'nuevos_expedientes': nuevos_expedientes,
-        'nuevos_expedientes_totales': nuevos_expedientes_totales,
-        'despachados_semana': despachados_semana,
-        'despachados_totales': despachados_totales,
-        'c_abs_despachados_sem': c_abs_despachados_sem,
-        'c_abs_despachados_tot': c_abs_despachados_tot,
-        'expedientes_cerrados': expedientes_cerrados,
-        'expedientes_cerrados_totales': expedientes_cerrados_totales,
-        'total_abiertos': total_abiertos,
-        'c_abs_cerrados_sem': c_abs_cerrados_sem,
-        'c_abs_cerrados_tot': c_abs_cerrados_tot,
-        'expedientes_especiales': expedientes_especiales,
-        'porcentaje_especiales': porcentaje_especiales,
-        'tiempo_medio_despachados': tiempo_medio_despachados,
-        'percentil_90_despachados': percentil_90_despachados,
-        'percentil_180_despachados': percentil_180_despachados,
-        'percentil_120_despachados': percentil_120_despachados,
-        'tiempo_medio_cerrados': tiempo_medio_cerrados,
-        'percentil_90_cerrados': percentil_90_cerrados,
-        'percentil_180_cerrados': percentil_180_cerrados,
-        'percentil_120_cerrados': percentil_120_cerrados,
-        'percentil_90_abiertos': percentil_90_abiertos,
-        'percentil_180_abiertos': percentil_180_abiertos,
-        'percentil_120_abiertos': percentil_120_abiertos,
-        'inicio_semana': inicio_semana,
-        'fin_semana': fin_semana,
-        'dias_semana': dias_semana,
-        'es_semana_actual': es_semana_actual
-    }
-
 # CALCULAR KPIs PARA TODAS LAS SEMANAS con cache de 2 horas - ACTUALIZADA
 @st.cache_data(ttl=CACHE_TTL, show_spinner="📊 Calculando KPIs históricos...")
 def calcular_kpis_todas_semanas_optimizado(_df, _semanas, _fecha_referencia, _fecha_max, _user_key=user_env.session_id):
@@ -1228,15 +1536,6 @@ def calcular_kpis_todas_semanas_optimizado(_df, _semanas, _fecha_referencia, _fe
         })
     
     return pd.DataFrame(datos_semanales)
-
-def obtener_hash_archivo(archivo):
-    """Genera un hash único del archivo para detectar cambios"""
-    if archivo is None:
-        return None
-    archivo.seek(0)
-    file_hash = hashlib.md5(archivo.read()).hexdigest()
-    archivo.seek(0)
-    return file_hash
 
 def enviar_correo_outlook(destinatario, asunto, cuerpo_mensaje, archivos_adjuntos, cc=None, bcc=None):
     """
@@ -1627,7 +1926,7 @@ with estado_col6:
     archivos_cargados = sum([1 for f in [archivo_rectauto, archivo_notifica, archivo_triaje, archivo_usuarios, archivo_documentos] if f])
     st.metric("Total Cargados", f"{archivos_cargados}/5")
 
-# Procesar archivos cuando estén listos
+# Procesar archivos cuando estén listos usando la función optimizada
 if archivo_rectauto:
     # Verificar si los archivos han cambiado
     archivos_actuales = {
@@ -1644,33 +1943,19 @@ if archivo_rectauto:
     if (archivos_actuales != archivos_guardados or 
         "df_combinado" not in st.session_state):
         
-        with st.spinner("🔄 Combinando archivos por RUE..."):
+        with st.spinner("🔄 Procesando archivos combinados..."):
             try:
-                # Cargar RECTAUTO
-                df_rectauto = cargar_y_procesar_rectauto(archivo_rectauto)
+                # Usar la función optimizada de procesamiento combinado
+                archivos_dict = {
+                    'rectauto': archivo_rectauto,
+                    'notifica': archivo_notifica,
+                    'triaje': archivo_triaje,
+                    'usuarios': archivo_usuarios,
+                    'documentos': archivo_documentos
+                }
                 
-                # Cargar NOTIFICA si está disponible
-                df_notifica = None
-                if archivo_notifica:
-                    df_notifica = cargar_y_procesar_notifica(archivo_notifica)
+                df_combinado, df_usuarios, datos_documentos = procesar_archivos_combinado(archivos_dict)
                 
-                # Cargar TRIAJE si está disponible
-                df_triaje = None
-                if archivo_triaje:
-                    df_triaje = cargar_y_procesar_triaje(archivo_triaje)
-                
-                # Cargar USUARIOS si está disponible
-                df_usuarios = None
-                if archivo_usuarios:
-                    df_usuarios = cargar_y_procesar_usuarios(archivo_usuarios)
-                
-                # Cargar DOCUMENTOS si está disponible
-                datos_documentos = None
-                if archivo_documentos:
-                    datos_documentos = cargar_y_procesar_documentos(archivo_documentos)
-                
-                # Combinar todos los archivos incluyendo documentación
-                df_combinado = combinar_archivos(df_rectauto, df_notifica, df_triaje, df_usuarios, datos_documentos)
                 # Convertir columnas de fecha
                 df_combinado = convertir_fechas(df_combinado)
                 
@@ -1680,7 +1965,7 @@ if archivo_rectauto:
                 st.session_state["datos_documentos"] = datos_documentos
                 st.session_state["archivos_hash"] = archivos_actuales
                 
-                st.success(f"✅ Archivos combinados correctamente")
+                st.success(f"✅ Archivos procesados correctamente")
                 st.info(f"📊 Dataset final: {len(df_combinado)} registros, {len(df_combinado.columns)} columnas")
                 if df_usuarios is not None:
                     st.info(f"👥 Usuarios cargados: {len(df_usuarios)} registros")
@@ -1688,7 +1973,7 @@ if archivo_rectauto:
                     st.info(f"📄 Documentos cargados: {len(datos_documentos['documentos'])} registros")
                 
             except Exception as e:
-                st.error(f"❌ Error combinando archivos: {e}")
+                st.error(f"❌ Error procesando archivos: {e}")
                 # Fallback: usar solo RECTAUTO
                 with st.spinner("🔄 Cargando solo RECTAUTO..."):
                     df_rectauto = cargar_y_procesar_rectauto(archivo_rectauto)
@@ -1716,92 +2001,8 @@ else:
     st.info("💡 **Archivos opcionales:** NOTIFICA, TRIAJE, USUARIOS y DOCUMENTOS enriquecerán el análisis")
     st.stop()
 
-# Función para identificar filas prioritarias (RUE amarillo)
-def identificar_filas_prioritarias(df):
-    """Identifica filas que deben aparecer primero (RUE amarillo) con NUEVAS condiciones"""
-    try:
-        # Crear una columna temporal para ordenar
-        df_priorizado = df.copy()
-        
-        # Identificar filas que cumplen la condición de RUE amarillo
-        def es_rue_amarillo(fila):
-            try:
-                etiq_penultimo = fila.get('ETIQ. PENÚLTIMO TRAM.', '')
-                fecha_notif = fila.get('FECHA NOTIFICACIÓN', None)
-                docum_incorp = fila.get('DOCUM.INCORP.', '')
-                
-                # CONDICIÓN 1: "80 PROPRES" con fecha límite superada
-                if (str(etiq_penultimo).strip() == "80 PROPRES" and 
-                    pd.notna(fecha_notif) and 
-                    isinstance(fecha_notif, (pd.Timestamp, datetime))):
-                    
-                    fecha_limite = fecha_notif + timedelta(days=23)
-                    if datetime.now() > fecha_limite:
-                        return True
-                
-                # NUEVA CONDICIÓN 2: "50 REQUERIR" con fecha límite superada
-                if (str(etiq_penultimo).strip() == "50 REQUERIR" and 
-                    pd.notna(fecha_notif) and 
-                    isinstance(fecha_notif, (pd.Timestamp, datetime))):
-                    
-                    fecha_limite = fecha_notif + timedelta(days=23)
-                    if datetime.now() > fecha_limite:
-                        return True
-                
-                # NUEVA CONDICIÓN 3: "70 ALEGACI" o "60 CONTESTA"
-                if (str(etiq_penultimo).strip() in ["70 ALEGACI", "60 CONTESTA"]):
-                    return True
-                
-                # NUEVA CONDICIÓN 4: DOCUM.INCORP. no vacío Y distinto de "SOLICITUD" o "REITERA SOLICITUD"
-                if (pd.notna(docum_incorp) and 
-                    str(docum_incorp).strip() != '' and
-                    str(docum_incorp).strip().upper() not in ["SOLICITUD", "REITERA SOLICITUD"]):
-                    return True
-                    
-            except:
-                pass
-            return False
-        
-        # Aplicar prioridad
-        df_priorizado['_prioridad'] = df_priorizado.apply(es_rue_amarillo, axis=1).astype(int)
-        
-        return df_priorizado
-    
-    except Exception as e:
-        st.error(f"Error al identificar filas prioritarias: {e}")
-        return df
 
-# Función para ordenar DataFrame (RUE amarillos primero y luego por antigüedad)
-def ordenar_dataframe_por_prioridad_y_antiguedad(df):
-    """Ordena el DataFrame: RUE amarillos primero, luego por antigüedad descendente"""
-    try:
-        # Primero identificar filas prioritarias
-        df_priorizado = identificar_filas_prioritarias(df)
-        
-        # Buscar la columna de antigüedad por nombre (más robusto)
-        columnas_antiguedad = [col for col in df_priorizado.columns if 'ANTIGÜEDAD' in col.upper() or 'DÍAS' in col.upper()]
-        
-        if columnas_antiguedad:
-            columna_antiguedad = columnas_antiguedad[0]
-            # 🔥 CORRECCIÓN: FORZAR A ENTEROS ANTES DE ORDENAR
-            df_priorizado[columna_antiguedad] = pd.to_numeric(df_priorizado[columna_antiguedad], errors='coerce').fillna(0).astype(int)
-        else:
-            # Fallback: usar la columna 5 como en el código original
-            columna_antiguedad = df_priorizado.columns[5]
-            st.warning(f"Usando columna {columna_antiguedad} para antigüedad")
-        
-        # Ordenar por prioridad (True primero) y luego por antigüedad descendente
-        df_ordenado = df_priorizado.sort_values(
-            ['_prioridad', columna_antiguedad], 
-            ascending=[False, False]  # Prioridad: False=1ros, Antigüedad: False=descendente
-        )
-        df_ordenado = df_ordenado.drop('_prioridad', axis=1)
-        
-        return df_ordenado
-    
-    except Exception as e:
-        st.error(f"Error al ordenar DataFrame: {e}")
-        return df
+
 
 # Función para aplicar formato condicional al DataFrame mostrado
 def aplicar_formato_condicional_dataframe(df):
@@ -1934,64 +2135,6 @@ def crear_grafico_dinamico(_conteo, columna, titulo):
     fig.update_traces(texttemplate='%{text:,}', textposition="auto")
     return fig
 
-# Función para generar PDF de usuario (MEJORADA con ordenamiento)
-def generar_pdf_usuario(usuario, df_pendientes, num_semana, fecha_max_str):
-    """Genera el PDF para un usuario específico con nombre único"""
-    df_user = df_pendientes[df_pendientes["USUARIO"] == usuario].copy()
-    
-    if df_user.empty:
-        return None
-    
-    # ORDENAR el DataFrame: RUE amarillos primero Y luego por antigüedad
-    df_user_ordenado = ordenar_dataframe_por_prioridad_y_antiguedad(df_user)
-    
-    # Procesar datos para PDF - mantener las columnas originales para el formato condicional
-    indices_a_incluir = list(range(df_user_ordenado.shape[1]))
-    indices_a_excluir = {1, 4, 5, 6, 13}
-    
-    # EXCLUIR también la columna "FECHA DE ACTUALIZACIÓN DATOS" si existe
-    for idx, col_name in enumerate(df_user_ordenado.columns):
-        if "FECHA DE ACTUALIZACIÓN DATOS" in col_name.upper():
-            indices_a_excluir.add(idx)
-    
-    indices_finales = [i for i in indices_a_incluir if i not in indices_a_excluir]
-    NOMBRES_COLUMNAS_PDF = df_user_ordenado.columns[indices_finales].tolist()
-
-    # 🔥 CORRECCIÓN: FORZAR COLUMNA ANTIGÜEDAD A ENTEROS
-    # Buscar la columna de antigüedad
-    columnas_antiguedad = [col for col in df_user_ordenado.columns if 'ANTIGÜEDAD' in col.upper() or 'DÍAS' in col.upper()]
-    if columnas_antiguedad:
-        columna_antiguedad = columnas_antiguedad[0]
-        # Convertir a numérico y luego a enteros, manejando errores
-        df_user_ordenado[columna_antiguedad] = pd.to_numeric(df_user_ordenado[columna_antiguedad], errors='coerce').fillna(0).astype(int)
-
-    # Crear DataFrame para mostrar (con fechas formateadas y "nan" reemplazados)
-    df_pdf_mostrar = df_user_ordenado[NOMBRES_COLUMNAS_PDF].copy()
-    
-    # Formatear fechas y reemplazar "nan" - Y ASEGURAR ANTIGÜEDAD COMO ENTERO
-    for col in df_pdf_mostrar.columns:
-        if df_pdf_mostrar[col].dtype == 'object':
-            df_pdf_mostrar[col] = df_pdf_mostrar[col].apply(
-                lambda x: "" if pd.isna(x) or str(x).lower() == "nan" else x
-            )
-        elif 'fecha' in col.lower():
-            df_pdf_mostrar[col] = df_pdf_mostrar[col].apply(
-                lambda x: x.strftime("%d/%m/%Y") if pd.notna(x) else ""
-            )
-        # 🔥 CORRECCIÓN: FORZAR COLUMNAS NUMÉRICAS A ENTEROS SIN DECIMALES
-        elif df_pdf_mostrar[col].dtype in ['float64', 'float32', 'int64', 'int32']:
-            df_pdf_mostrar[col] = df_pdf_mostrar[col].apply(
-                lambda x: f"{int(x):,}".replace(",", ".") if pd.notna(x) else "0"
-            )
-
-    num_expedientes = len(df_pdf_mostrar)
-    
-    # NOMBRE ÚNICO que incluye timestamp para evitar colisiones
-    timestamp = datetime.now().strftime("%H%M%S")
-    titulo_pdf = f"{usuario} - Semana {num_semana} a {fecha_max_str} - Expedientes Pendientes ({num_expedientes})"
-    
-    # Pasar el DataFrame ORIGINAL ORDENADO (con fechas datetime) para el formato condicional
-    return dataframe_to_pdf_bytes(df_pdf_mostrar, titulo_pdf, df_original=df_user_ordenado)
 
 if eleccion == "Principal":
     # Usar df_combinado en lugar de df
@@ -2147,77 +2290,69 @@ if eleccion == "Principal":
     st.sidebar.subheader("Opciones de Visualización")
     
     # Checkbox para ordenar por prioridad
-    ordenar_prioridad = st.sidebar.checkbox("Ordenar por prioridad (RUE amarillo primero)", value=True)
-    
-    # Auto-filtros para mostrar solo filas con formato condicional
-    st.sidebar.markdown("**Auto-filtros:**")
-    mostrar_solo_amarillos = st.sidebar.checkbox("Solo RUE prioritarios", value=False)
-    mostrar_solo_rojos = st.sidebar.checkbox("Solo USUARIO-CSV discrepantes", value=False)
-    mostrar_solo_docum = st.sidebar.checkbox("Solo con DOCUM.INCORP.", value=False)
+    ordenar_prioridad = st.sidebar.checkbox("Ordenar por prioridad (RUE amarillo primero)", value=True, key="ordenar_prioridad_checkbox")
 
-    # Aplicar ordenamiento si está activado
+    # Aplicar ordenamiento si está activado - CORREGIDO
     if ordenar_prioridad:
         df_filtrado = ordenar_dataframe_por_prioridad_y_antiguedad(df_filtrado)
+        st.sidebar.success("✅ Ordenado por prioridad")
+    else:
+        # Si no está activado, ordenar solo por antigüedad descendente
+        columnas_antiguedad = [col for col in df_filtrado.columns if 'ANTIGÜEDAD' in col.upper() or 'DÍAS' in col.upper()]
+        if columnas_antiguedad:
+            columna_antiguedad = columnas_antiguedad[0]
+            df_filtrado = df_filtrado.sort_values(columna_antiguedad, ascending=False)
+            st.sidebar.info("📊 Ordenado solo por antigüedad")
 
-    # Aplicar auto-filtros
+    # Auto-filtros para mostrar solo filas con formato condicional
+    st.sidebar.markdown("**Auto-filtros:**")
+
+    # Usar keys únicos para los checkboxes y definir las variables
+    mostrar_solo_amarillos = st.sidebar.checkbox("Solo RUE prioritarios", value=False, key="filtro_amarillos")
+    mostrar_solo_rojos = st.sidebar.checkbox("Solo USUARIO-CSV discrepantes", value=False, key="filtro_rojos") 
+    mostrar_solo_docum = st.sidebar.checkbox("Solo con DOCUM.INCORP.", value=False, key="filtro_docum")
+
+    # Aplicar auto-filtros - VERSIÓN CORREGIDA
     if mostrar_solo_amarillos or mostrar_solo_rojos or mostrar_solo_docum:
-        df_filtrado_temp = df_filtrado.copy()
+        # Crear una COPIA para los filtros sin afectar el DataFrame principal
+        df_filtrado_temp = df_filtrado.copy(deep=True)
+        
+        filtros_aplicados = []
         
         if mostrar_solo_amarillos:
-            # Filtrar solo RUE amarillos - CON TODAS LAS CONDICIONES
-            mask_amarillo = pd.Series(False, index=df_filtrado_temp.index)
-            for idx, row in df_filtrado_temp.iterrows():
-                try:
-                    etiq_penultimo = row.get('ETIQ. PENÚLTIMO TRAM.', '')
-                    fecha_notif = row.get('FECHA NOTIFICACIÓN', None)
-                    docum_incorp = row.get('DOCUM.INCORP.', '')
-                    
-                    # CONDICIÓN 1: "80 PROPRES" con fecha límite superada
-                    if (str(etiq_penultimo).strip() == "80 PROPRES" and 
-                        pd.notna(fecha_notif) and 
-                        isinstance(fecha_notif, (pd.Timestamp, datetime))):
-                        
-                        fecha_limite = fecha_notif + timedelta(days=23)
-                        if datetime.now() > fecha_limite:
-                            mask_amarillo[idx] = True
-                    
-                    # CONDICIÓN 2: "50 REQUERIR" con fecha límite superada
-                    elif (str(etiq_penultimo).strip() == "50 REQUERIR" and 
-                        pd.notna(fecha_notif) and 
-                        isinstance(fecha_notif, (pd.Timestamp, datetime))):
-                        
-                        fecha_limite = fecha_notif + timedelta(days=23)
-                        if datetime.now() > fecha_limite:
-                            mask_amarillo[idx] = True
-                    
-                    # CONDICIÓN 3: "70 ALEGACI" o "60 CONTESTA"
-                    elif str(etiq_penultimo).strip() in ["70 ALEGACI", "60 CONTESTA"]:
-                        mask_amarillo[idx] = True
-                    
-                    # CONDICIÓN 4: DOCUM.INCORP. no vacío Y distinto de "SOLICITUD" o "REITERA SOLICITUD"
-                    elif (pd.notna(docum_incorp) and 
-                        str(docum_incorp).strip() != '' and
-                        str(docum_incorp).strip().upper() not in ["SOLICITUD", "REITERA SOLICITUD"]):
-                        mask_amarillo[idx] = True
-                        
-                except:
-                    pass
-            
-            df_filtrado_temp = df_filtrado_temp[mask_amarillo]
+            # Filtrar solo RUE amarillos usando la función corregida
+            df_priorizado_temp = identificar_filas_prioritarias(df_filtrado_temp)
+            mask_amarillo = df_priorizado_temp['_prioridad'] == 1
+            if mask_amarillo.any():
+                df_filtrado_temp = df_filtrado_temp[mask_amarillo]
+                filtros_aplicados.append(f"RUE prioritarios: {mask_amarillo.sum()}")
         
         if mostrar_solo_rojos:
             # Filtrar solo USUARIO-CSV rojos
             if 'USUARIO' in df_filtrado_temp.columns and 'USUARIO-CSV' in df_filtrado_temp.columns:
-                mask_rojo = df_filtrado_temp['USUARIO'] != df_filtrado_temp['USUARIO-CSV']
-                df_filtrado_temp = df_filtrado_temp[mask_rojo]
+                # Comparación segura
+                usuario_principal = df_filtrado_temp['USUARIO'].astype(str).str.strip().fillna('')
+                usuario_csv = df_filtrado_temp['USUARIO-CSV'].astype(str).str.strip().fillna('')
+                mask_rojo = usuario_principal != usuario_csv
+                
+                if mask_rojo.any():
+                    df_filtrado_temp = df_filtrado_temp[mask_rojo]
+                    filtros_aplicados.append(f"USUARIO-CSV discrepantes: {mask_rojo.sum()}")
         
         if mostrar_solo_docum:
             # Filtrar solo expedientes con documentación incorporada
             if 'DOCUM.INCORP.' in df_filtrado_temp.columns:
-                mask_docum = df_filtrado_temp['DOCUM.INCORP.'].notna() & (df_filtrado_temp['DOCUM.INCORP.'] != '')
-                df_filtrado_temp = df_filtrado_temp[mask_docum]
+                docum_incorp = df_filtrado_temp['DOCUM.INCORP.'].astype(str).str.strip().fillna('')
+                mask_docum = (docum_incorp != '') & (docum_incorp != 'nan')
+                
+                if mask_docum.any():
+                    df_filtrado_temp = df_filtrado_temp[mask_docum]
+                    filtros_aplicados.append(f"Con documentación: {mask_docum.sum()}")
         
-        df_filtrado = df_filtrado_temp
+        # Solo actualizar si se aplicaron filtros
+        if filtros_aplicados:
+            df_filtrado = df_filtrado_temp
+            st.sidebar.success(" | ".join(filtros_aplicados))
 
     # Gráficos Generales - CORREGIDOS: datos siempre frescos según filtros
     st.subheader("📈 Gráficos Generales")
@@ -2253,6 +2388,22 @@ if eleccion == "Principal":
     # Formatear TODAS las columnas de fecha
     for col in df_mostrar.select_dtypes(include='datetime').columns:
         df_mostrar[col] = df_mostrar[col].dt.strftime("%d/%m/%Y")
+
+    # 🔥 CORRECCIÓN 3: Redondear columnas numéricas con decimales (ANTES DE MOSTRAR)
+    columnas_antiguedad = [col for col in df_mostrar.columns if 'ANTIGÜEDAD' in col.upper() or 'DÍAS' in col.upper()]
+
+    for col in df_mostrar.columns:
+        if df_mostrar[col].dtype in ['float64', 'float32']:
+            if col in columnas_antiguedad:
+                # Redondear antigüedad y convertir a entero
+                df_mostrar[col] = df_mostrar[col].apply(
+                    lambda x: int(round(x)) if pd.notna(x) else 0
+                )
+            else:
+                # Redondear otras columnas flotantes
+                df_mostrar[col] = df_mostrar[col].apply(
+                    lambda x: int(round(x)) if pd.notna(x) else 0
+                )
 
     # Mostrar tabla principal SIN formato condicional pero CON fechas formateadas
     st.dataframe(df_mostrar, use_container_width=True, height=400)
@@ -2745,7 +2896,7 @@ if eleccion == "Principal":
         st.error(f"❌ Faltan columnas requeridas en el archivo USUARIOS: {', '.join(columnas_faltantes)}")
         st.stop()
 
-    # DEBUG: Mostrar información para verificar
+    # MODIFICACIÓN EN LA SECCIÓN DE DEPURACIÓN - MOSTRAR TODOS LOS USUARIOS
     st.markdown("---")
     st.subheader("🔍 Información de Depuración")
     st.write(f"Usuarios activos: {len(usuarios_activos)}")
@@ -2755,25 +2906,24 @@ if eleccion == "Principal":
         st.write("Primeros 5 usuarios activos:")
         st.dataframe(usuarios_activos[['USUARIOS', 'EMAIL', 'ENVIAR', 'ENVÍO RESUMEN']].head())
 
+    # REEMPLAZO OPTIMIZADO: Mostrar todos los usuarios en lugar de solo 10
     if usuarios_con_pendientes:
-        st.write(f"**Usuarios con expedientes pendientes: {len(usuarios_con_pendientes)}**")
-        
-        # Lista simple
-        with st.expander("📝 Ver lista simple"):
-            for usuario in usuarios_con_pendientes:
-                st.write(f"- {usuario}")
-        
-        # Tabla con detalles
-        with st.expander("📊 Ver tabla con detalles"):
-            df_detalle = pd.DataFrame({
+        with st.expander(f"📋 Todos los usuarios con expedientes pendientes ({len(usuarios_con_pendientes)})", expanded=False):
+            # Crear DataFrame para mejor visualización
+            df_usuarios_pendientes = pd.DataFrame({
                 'Usuario': usuarios_con_pendientes,
-                'Expedientes Pendientes': [len(df_pendientes[df_pendientes['USUARIO'] == usuario]) 
-                                        for usuario in usuarios_con_pendientes],
-                'Equipo': [df_pendientes[df_pendientes['USUARIO'] == usuario]['EQUIPO'].iloc[0] 
-                        if len(df_pendientes[df_pendientes['USUARIO'] == usuario]) > 0 else 'N/A'
-                        for usuario in usuarios_con_pendientes]
+                'Cantidad Expedientes': [len(df_pendientes[df_pendientes['USUARIO'] == usuario]) 
+                                        for usuario in usuarios_con_pendientes]
             })
-            st.dataframe(df_detalle, use_container_width=True)
+            
+            # Ordenar por cantidad de expedientes (descendente)
+            df_usuarios_pendientes = df_usuarios_pendientes.sort_values('Cantidad Expedientes', ascending=False)
+            
+            st.dataframe(
+                df_usuarios_pendientes, 
+                use_container_width=True,
+                height=min(400, 35 * len(df_usuarios_pendientes) + 38)  # Altura dinámica
+            )
 
     # PROCESAR CADA USUARIO ACTIVO - CORRECCIÓN IMPORTANTE
     for _, usuario_row in usuarios_activos.iterrows():
