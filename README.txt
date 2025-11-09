@@ -24,4 +24,4 @@ INSTRUCCIONES PARA EJECUTAR LA APLICACIÓN WEB CON STREAMLIT CLOUD
             tarios de los equipos y el resumen de KPI semanal, descargándose 
             en un archivo comprimido .zip.
          - En la app-web NO SE PUEDE REALIZAR EL ENVÍO DE CORREO DIRECTAMENTE.
-            En la app de escritorio sí se puede, teniendo Ortlook instalado.
+            En la app de escritorio sí se puede, teniendo Outlook instalado.
