@@ -2,10 +2,10 @@ streamlit
 pandas
 numpy
 plotly
-plotly.express
 openpyxl
 jinja2
 fpdf2
 matplotlib
-kaleido
+kaleido==0.2.1
 Pillow
+
