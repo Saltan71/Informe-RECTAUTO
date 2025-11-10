@@ -20,7 +20,7 @@ INSTRUCCIONES PARA EJECUTAR LA APLICACIÓN WEB CON STREAMLIT CLOUD
             misma app-web, ya que grabamos los datos actualizados de esos
             expedientes, y descargamos el fichero que se utilizará la siguien-
             vez que se utilice la app-web.
-         - Se optienen los informes individuales, los de Expedientes Priori-
+         - Se obtienen los informes individuales, los de Expedientes Priori-
             tarios de los equipos y el resumen de KPI semanal, descargándose 
             en un archivo comprimido .zip.
          - En la app-web NO SE PUEDE REALIZAR EL ENVÍO DE CORREO DIRECTAMENTE.
