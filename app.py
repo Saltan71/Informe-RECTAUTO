@@ -14,6 +14,7 @@ import shutil
 import uuid
 import getpass
 from PIL import Image
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 
 # === NUEVA CLASE PARA ENTORNO DE USUARIO ===
@@ -59,7 +60,209 @@ with open(test_file, 'w') as f:
     f.write("test")
 
 st.set_page_config(page_title="Informe Rectauto", layout="wide", page_icon=Image.open("icono.ico"))
-st.title("📊 Seguimiento Equipo Regional RECTAUTO")
+
+# CSS ACTUALIZADO CON ESTILOS PARA BOTONES Y MENÚS DESPLEGABLES
+st.markdown("""
+<style>
+    [data-testid="stSidebar"] {
+        background-color: #007933 !important;
+    }
+    
+    .main .block-container {
+        background-color: #C4DDCA !important;
+        padding: 2rem;
+        border-radius: 10px;
+    }
+    
+    .stApp {
+        background-color: #92C88F !important;
+    }
+    
+    [data-testid="stSidebar"] * {
+        color: white !important;
+    }
+    
+    .main .stMarkdown, .main h1, .main h2, .main h3 {
+        color: #333333 !important;
+    }
+    
+    /* ESTILOS ESPECÍFICOS PARA BOTONES EN LA BARRA LATERAL */
+    [data-testid="stSidebar"] button {
+        background-color: #005a25 !important;
+        color: white !important;
+        border: 1px solid white !important;
+        border-radius: 5px !important;
+        padding: 0.5rem 1rem !important;
+        font-weight: bold !important;
+    }
+    
+    [data-testid="stSidebar"] button:hover {
+        background-color: #003d1a !important;
+        color: white !important;
+        border: 1px solid white !important;
+    }
+    
+    [data-testid="stSidebar"] button:focus {
+        background-color: #003d1a !important;
+        color: white !important;
+        border: 2px solid #ffffff !important;
+        box-shadow: 0 0 0 0.2rem rgba(255, 255, 255, 0.25) !important;
+    }
+    
+    [data-testid="stSidebar"] button[kind="primary"] {
+        background-color: #00802b !important;
+        color: white !important;
+        border: 2px solid #ffffff !important;
+    }
+    
+    [data-testid="stSidebar"] button[kind="primary"]:hover {
+        background-color: #006622 !important;
+        color: white !important;
+    }
+    
+    /* Estilos para los botones de navegación de semanas en KPI */
+    [data-testid="stSidebar"] .stButton button {
+        background-color: #005a25 !important;
+        color: white !important;
+        border: 1px solid white !important;
+        border-radius: 5px !important;
+        padding: 0.5rem 1rem !important;
+        font-weight: bold !important;
+        width: 100% !important;
+    }
+    
+    [data-testid="stSidebar"] .stButton button:hover {
+        background-color: #003d1a !important;
+        color: white !important;
+        border: 1px solid white !important;
+    }
+    
+    /* ESTILOS PARA MENÚS DESPLEGABLES EN BARRA LATERAL */
+    [data-testid="stSidebar"] .stSelectbox > div > div {
+        background-color: #009945 !important;
+        color: white !important;
+        border: 1px solid white !important;
+        border-radius: 5px !important;
+    }
+    
+    [data-testid="stSidebar"] .stSelectbox > div > div:hover {
+        background-color: #007933 !important;
+        color: white !important;
+        border: 1px solid white !important;
+    }
+    
+    [data-testid="stSidebar"] .stSelectbox input {
+        color: white !important;
+    }
+    
+    [data-testid="stSidebar"] .stMultiSelect > div > div {
+        background-color: #009945 !important;
+        color: white !important;
+        border: 1px solid white !important;
+        border-radius: 5px !important;
+    }
+    
+    [data-testid="stSidebar"] .stMultiSelect > div > div:hover {
+        background-color: #007933 !important;
+        color: white !important;
+        border: 1px solid white !important;
+    }
+    
+    [data-testid="stSidebar"] .stMultiSelect input {
+        color: white !important;
+    }
+    
+    /* Estilos para las opciones del menú desplegable */
+    [data-testid="stSidebar"] .stSelectbox [data-testid="stMarkdownContainer"] p,
+    [data-testid="stSidebar"] .stMultiSelect [data-testid="stMarkdownContainer"] p {
+        color: white !important;
+    }
+    
+    /* Estilos para las opciones seleccionadas en multiselect */
+    [data-testid="stSidebar"] .stMultiSelect [data-baseweb="tag"] {
+        background-color: #005a25 !important;
+        color: white !important;
+        border: 1px solid white !important;
+        border-radius: 12px !important;
+    }
+    
+    [data-testid="stSidebar"] .stMultiSelect [data-baseweb="tag"]:hover {
+        background-color: #003d1a !important;
+        color: white !important;
+    }
+    
+    /* Estilos para el menú desplegable abierto */
+    [data-testid="stSidebar"] div[data-baseweb="popover"] {
+        background-color: #009945 !important;
+        border: 1px solid white !important;
+        border-radius: 5px !important;
+    }
+    
+    [data-testid="stSidebar"] div[data-baseweb="menu"] {
+        background-color: #009945 !important;
+        color: white !important;
+    }
+    
+    [data-testid="stSidebar"] div[data-baseweb="menu"] li {
+        background-color: #009945 !important;
+        color: white !important;
+    }
+    
+    [data-testid="stSidebar"] div[data-baseweb="menu"] li:hover {
+        background-color: #007933 !important;
+        color: white !important;
+    }
+    
+    [data-testid="stSidebar"] div[data-baseweb="menu"] li:focus {
+        background-color: #005a25 !important;
+        color: white !important;
+    }
+    
+    /* Estilos para el texto dentro de los menús desplegables */
+    [data-testid="stSidebar"] div[data-baseweb="popover"] * {
+        color: white !important;
+    }
+</style>
+""", unsafe_allow_html=True)
+
+# Logo
+st.sidebar.image("Logo Atrian.png", width=260)
+
+# Menú principal reorganizado
+menu = ["Carga de Archivos", "Vista de Expedientes", "Indicadores clave (KPI)", "Análisis del Rendimiento", "Informes y Correos"]
+eleccion = st.sidebar.selectbox("Menú", menu)
+
+# Función para obtener información de la semana actual
+def obtener_info_semana_actual(df_combinado):
+    """Obtiene la información de la semana actual para mostrar en todas las páginas"""
+    if df_combinado is None or df_combinado.empty:
+        return None, None, None
+    
+    try:
+        columna_fecha = df_combinado.columns[13]
+        df_combinado[columna_fecha] = pd.to_datetime(df_combinado[columna_fecha], errors='coerce')
+        fecha_max = df_combinado[columna_fecha].max()
+        
+        if pd.isna(fecha_max):
+            return None, None, None
+            
+        dias_transcurridos = (fecha_max - FECHA_REFERENCIA).days
+        num_semana = dias_transcurridos // 7 + 1
+        fecha_max_str = fecha_max.strftime("%d/%m/%Y")
+        
+        return num_semana, fecha_max_str, fecha_max
+    except:
+        return None, None, None
+
+# Mostrar información de la semana actual en todas las páginas
+if "df_combinado" in st.session_state:
+    num_semana, fecha_max_str, fecha_max = obtener_info_semana_actual(st.session_state["df_combinado"])
+    if num_semana and fecha_max_str:
+        st.title(f"📊 Seguimiento Equipo Regional RECTAUTO - Semana {num_semana} a {fecha_max_str}")
+    else:
+        st.title("📊 Seguimiento Equipo Regional RECTAUTO")
+else:
+    st.title("📊 Seguimiento Equipo Regional RECTAUTO")
 
 # Inicializar variables de sesión para documentación
 if 'mostrar_descarga' not in st.session_state:
@@ -485,10 +688,9 @@ def calcular_despachados_optimizado(_df, inicio_semana, fin_semana, fecha_inicio
     return despachados_semana, despachados_totales
 
 # === FUNCIÓN AUXILIAR OPTIMIZADA PARA CÁLCULO DE TIEMPOS ===
+
 def calcular_tiempos_optimizado(_df, fecha_inicio_totales, fin_semana):
-    """Calcula los tiempos de tramitación de forma optimizada - VERSIÓN COMPLETAMENTE CORREGIDA"""
-    
-    # Inicializar resultados por defecto
+    """Versión vectorizada y optimizada de cálculo de tiempos."""
     resultados = {
         'tiempo_medio_despachados': 0,
         'percentil_90_despachados': 0,
@@ -502,154 +704,64 @@ def calcular_tiempos_optimizado(_df, fecha_inicio_totales, fin_semana):
         'percentil_180_abiertos': 0,
         'percentil_120_abiertos': 0
     }
-    
     try:
-        # Asegurarse de que las fechas son datetime
-        fecha_inicio_totales = pd.to_datetime(fecha_inicio_totales)
-        fin_semana = pd.to_datetime(fin_semana)
-        
-        # Crear copia para no modificar el original
-        df_temp = _df.copy()
-        
-        # DEBUG: Verificar columnas disponibles
-        print(f"Columnas disponibles: {list(df_temp.columns)}")
-        
-        # Convertir columnas de fecha necesarias
-        columnas_fecha = ['FECHA RESOLUCIÓN', 'FECHA INICIO TRAMITACIÓN', 'FECHA CIERRE', 'FECHA APERTURA']
-        for col in columnas_fecha:
-            if col in df_temp.columns:
-                df_temp[col] = pd.to_datetime(df_temp[col], errors='coerce')
-                print(f"Columna {col} convertida, valores no nulos: {df_temp[col].notna().sum()}")
-        
+        # Normalizar fechas (no modificar original si ya lo está)
         fecha_9999 = pd.to_datetime('9999-09-09', errors='coerce')
-        
-        # ===== TIEMPOS PARA EXPEDIENTES DESPACHADOS =====
-        if all(col in df_temp.columns for col in ['FECHA RESOLUCIÓN', 'FECHA INICIO TRAMITACIÓN', 'ESTADO', 'FECHA CIERRE']):
-            print("Calculando tiempos para expedientes despachados...")
-            
-            # Crear máscaras vectorizadas para ambos tipos de despachados
-            mask_despachados_reales = (
-                df_temp['FECHA RESOLUCIÓN'].notna() & 
-                (df_temp['FECHA RESOLUCIÓN'] != fecha_9999) &
-                (df_temp['FECHA RESOLUCIÓN'] >= fecha_inicio_totales) &
-                (df_temp['FECHA RESOLUCIÓN'] <= fin_semana)
-            )
-            
-            mask_despachados_cerrados = (
-                (df_temp['ESTADO'] == 'Cerrado') &
-                (df_temp['FECHA RESOLUCIÓN'].isna() | (df_temp['FECHA RESOLUCIÓN'] == fecha_9999)) &
-                df_temp['FECHA CIERRE'].notna() &
-                (df_temp['FECHA CIERRE'] >= fecha_inicio_totales) &
-                (df_temp['FECHA CIERRE'] <= fin_semana)
-            )
-            
-            # Combinar máscaras
-            mask_despachados_tiempo = mask_despachados_reales | mask_despachados_cerrados
-            
-            print(f"Expedientes despachados encontrados: {mask_despachados_tiempo.sum()}")
-            
-            if mask_despachados_tiempo.any():
-                despachados_tiempo = df_temp[mask_despachados_tiempo].copy()
-                
-                # Calcular fecha final
-                condiciones = [
-                    despachados_tiempo['FECHA RESOLUCIÓN'].notna() & 
-                    (despachados_tiempo['FECHA RESOLUCIÓN'] != fecha_9999)
-                ]
-                opciones = [despachados_tiempo['FECHA RESOLUCIÓN']]
-                
-                despachados_tiempo['FECHA_FINAL'] = np.select(
-                    condiciones, 
-                    opciones, 
-                    default=despachados_tiempo['FECHA CIERRE']
-                )
-                
-                # Calcular días de tramitación
-                despachados_tiempo['dias_tramitacion'] = (
-                    despachados_tiempo['FECHA_FINAL'] - despachados_tiempo['FECHA INICIO TRAMITACIÓN']
-                ).dt.days
-                
-                # Filtrar valores válidos (mayores o iguales a 0)
-                dias_validos = despachados_tiempo['dias_tramitacion'][despachados_tiempo['dias_tramitacion'] >= 0]
-                
-                print(f"Días válidos para despachados: {len(dias_validos)}")
-                
-                if not dias_validos.empty and len(dias_validos) > 0:
-                    resultados['tiempo_medio_despachados'] = round(dias_validos.mean(), 1)
-                    resultados['percentil_90_despachados'] = round(dias_validos.quantile(0.9), 1)
-                    resultados['percentil_180_despachados'] = round((dias_validos <= 180).mean() * 100, 1)
-                    resultados['percentil_120_despachados'] = round((dias_validos <= 120).mean() * 100, 1)
-        
-        # ===== TIEMPOS PARA EXPEDIENTES CERRADOS =====
-        if all(col in df_temp.columns for col in ['FECHA CIERRE', 'FECHA INICIO TRAMITACIÓN']):
-            print("Calculando tiempos para expedientes cerrados...")
-            
-            # Crear máscara vectorizada para expedientes cerrados
-            mask_cerrados_tiempo = (
-                df_temp['FECHA CIERRE'].notna() &
-                (df_temp['FECHA CIERRE'] >= fecha_inicio_totales) & 
-                (df_temp['FECHA CIERRE'] <= fin_semana)
-            )
-            
-            print(f"Expedientes cerrados encontrados: {mask_cerrados_tiempo.sum()}")
-            
-            if mask_cerrados_tiempo.any():
-                cerrados_tiempo = df_temp[mask_cerrados_tiempo].copy()
-                
-                # Calcular días de tramitación
-                cerrados_tiempo['dias_tramitacion'] = (
-                    cerrados_tiempo['FECHA CIERRE'] - cerrados_tiempo['FECHA INICIO TRAMITACIÓN']
-                ).dt.days
-                
-                # Filtrar valores válidos
-                dias_validos_cerrados = cerrados_tiempo['dias_tramitacion'][cerrados_tiempo['dias_tramitacion'] >= 0]
-                
-                print(f"Días válidos para cerrados: {len(dias_validos_cerrados)}")
-                
-                if not dias_validos_cerrados.empty and len(dias_validos_cerrados) > 0:
-                    resultados['tiempo_medio_cerrados'] = round(dias_validos_cerrados.mean(), 1)
-                    resultados['percentil_90_cerrados'] = round(dias_validos_cerrados.quantile(0.9), 1)
-                    resultados['percentil_180_cerrados'] = round((dias_validos_cerrados <= 180).mean() * 100, 1)
-                    resultados['percentil_120_cerrados'] = round((dias_validos_cerrados <= 120).mean() * 100, 1)
-        
-        # ===== TIEMPOS PARA EXPEDIENTES ABIERTOS =====
-        if all(col in df_temp.columns for col in ['FECHA INICIO TRAMITACIÓN', 'FECHA APERTURA', 'FECHA CIERRE']):
-            print("Calculando tiempos para expedientes abiertos...")
-            
-            # Crear máscara vectorizada para expedientes abiertos
-            mask_abiertos_tiempo = (
-                (df_temp['FECHA APERTURA'] <= fin_semana) & 
-                ((df_temp['FECHA CIERRE'] > fin_semana) | (df_temp['FECHA CIERRE'].isna()))
-            )
-            
-            print(f"Expedientes abiertos encontrados: {mask_abiertos_tiempo.sum()}")
-            
-            if mask_abiertos_tiempo.any():
-                abiertos_tiempo = df_temp[mask_abiertos_tiempo].copy()
-                
-                # Calcular días de tramitación (hasta fin_semana)
-                abiertos_tiempo['dias_tramitacion'] = (
-                    fin_semana - abiertos_tiempo['FECHA INICIO TRAMITACIÓN']
-                ).dt.days
-                
-                # Filtrar valores válidos
-                dias_validos_abiertos = abiertos_tiempo['dias_tramitacion'][abiertos_tiempo['dias_tramitacion'] >= 0]
-                
-                print(f"Días válidos para abiertos: {len(dias_validos_abiertos)}")
-                
-                if not dias_validos_abiertos.empty and len(dias_validos_abiertos) > 0:
-                    resultados['percentil_90_abiertos'] = round(dias_validos_abiertos.quantile(0.9), 1)
-                    resultados['percentil_180_abiertos'] = round((dias_validos_abiertos <= 180).mean() * 100, 1)
-                    resultados['percentil_120_abiertos'] = round((dias_validos_abiertos <= 120).mean() * 100, 1)
-        
-        print(f"Resultados finales: {resultados}")
-        
+        fr = pd.to_datetime(fecha_inicio_totales)
+        fs = pd.to_datetime(fin_semana)
+
+        df = _df.copy()
+
+        for c in ['FECHA RESOLUCIÓN', 'FECHA INICIO TRAMITACIÓN', 'FECHA CIERRE', 'FECHA APERTURA']:
+            if c in df.columns:
+                df[c] = pd.to_datetime(df[c], errors='coerce')
+
+        # DESPACHADOS: reales o cerrados
+        if all(col in df.columns for col in ['FECHA INICIO TRAMITACIÓN', 'ESTADO']):
+            mask_reales = df['FECHA RESOLUCIÓN'].notna() & (df['FECHA RESOLUCIÓN'] != fecha_9999) & (df['FECHA RESOLUCIÓN'] >= fr) & (df['FECHA RESOLUCIÓN'] <= fs)
+            mask_cerrados = (df['ESTADO'] == 'Cerrado') & df['FECHA CIERRE'].notna() & (df['FECHA CIERRE'] >= fr) & (df['FECHA CIERRE'] <= fs) & (df['FECHA RESOLUCIÓN'].isna() | (df['FECHA RESOLUCIÓN'] == fecha_9999))
+            mask_desp = mask_reales | mask_cerrados
+            if mask_desp.any():
+                d = df.loc[mask_desp].copy()
+                fecha_final = d['FECHA RESOLUCIÓN'].where(d['FECHA RESOLUCIÓN'].notna() & (d['FECHA RESOLUCIÓN'] != fecha_9999), d['FECHA CIERRE'])
+                dias = (fecha_final - d['FECHA INICIO TRAMITACIÓN']).dt.days.dropna()
+                dias = dias[dias >= 0]
+                if len(dias) > 0:
+                    resultados['tiempo_medio_despachados'] = round(dias.mean(), 1)
+                    resultados['percentil_90_despachados'] = round(np.percentile(dias, 90), 1)
+                    resultados['percentil_180_despachados'] = round((dias <= 180).mean() * 100, 1)
+                    resultados['percentil_120_despachados'] = round((dias <= 120).mean() * 100, 1)
+
+        # CERRADOS
+        if 'FECHA CIERRE' in df.columns and 'FECHA INICIO TRAMITACIÓN' in df.columns:
+            mask_cerr = df['FECHA CIERRE'].notna() & (df['FECHA CIERRE'] >= fr) & (df['FECHA CIERRE'] <= fs)
+            if mask_cerr.any():
+                d = df.loc[mask_cerr].copy()
+                dias = (d['FECHA CIERRE'] - d['FECHA INICIO TRAMITACIÓN']).dt.days.dropna()
+                dias = dias[dias >= 0]
+                if len(dias) > 0:
+                    resultados['tiempo_medio_cerrados'] = round(dias.mean(), 1)
+                    resultados['percentil_90_cerrados'] = round(np.percentile(dias, 90), 1)
+                    resultados['percentil_180_cerrados'] = round((dias <= 180).mean() * 100, 1)
+                    resultados['percentil_120_cerrados'] = round((dias <= 120).mean() * 100, 1)
+
+        # ABIERTOS
+        if 'FECHA APERTURA' in df.columns and 'FECHA INICIO TRAMITACIÓN' in df.columns:
+            mask_ab = (df['FECHA APERTURA'] <= fs) & ((df['FECHA CIERRE'] > fs) | (df['FECHA CIERRE'].isna()))
+            if mask_ab.any():
+                d = df.loc[mask_ab].copy()
+                dias = (fs - d['FECHA INICIO TRAMITACIÓN']).dt.days.dropna()
+                dias = dias[dias >= 0]
+                if len(dias) > 0:
+                    resultados['percentil_90_abiertos'] = round(np.percentile(dias, 90), 1)
+                    resultados['percentil_180_abiertos'] = round((dias <= 180).mean() * 100, 1)
+                    resultados['percentil_120_abiertos'] = round((dias <= 120).mean() * 100, 1)
+
     except Exception as e:
-        print(f"ERROR en calcular_tiempos_optimizado: {e}")
-        import traceback
-        print(f"Detalle del error: {traceback.format_exc()}")
-    
+        # Mantener silent failure consistente con original pero loguear
+        print(f"ERROR en calcular_tiempos_optimizado (optimizado): {e}")
     return resultados
+
 
 def calcular_kpis_para_semana(_df, semana_fin, es_semana_actual=False):
     """Versión optimizada del cálculo de KPIs con tiempos optimizados"""
@@ -818,183 +930,49 @@ def identificar_filas_prioritarias(df):
         df['_prioridad'] = 0
         return df
 
-def actualizar_filtros_optimizados(df, estado_sel, equipo_sel, usuario_sel):
-    """Versión optimizada del filtrado interconectado"""
-    # Pre-calcular opciones disponibles
-    opciones_base = {
-        'estados': sorted(df['ESTADO'].dropna().unique()),
-        'equipos': sorted(df['EQUIPO'].dropna().unique()),
-        'usuarios': sorted(df['USUARIO'].dropna().unique())
-    }
-    
-    # Aplicar filtros secuencialmente de forma vectorizada
-    mask_actual = pd.Series(True, index=df.index)
-    
-    if estado_sel:
-        mask_actual &= df['ESTADO'].isin(estado_sel)
-    
-    # Calcular equipos disponibles basado en estado
-    equipos_disponibles = df.loc[mask_actual, 'EQUIPO'].dropna().unique()
-    equipos_disponibles = sorted(equipos_disponibles)
-    
-    if equipo_sel:
-        equipos_seleccionados = [eq for eq in equipo_sel if eq in equipos_disponibles]
-        mask_actual &= df['EQUIPO'].isin(equipos_seleccionados) if equipos_seleccionados else mask_actual
-    
-    # Calcular usuarios disponibles basado en estado y equipo
-    usuarios_disponibles = df.loc[mask_actual, 'USUARIO'].dropna().unique()
-    usuarios_disponibles = sorted(usuarios_disponibles)
-    
-    if usuario_sel:
-        usuarios_seleccionados = [us for us in usuario_sel if us in usuarios_disponibles]
-        mask_actual &= df['USUARIO'].isin(usuarios_seleccionados) if usuarios_seleccionados else mask_actual
-    
-    return df[mask_actual].copy(), equipos_disponibles, usuarios_disponibles
-
-@st.cache_data(ttl=3600)
+@st.cache_data(ttl=CACHE_TTL)
 def dataframe_to_pdf_bytes(df_mostrar, title, df_original):
-    """Versión optimizada de generación de PDFs"""
+    """Versión optimizada de generación de PDFs (más rápida)"""
     try:
         pdf = PDF('L', 'mm', 'A4')
         pdf.add_page()
-        
         pdf.set_font("Arial", "B", 8)
         pdf.cell(0, 5, title, 0, 1, 'C')
-        pdf.ln(5)
+        pdf.ln(4)
 
-        # PRE-CALCULAR estructura de columnas
-        columnas_a_excluir = {
-            idx for idx, col_name in enumerate(df_mostrar.columns) 
-            if "FECHA DE ACTUALIZACIÓN DATOS" in col_name.upper()
-        }
-        
-        # Filtrar columnas una sola vez
-        columnas_visibles = [
-            (idx, col_name, col_width) 
-            for idx, (col_name, col_width) in enumerate(zip(df_mostrar.columns, COL_WIDTHS_OPTIMIZED))
-            if idx not in columnas_a_excluir
-        ]
+        # Encabezados simples
+        pdf.set_font("Arial", "", 6)
+        widths = [COL_WIDTHS_OPTIMIZED[i] if i < len(COL_WIDTHS_OPTIMIZED) else 20 for i in range(len(df_mostrar.columns))]
+        for i, col in enumerate(df_mostrar.columns):
+            pdf.cell(widths[i], 5, str(col), 1, 0, 'C')
+        pdf.ln()
 
-        ALTURA_ENCABEZADO = 13
-        ALTURA_LINEA = 3
-        ALTURA_BASE_FILA = 2
-
-        # --- Encabezados de tabla ---
-        def imprimir_encabezados():
-            pdf.set_font("Arial", "", 5)
-            pdf.set_fill_color(200, 220, 255)
-            y_inicio = pdf.get_y()
-
-            for i, header in enumerate(df_mostrar.columns):
-                # EXCLUIR columna "FECHA DE ACTUALIZACIÓN DATOS"
-                if "FECHA DE ACTUALIZACIÓN DATOS" in header.upper():
-                    continue
-                    
-                x = pdf.get_x()
-                y = pdf.get_y()
-                pdf.cell(COL_WIDTHS_OPTIMIZED[i], ALTURA_ENCABEZADO, "", 1, 0, 'C', True)
-                pdf.set_xy(x, y)
-
-                texto = str(header)
-                ancho_texto = pdf.get_string_width(texto)
-
-                if ancho_texto <= COL_WIDTHS_OPTIMIZED[i] - 2:
-                    altura_texto = 3
-                    y_pos = y + (ALTURA_ENCABEZADO - altura_texto) / 2
-                    pdf.set_xy(x, y_pos)
-                    pdf.cell(COL_WIDTHS_OPTIMIZED[i], altura_texto, texto, 0, 0, 'C')
-                else:
-                    pdf.set_xy(x, y + 1)
-                    pdf.multi_cell(COL_WIDTHS_OPTIMIZED[i], 2.5, texto, 0, 'C')
-
-                pdf.set_xy(x + COL_WIDTHS_OPTIMIZED[i], y)
-
-            pdf.set_xy(pdf.l_margin, y_inicio + ALTURA_ENCABEZADO)
-
-        imprimir_encabezados()
-        pdf.set_font("Arial", "", 5)
-
-        # --- Filas de datos ---
-        for idx, (_, row) in enumerate(df_mostrar.iterrows()):
-            max_lineas = 1
-            for col_idx, (col_name, col_data) in enumerate(zip(df_mostrar.columns, row)):
-                # EXCLUIR columna "FECHA DE ACTUALIZACIÓN DATOS"
-                if "FECHA DE ACTUALIZACIÓN DATOS" in col_name.upper():
-                    continue
-                    
-                texto = str(col_data).replace("\n", " ")
-                # REEMPLAZAR "nan" por vacío
-                if texto.lower() == "nan" or texto.strip() == "":
+        pdf.set_font("Arial", "", 6)
+        for idx, row in df_mostrar.iterrows():
+            for i, col in enumerate(df_mostrar.columns):
+                texto = row[col]
+                if pd.isna(texto):
                     texto = ""
-                    
-                if not texto.strip():
-                    continue
-                ancho_disponible = min(COL_WIDTHS_OPTIMIZED) - 2
-                ancho_texto = pdf.get_string_width(texto)
-                if ancho_texto > ancho_disponible:
-                    lineas_necesarias = max(1, int(ancho_texto / ancho_disponible) + 1)
-                    max_lineas = max(max_lineas, lineas_necesarias)
-
-            altura_fila = ALTURA_BASE_FILA + ((max_lineas - 1) * ALTURA_LINEA) / 2
-
-            # Saltar de página si es necesario
-            if pdf.get_y() + altura_fila > 190:
+                texto = str(texto).replace("\n", " ")
+                w = widths[i]
+                # aplicar formato condicional ligero
+                try:
+                    pdf.aplicar_formato_condicional_pdf(df_original, idx, col, w, 4, pdf.get_x(), pdf.get_y())
+                except Exception:
+                    pass
+                # Usar multi_cell para permitir saltos si es necesario
+                pdf.multi_cell(w, 4, texto, border=1)
+            pdf.ln()
+            if pdf.get_y() > 180:
                 pdf.add_page()
-                imprimir_encabezados()
-
-            x_inicio = pdf.get_x()
-            y_inicio = pdf.get_y()
-
-            # Bordes de las celdas (excluyendo FECHA DE ACTUALIZACIÓN DATOS)
-            ancho_total = 0
-            for i, col_name in enumerate(df_mostrar.columns):
-                if "FECHA DE ACTUALIZACIÓN DATOS" in col_name.upper():
-                    continue
-                ancho_total += COL_WIDTHS_OPTIMIZED[i]
-                pdf.rect(x_inicio + sum(COL_WIDTHS_OPTIMIZED[:i]), y_inicio, COL_WIDTHS_OPTIMIZED[i], altura_fila)
-
-            # Contenido con formato condicional (excluyendo FECHA DE ACTUALIZACIÓN DATOS)
-            col_idx_visible = 0
-            for i, (col_name, col_data) in enumerate(zip(df_mostrar.columns, row)):
-                # EXCLUIR columna "FECHA DE ACTUALIZACIÓN DATOS"
-                if "FECHA DE ACTUALIZACIÓN DATOS" in col_name.upper():
-                    continue
-                    
-                texto = str(col_data).replace("\n", " ")
-                # REEMPLAZAR "nan" por vacío
-                if texto.lower() == "nan" or texto.strip() == "":
-                    texto = ""
-                    
-                x_celda = x_inicio + sum(COL_WIDTHS_OPTIMIZED[:col_idx_visible])
-                y_celda = y_inicio
-
-                pdf.aplicar_formato_condicional_pdf(
-                    df_original, idx, col_name, COL_WIDTHS_OPTIMIZED[col_idx_visible], altura_fila, x_celda, y_celda
-                )
-
-                pdf.set_xy(x_celda, y_celda)
-                pdf.multi_cell(COL_WIDTHS_OPTIMIZED[col_idx_visible], ALTURA_LINEA, texto, 0, 'L')
-                
-                col_idx_visible += 1
-
-            pdf.set_xy(pdf.l_margin, y_inicio + altura_fila)
-
-        # --- Exportar a bytes (compatible con todas las versiones de fpdf2) ---
-        pdf_output = pdf.output(dest='S')
-
-        # Normalizar salida: puede ser str, bytes o bytearray según versión de fpdf2
-        if isinstance(pdf_output, str):
-            pdf_bytes = pdf_output.encode('latin1')
-        elif isinstance(pdf_output, (bytes, bytearray)):
-            pdf_bytes = bytes(pdf_output)
-        else:
-            raise TypeError(f"Tipo inesperado devuelto por fpdf.output(): {type(pdf_output)}")
-
-        return io.BytesIO(pdf_bytes).getvalue()
-
+        out = pdf.output(dest='S')
+        if isinstance(out, str):
+            return out.encode('latin1')
+        return bytes(out)
     except Exception as e:
-        st.error(f"Error generando PDF: {e}")
+        st.error(f"Error generando PDF (optimizado): {e}")
         return None
+
 
 # === FUNCIONES ORIGINALES (MANTENIDAS POR COMPATIBILIDAD) ===
 
@@ -1489,16 +1467,47 @@ def generar_pdf_resumen_kpi(df_kpis_semanales, num_semana, fecha_max_str, df_com
         st.error(f"Detalle del error: {traceback.format_exc()}")
         return None
 
+@st.cache_data(ttl=CACHE_TTL_STATIC, show_spinner="📊 Generando PDF de resumen KPI...")
+def generar_pdf_resumen_kpi_cached(df_kpis_semanales, num_semana, fecha_max_str, df_combinado, semanas_disponibles, FECHA_REFERENCIA, fecha_max):
+    """Versión cached del PDF de resumen KPI - SOLO datos, sin gráficos pesados"""
+    return generar_pdf_resumen_kpi(df_kpis_semanales, num_semana, fecha_max_str, df_combinado, semanas_disponibles, FECHA_REFERENCIA, fecha_max)
+
+@st.cache_data(ttl=CACHE_TTL_STATIC, show_spinner="📊 Generando PDF de resumen KPI completo optimizado...")
+def generar_pdf_resumen_kpi_cached_completo(df_kpis_semanales, num_semana, fecha_max_str, df_combinado, semanas_disponibles, FECHA_REFERENCIA, fecha_max):
+    """Versión cached del PDF de resumen KPI completo optimizado"""
+    return generar_pdf_resumen_kpi_completo_optimizado(df_kpis_semanales, num_semana, fecha_max_str, df_combinado, semanas_disponibles, FECHA_REFERENCIA, fecha_max)
+
 # CALCULAR KPIs PARA TODAS LAS SEMANAS con cache de 2 horas - ACTUALIZADA
-@st.cache_data(ttl=CACHE_TTL, show_spinner="📊 Calculando KPIs históricos...")
+@st.cache_data(ttl=CACHE_TTL_DYNAMIC, show_spinner="📊 Calculando KPIs históricos...")
 def calcular_kpis_todas_semanas_optimizado(_df, _semanas, _fecha_referencia, _fecha_max, _user_key=user_env.session_id):
+    """Versión optimizada con pre-cálculo de máscaras reutilizables"""
+    
+    # PRE-CALCULAR máscaras base que se reutilizan en todas las semanas
+    fecha_9999 = pd.to_datetime('9999-09-09', errors='coerce')
+    
+    # Máscaras para columnas esenciales (una sola vez)
+    tiene_fecha_apertura = 'FECHA APERTURA' in _df.columns
+    tiene_fecha_resolucion = 'FECHA RESOLUCIÓN' in _df.columns
+    tiene_fecha_cierre = 'FECHA CIERRE' in _df.columns
+    tiene_estado = 'ESTADO' in _df.columns
+    tiene_etiq_penultimo = 'ETIQ. PENÚLTIMO TRAM.' in _df.columns
+    
+    # Pre-convertir columnas de fecha críticas
+    df_temp = _df.copy()
+    if tiene_fecha_apertura:
+        df_temp['FECHA APERTURA'] = pd.to_datetime(df_temp['FECHA APERTURA'], errors='coerce')
+    if tiene_fecha_resolucion:
+        df_temp['FECHA RESOLUCIÓN'] = pd.to_datetime(df_temp['FECHA RESOLUCIÓN'], errors='coerce')
+    if tiene_fecha_cierre:
+        df_temp['FECHA CIERRE'] = pd.to_datetime(df_temp['FECHA CIERRE'], errors='coerce')
+    
     datos_semanales = []
     
     for i, semana in enumerate(_semanas):
-        # Determinar si es la semana actual (la última)
-        es_semana_actual = (i == len(_semanas) - 1)  # Última semana en la lista
+        es_semana_actual = (i == len(_semanas) - 1)
         
-        kpis = calcular_kpis_para_semana(_df, semana, es_semana_actual)
+        # Usar la función existente pero con el DataFrame pre-procesado
+        kpis = calcular_kpis_para_semana(df_temp, semana, es_semana_actual)
         num_semana = ((semana - _fecha_referencia).days) // 7 + 1
         
         datos_semanales.append({
@@ -1620,390 +1629,6 @@ def enviar_correo_outlook(destinatario, asunto, cuerpo_mensaje, archivos_adjunto
         except:
             pass
 
-# CSS ACTUALIZADO CON ESTILOS PARA BOTONES Y MENÚS DESPLEGABLES
-st.markdown("""
-<style>
-    [data-testid="stSidebar"] {
-        background-color: #007933 !important;
-    }
-    
-    .main .block-container {
-        background-color: #C4DDCA !important;
-        padding: 2rem;
-        border-radius: 10px;
-    }
-    
-    .stApp {
-        background-color: #92C88F !important;
-    }
-    
-    [data-testid="stSidebar"] * {
-        color: white !important;
-    }
-    
-    .main .stMarkdown, .main h1, .main h2, .main h3 {
-        color: #333333 !important;
-    }
-    
-    /* ESTILOS ESPECÍFICOS PARA BOTONES EN LA BARRA LATERAL */
-    [data-testid="stSidebar"] button {
-        background-color: #005a25 !important;
-        color: white !important;
-        border: 1px solid white !important;
-        border-radius: 5px !important;
-        padding: 0.5rem 1rem !important;
-        font-weight: bold !important;
-    }
-    
-    [data-testid="stSidebar"] button:hover {
-        background-color: #003d1a !important;
-        color: white !important;
-        border: 1px solid white !important;
-    }
-    
-    [data-testid="stSidebar"] button:focus {
-        background-color: #003d1a !important;
-        color: white !important;
-        border: 2px solid #ffffff !important;
-        box-shadow: 0 0 0 0.2rem rgba(255, 255, 255, 0.25) !important;
-    }
-    
-    [data-testid="stSidebar"] button[kind="primary"] {
-        background-color: #00802b !important;
-        color: white !important;
-        border: 2px solid #ffffff !important;
-    }
-    
-    [data-testid="stSidebar"] button[kind="primary"]:hover {
-        background-color: #006622 !important;
-        color: white !important;
-    }
-    
-    /* Estilos para los botones de navegación de semanas en KPI */
-    [data-testid="stSidebar"] .stButton button {
-        background-color: #005a25 !important;
-        color: white !important;
-        border: 1px solid white !important;
-        border-radius: 5px !important;
-        padding: 0.5rem 1rem !important;
-        font-weight: bold !important;
-        width: 100% !important;
-    }
-    
-    [data-testid="stSidebar"] .stButton button:hover {
-        background-color: #003d1a !important;
-        color: white !important;
-        border: 1px solid white !important;
-    }
-    
-    /* ESTILOS PARA MENÚS DESPLEGABLES EN BARRA LATERAL */
-    [data-testid="stSidebar"] .stSelectbox > div > div {
-        background-color: #009945 !important;
-        color: white !important;
-        border: 1px solid white !important;
-        border-radius: 5px !important;
-    }
-    
-    [data-testid="stSidebar"] .stSelectbox > div > div:hover {
-        background-color: #007933 !important;
-        color: white !important;
-        border: 1px solid white !important;
-    }
-    
-    [data-testid="stSidebar"] .stSelectbox input {
-        color: white !important;
-    }
-    
-    [data-testid="stSidebar"] .stMultiSelect > div > div {
-        background-color: #009945 !important;
-        color: white !important;
-        border: 1px solid white !important;
-        border-radius: 5px !important;
-    }
-    
-    [data-testid="stSidebar"] .stMultiSelect > div > div:hover {
-        background-color: #007933 !important;
-        color: white !important;
-        border: 1px solid white !important;
-    }
-    
-    [data-testid="stSidebar"] .stMultiSelect input {
-        color: white !important;
-    }
-    
-    /* Estilos para las opciones del menú desplegable */
-    [data-testid="stSidebar"] .stSelectbox [data-testid="stMarkdownContainer"] p,
-    [data-testid="stSidebar"] .stMultiSelect [data-testid="stMarkdownContainer"] p {
-        color: white !important;
-    }
-    
-    /* Estilos para las opciones seleccionadas en multiselect */
-    [data-testid="stSidebar"] .stMultiSelect [data-baseweb="tag"] {
-        background-color: #005a25 !important;
-        color: white !important;
-        border: 1px solid white !important;
-        border-radius: 12px !important;
-    }
-    
-    [data-testid="stSidebar"] .stMultiSelect [data-baseweb="tag"]:hover {
-        background-color: #003d1a !important;
-        color: white !important;
-    }
-    
-    /* Estilos para el menú desplegable abierto */
-    [data-testid="stSidebar"] div[data-baseweb="popover"] {
-        background-color: #009945 !important;
-        border: 1px solid white !important;
-        border-radius: 5px !important;
-    }
-    
-    [data-testid="stSidebar"] div[data-baseweb="menu"] {
-        background-color: #009945 !important;
-        color: white !important;
-    }
-    
-    [data-testid="stSidebar"] div[data-baseweb="menu"] li {
-        background-color: #009945 !important;
-        color: white !important;
-    }
-    
-    [data-testid="stSidebar"] div[data-baseweb="menu"] li:hover {
-        background-color: #007933 !important;
-        color: white !important;
-    }
-    
-    [data-testid="stSidebar"] div[data-baseweb="menu"] li:focus {
-        background-color: #005a25 !important;
-        color: white !important;
-    }
-    
-    /* Estilos para el texto dentro de los menús desplegables */
-    [data-testid="stSidebar"] div[data-baseweb="popover"] * {
-        color: white !important;
-    }
-</style>
-""", unsafe_allow_html=True)
-
-# Logo
-st.sidebar.image("Logo Atrian.png", width=260)
-
-# Botón para limpiar cache
-with st.sidebar:
-    st.markdown("---")
-    col1, col2 = st.columns(2)
-    
-    with col1:
-        if st.button("🔄 Limpiar cache", help="Limpiar toda la cache y recargar"):
-            st.cache_data.clear()
-            # Mantener solo los datos esenciales
-            keys_to_keep = ['df_combinado', 'df_usuarios', 'archivos_hash', 'filtro_estado', 'filtro_equipo', 'filtro_usuario']
-            for key in list(st.session_state.keys()):
-                if key not in keys_to_keep:
-                    del st.session_state[key]
-            st.success("Cache limpiada correctamente")
-            st.rerun()
-    
-    with col2:
-        if st.button("🧹 Limpiar temp", help="Limpiar archivos temporales"):
-            user_env.cleanup()
-            st.success("Archivos temporales limpiados")
-
-# NUEVA SECCIÓN: CARGA DE CINCO ARCHIVOS (incluyendo DOCUMENTOS)
-st.markdown("---")
-st.subheader("📁 Carga de Archivos")
-
-# Crear cinco columnas para los archivos
-col1, col2, col3, col4, col5 = st.columns(5)
-
-with col1:
-    st.markdown('<div style="text-align: center; background-color: #1f77b4; padding: 10px; border-radius: 5px; margin-bottom: 10px;">'
-                '<h4 style="color: white; margin: 0;">📊 RECTAUTO</h4>'
-                '</div>', unsafe_allow_html=True)
-    archivo_rectauto = st.file_uploader(
-        "Archivo principal de expedientes",
-        type=["xlsx", "xls"],
-        key="rectauto_upload",
-        label_visibility="collapsed",
-        help="Sube el archivo principal RECTAUTO"
-    )
-    if archivo_rectauto:
-        st.success(f"✅ {archivo_rectauto.name}")
-    else:
-        st.info("⏳ Esperando archivo RECTAUTO")
-
-with col2:
-    st.markdown('<div style="text-align: center; background-color: #ff7f0e; padding: 10px; border-radius: 5px; margin-bottom: 10px;">'
-                '<h4 style="color: white; margin: 0;">📨 NOTIFICA</h4>'
-                '</div>', unsafe_allow_html=True)
-    archivo_notifica = st.file_uploader(
-        "Archivo de notificaciones",
-        type=["xlsx", "xls"],
-        key="notifica_upload",
-        label_visibility="collapsed",
-        help="Sube el archivo NOTIFICA"
-    )
-    if archivo_notifica:
-        st.success(f"✅ {archivo_notifica.name}")
-    else:
-        st.info("⏳ Esperando archivo NOTIFICA")
-
-with col3:
-    st.markdown('<div style="text-align: center; background-color: #2ca02c; padding: 10px; border-radius: 5px; margin-bottom: 10px;">'
-                '<h4 style="color: white; margin: 0;">⚡ TRIAJE</h4>'
-                '</div>', unsafe_allow_html=True)
-    archivo_triaje = st.file_uploader(
-        "Archivo de triaje",
-        type=["xlsx", "xls"],
-        key="triaje_upload",
-        label_visibility="collapsed",
-        help="Sube el archivo TRIAJE"
-    )
-    if archivo_triaje:
-        st.success(f"✅ {archivo_triaje.name}")
-    else:
-        st.info("⏳ Esperando archivo TRIAJE")
-
-with col4:
-    st.markdown('<div style="text-align: center; background-color: #9467bd; padding: 10px; border-radius: 5px; margin-bottom: 10px;">'
-                '<h4 style="color: white; margin: 0;">👥 USUARIOS</h4>'
-                '</div>', unsafe_allow_html=True)
-    archivo_usuarios = st.file_uploader(
-        "Archivo de configuración de usuarios",
-        type=["xlsx", "xls"],
-        key="usuarios_upload",
-        label_visibility="collapsed",
-        help="Sube el archivo USUARIOS.xlsx"
-    )
-    if archivo_usuarios:
-        st.success(f"✅ {archivo_usuarios.name}")
-    else:
-        st.info("⏳ Esperando archivo USUARIOS")
-
-with col5:
-    st.markdown('<div style="text-align: center; background-color: #d62728; padding: 10px; border-radius: 5px; margin-bottom: 10px;">'
-                '<h4 style="color: white; margin: 0;">📄 DOCUMENTOS</h4>'
-                '</div>', unsafe_allow_html=True)
-    archivo_documentos = st.file_uploader(
-        "Archivo de documentación incorporada",
-        type=["xlsx"],
-        key="documentos_upload",
-        label_visibility="collapsed",
-        help="Sube el archivo DOCUMENTOS.xlsx"
-    )
-    if archivo_documentos:
-        st.success(f"✅ {archivo_documentos.name}")
-    else:
-        st.info("⏳ Esperando archivo DOCUMENTOS")
-
-# Estado de carga
-st.markdown("---")
-st.subheader("📋 Estado de Carga")
-
-# Mostrar estado con métricas (6 columnas ahora)
-estado_col1, estado_col2, estado_col3, estado_col4, estado_col5, estado_col6 = st.columns(6)
-
-with estado_col1:
-    rectauto_status = "✅ Cargado" if archivo_rectauto else "❌ Pendiente"
-    st.metric("RECTAUTO", rectauto_status)
-
-with estado_col2:
-    notifica_status = "✅ Cargado" if archivo_notifica else "❌ Pendiente"
-    st.metric("NOTIFICA", notifica_status)
-
-with estado_col3:
-    triaje_status = "✅ Cargado" if archivo_triaje else "❌ Pendiente"
-    st.metric("TRIAJE", triaje_status)
-
-with estado_col4:
-    usuarios_status = "✅ Cargado" if archivo_usuarios else "❌ Pendiente"
-    st.metric("USUARIOS", usuarios_status)
-
-with estado_col5:
-    documentos_status = "✅ Cargado" if archivo_documentos else "❌ Pendiente"
-    st.metric("DOCUMENTOS", documentos_status)
-
-with estado_col6:
-    archivos_cargados = sum([1 for f in [archivo_rectauto, archivo_notifica, archivo_triaje, archivo_usuarios, archivo_documentos] if f])
-    st.metric("Total Cargados", f"{archivos_cargados}/5")
-
-# Procesar archivos cuando estén listos usando la función optimizada
-if archivo_rectauto:
-    # Verificar si los archivos han cambiado
-    archivos_actuales = {
-        'rectauto': obtener_hash_archivo(archivo_rectauto),
-        'notifica': obtener_hash_archivo(archivo_notifica) if archivo_notifica else None,
-        'triaje': obtener_hash_archivo(archivo_triaje) if archivo_triaje else None,
-        'usuarios': obtener_hash_archivo(archivo_usuarios) if archivo_usuarios else None,
-        'documentos': obtener_hash_archivo(archivo_documentos) if archivo_documentos else None
-    }
-    
-    archivos_guardados = st.session_state.get("archivos_hash", {})
-    
-    # Si los archivos son nuevos o cambiaron, procesar
-    if (archivos_actuales != archivos_guardados or 
-        "df_combinado" not in st.session_state):
-        
-        with st.spinner("🔄 Procesando archivos combinados..."):
-            try:
-                # Usar la función optimizada de procesamiento combinado
-                archivos_dict = {
-                    'rectauto': archivo_rectauto,
-                    'notifica': archivo_notifica,
-                    'triaje': archivo_triaje,
-                    'usuarios': archivo_usuarios,
-                    'documentos': archivo_documentos
-                }
-                
-                df_combinado, df_usuarios, datos_documentos = procesar_archivos_combinado(archivos_dict)
-                
-                # Convertir columnas de fecha
-                df_combinado = convertir_fechas(df_combinado)
-                
-                # Guardar en session_state
-                st.session_state["df_combinado"] = df_combinado
-                st.session_state["df_usuarios"] = df_usuarios
-                st.session_state["datos_documentos"] = datos_documentos
-                st.session_state["archivos_hash"] = archivos_actuales
-                
-                st.success(f"✅ Archivos procesados correctamente")
-                st.info(f"📊 Dataset final: {len(df_combinado)} registros, {len(df_combinado.columns)} columnas")
-                if df_usuarios is not None:
-                    st.info(f"👥 Usuarios cargados: {len(df_usuarios)} registros")
-                if datos_documentos is not None:
-                    st.info(f"📄 Documentos cargados: {len(datos_documentos['documentos'])} registros")
-                
-            except Exception as e:
-                st.error(f"❌ Error procesando archivos: {e}")
-                # Fallback: usar solo RECTAUTO
-                with st.spinner("🔄 Cargando solo RECTAUTO..."):
-                    df_rectauto = cargar_y_procesar_rectauto(archivo_rectauto)
-                    st.session_state["df_combinado"] = df_rectauto
-                    st.session_state["df_usuarios"] = None
-                    st.session_state["datos_documentos"] = None
-                    st.session_state["archivos_hash"] = archivos_actuales
-                    st.warning("⚠️ Usando solo archivo RECTAUTO debido a errores en combinación")
-    
-    else:
-        # Usar datos cacheados
-        df_combinado = st.session_state["df_combinado"]
-        df_usuarios = st.session_state.get("df_usuarios", None)
-        datos_documentos = st.session_state.get("datos_documentos", None)
-        st.sidebar.success("✅ Usando datos combinados cacheados")
-
-elif "df_combinado" in st.session_state:
-    # Usar datos previamente cargados
-    df_combinado = st.session_state["df_combinado"]
-    df_usuarios = st.session_state.get("df_usuarios", None)
-    datos_documentos = st.session_state.get("datos_documentos", None)
-    st.sidebar.info("📊 Datos combinados cargados desde cache")
-else:
-    st.warning("⚠️ **Carga obligatoria:** Sube al menos el archivo RECTAUTO para continuar")
-    st.info("💡 **Archivos opcionales:** NOTIFICA, TRIAJE, USUARIOS y DOCUMENTOS enriquecerán el análisis")
-    st.stop()
-
-
-
-
 # Función para aplicar formato condicional al DataFrame mostrado
 def aplicar_formato_condicional_dataframe(df):
     """Aplica formato condicional al DataFrame para Streamlit con NUEVAS condiciones"""
@@ -2067,63 +1692,6 @@ def aplicar_formato_condicional_dataframe(df):
     
     return styles
 
-# Mostrar información del dataset combinado
-with st.expander("📊 Información del Dataset Combinado"):
-    col1, col2, col3, col4 = st.columns(4)
-    
-    with col1:
-        st.metric("Total Registros", f"{len(df_combinado):,}".replace(",", "."))
-    
-    with col2:
-        st.metric("Total Columnas", len(df_combinado.columns))
-    
-    with col3:
-        archivos_usados = 1
-        if archivo_notifica and 'FECHA NOTIFICACIÓN' in df_combinado.columns:
-            archivos_usados += 1
-        if archivo_triaje and any(col in df_combinado.columns for col in ['USUARIO-CSV', 'CALIFICACIÓN', 'OBSERVACIONES', 'FECHA ASIG']):
-            archivos_usados += 1
-        if archivo_documentos and 'DOCUM.INCORP.' in df_combinado.columns:
-            archivos_usados += 1
-        st.metric("Archivos Usados", f"{archivos_usados}/4")
-    
-    with col4:
-        documentos_status = "✅ Cargado" if datos_documentos is not None else "❌ No cargado"
-        st.metric("DOCUMENTOS", documentos_status)
-    
-    # Mostrar primeras filas SIN formato condicional para evitar errores
-    st.write("**Vista previa del dataset combinado:**")
-    df_mostrar_preview = df_combinado.head(3).copy()
-    for col in df_mostrar_preview.select_dtypes(include='datetime').columns:
-        df_mostrar_preview[col] = df_mostrar_preview[col].dt.strftime("%d/%m/%Y")
-    
-    st.dataframe(df_mostrar_preview, use_container_width=True)
-    
-    # Mostrar columnas disponibles
-    st.write("**Columnas disponibles:**")
-    columnas_grupos = {}
-    for col in df_combinado.columns:
-        if col == 'FECHA NOTIFICACIÓN':
-            grupo = 'NOTIFICA'
-        elif col in ['USUARIO-CSV', 'CALIFICACIÓN', 'OBSERVACIONES', 'FECHA ASIG']:
-            grupo = 'TRIAJE'
-        elif col == 'DOCUM.INCORP.':
-            grupo = 'DOCUMENTACIÓN'
-        else:
-            grupo = 'RECTAUTO'
-        
-        if grupo not in columnas_grupos:
-            columnas_grupos[grupo] = []
-        columnas_grupos[grupo].append(col)
-    
-    for grupo, columnas in columnas_grupos.items():
-        with st.expander(f"📋 Columnas de {grupo} ({len(columnas)})"):
-            st.write(columnas)
-
-# Menú principal
-menu = ["Principal", "Indicadores clave (KPI)"]
-eleccion = st.sidebar.selectbox("Menú", menu)
-
 # Función para gráficos dinámicos (SIN CACHE)
 def crear_grafico_dinamico(_conteo, columna, titulo):
     """Crea gráficos dinámicos que responden a los filtros"""
@@ -2135,28 +1703,661 @@ def crear_grafico_dinamico(_conteo, columna, titulo):
     fig.update_traces(texttemplate='%{text:,}', textposition="auto")
     return fig
 
+# === FUNCIÓN OPTIMIZADA PARA GRÁFICOS COMPLETOS ===
+def generar_todos_graficos_kpi_optimizados(datos_grafico, num_semana, user_env):
+    """Versión optimizada que mantiene todos los gráficos pero mejora rendimiento"""
+    try:
+        import plotly.io as pio
+        
+        # Verificar si kaleido está disponible
+        if not hasattr(pio, 'kaleido') or pio.kaleido.scope is None:
+            raise ImportError("Kaleido no disponible")
+        
+        graficos_generados = {}
+        
+        # CONFIGURACIÓN COMÚN OPTIMIZADA
+        config_comun_optimizado = {
+            'height': 380,
+            'width': 700,
+            'showlegend': True,
+            'margin': dict(l=50, r=50, t=60, b=50),
+            'legend': dict(
+                orientation='h',
+                yanchor='bottom',
+                y=1.02,
+                xanchor='center',
+                x=0.5
+            )
+        }
+        
+        # LISTA DE TODOS LOS GRÁFICOS ORIGINALES (MANTENIENDO TODOS)
+        definiciones_graficos = [
+            # GRÁFICO 1: Evolución de expedientes principales
+            {
+                'func': lambda: px.line(
+                    datos_grafico,
+                    x='semana_numero',
+                    y=['nuevos_expedientes', 'despachados_semana', 'expedientes_cerrados'],
+                    title=f'Evolución de Expedientes - Semana {num_semana}',
+                    labels={'semana_numero': 'Semana', 'value': 'Cantidad', 'variable': 'KPI'},
+                    color_discrete_map={
+                        'nuevos_expedientes': '#1f77b4',
+                        'despachados_semana': '#ff7f0e',
+                        'expedientes_cerrados': '#2ca02c'
+                    }
+                ),
+                'nombre': 'chart1',
+                'titulo_pdf': "Evolución de Expedientes (Nuevos, Despachados, Cerrados)"
+            },
+            
+            # GRÁFICO 2: Expedientes Abiertos
+            {
+                'func': lambda: px.line(
+                    datos_grafico,
+                    x='semana_numero',
+                    y=['total_abiertos'],
+                    title=f'Expedientes Abiertos - Semana {num_semana}',
+                    labels={'semana_numero': 'Semana', 'value': 'Cantidad'},
+                    color_discrete_sequence=['#d62728']
+                ),
+                'nombre': 'chart2',
+                'titulo_pdf': "Evolución de Expedientes Abiertos"
+            },
+            
+            # GRÁFICO 3: Coeficientes de absorción
+            {
+                'func': lambda: px.line(
+                    datos_grafico,
+                    x='semana_numero',
+                    y=['c_abs_despachados_sem', 'c_abs_despachados_tot', 'c_abs_cerrados_sem', 'c_abs_cerrados_tot'],
+                    title=f'Coeficientes de Absorción - Semana {num_semana}',
+                    labels={'semana_numero': 'Semana', 'value': 'Porcentaje (%)', 'variable': 'Indicador'},
+                    color_discrete_map={
+                        'c_abs_despachados_sem': '#9467bd',
+                        'c_abs_cerrados_sem': '#8c564b',
+                        'c_abs_despachados_tot': '#c5b0d5',
+                        'c_abs_cerrados_tot': '#c49c94'
+                    }
+                ),
+                'nombre': 'chart3',
+                'titulo_pdf': "Coeficientes de Absorción Semanales (%)"
+            },
+            
+            # GRÁFICO 4: Tiempos de tramitación
+            {
+                'func': lambda: px.line(
+                    datos_grafico,
+                    x='semana_numero',
+                    y=['tiempo_medio_despachados', 'tiempo_medio_cerrados', 'percentil_90_despachados', 'percentil_90_cerrados'],
+                    title=f'Tiempos de Tramitación - Semana {num_semana}',
+                    labels={'semana_numero': 'Semana', 'value': 'Días', 'variable': 'Indicador'},
+                    color_discrete_map={
+                        'tiempo_medio_despachados': '#ff7f0e',
+                        'tiempo_medio_cerrados': '#2ca02c',
+                        'percentil_90_despachados': '#ffbb78',
+                        'percentil_90_cerrados': '#98df8a'
+                    }
+                ),
+                'nombre': 'chart4',
+                'titulo_pdf': "Tiempos de Tramitación (Medios y Percentil 90)"
+            },
+            
+            # GRÁFICO 5: Porcentajes 120/180 días
+            {
+                'func': lambda: px.line(
+                    datos_grafico,
+                    x='semana_numero',
+                    y=['percentil_180_despachados', 'percentil_120_despachados', 'percentil_180_cerrados', 'percentil_120_cerrados'],
+                    title=f'Expedientes dentro de Plazos - Semana {num_semana}',
+                    labels={'semana_numero': 'Semana', 'value': 'Porcentaje (%)', 'variable': 'Indicador'},
+                    color_discrete_map={
+                        'percentil_180_despachados': '#ff7f0e',
+                        'percentil_120_despachados': '#ffddaa',
+                        'percentil_180_cerrados': '#2ca02c',
+                        'percentil_120_cerrados': '#98df8a'
+                    }
+                ),
+                'nombre': 'chart5',
+                'titulo_pdf': "Porcentaje de Expedientes dentro de Plazos (120/180 días)"
+            }
+        ]
+        
+        # GENERAR GRÁFICOS CON CONFIGURACIÓN OPTIMIZADA
+        for definicion in definiciones_graficos:
+            try:
+                fig = definicion['func']()
+                fig.update_layout(**config_comun_optimizado)
+                fig.add_vline(x=num_semana, line_dash="dash", line_color="red")
+                
+                # Exportar con configuración optimizada
+                temp_path = user_env.get_temp_path(f"{definicion['nombre']}_{num_semana}.png")
+                fig.write_image(
+                    temp_path,
+                    engine="kaleido",
+                    scale=1.8,  # Calidad optimizada para PDF
+                    format="png",
+                    optimize=True  # Habilitar optimización interna
+                )
+                
+                graficos_generados[definicion['nombre']] = {
+                    'path': temp_path,
+                    'titulo': definicion['titulo_pdf']
+                }
+                
+            except Exception as e:
+                print(f"Error generando gráfico {definicion['nombre']}: {e}")
+                graficos_generados[definicion['nombre']] = None
+        
+        return graficos_generados
+        
+    except Exception as e:
+        print(f"Error en generación completa de gráficos: {e}")
+        return {}
 
-if eleccion == "Principal":
-    # Usar df_combinado en lugar de df
-    df = df_combinado
+def generar_pdf_resumen_kpi_completo_optimizado(df_kpis_semanales, num_semana, fecha_max_str, df_combinado, semanas_disponibles, FECHA_REFERENCIA, fecha_max):
+    """Versión optimizada que mantiene TODOS los gráficos y contenido original"""
+    try:
+        # Filtrar datos de la semana actual (igual que antes)
+        kpis_semana = df_kpis_semanales[df_kpis_semanales['semana_numero'] == num_semana].iloc[0]
+        
+        pdf = PDFResumenKPI()
+        
+        # Título principal (sin cambios)
+        pdf.set_font('Arial', 'B', 14)
+        pdf.cell(0, 10, f'RESUMEN DE KPIs - SEMANA {num_semana}', 0, 1, 'C')
+        pdf.cell(0, 5, f'Periodo: {fecha_max_str}', 0, 1, 'C')
+        pdf.ln(3)
+        
+        # SECCIÓN 1: KPIs PRINCIPALES (mantener exactamente igual)
+        pdf.add_section_title("KPIs PRINCIPALES")
+        
+        # Semanales
+        pdf.set_font('Arial', 'B', 10)
+        pdf.cell(0, 8, "Semanales:", 0, 1)
+        pdf.add_metric("Nuevos Expedientes", f"{int(kpis_semana['nuevos_expedientes']):,}".replace(",", "."))
+        pdf.add_metric("Expedientes Despachados", f"{int(kpis_semana['despachados_semana']):,}".replace(",", "."))
+        pdf.add_metric("Coef. Absorcion (Desp/Nuevos)", f"{kpis_semana['c_abs_despachados_sem']:.2f}%".replace(".", ","))
+        pdf.add_metric("Expedientes Cerrados", f"{int(kpis_semana['expedientes_cerrados']):,}".replace(",", "."))
+        pdf.add_metric("Coef. Absorcion (Cer/Asig)", f"{kpis_semana['c_abs_cerrados_sem']:.2f}%".replace(".", ","))
+        pdf.add_metric("Expedientes Abiertos", f"{int(kpis_semana['total_abiertos']):,}".replace(",", "."))
+        
+        pdf.ln(3)
+        
+        # Totales
+        pdf.set_font('Arial', 'B', 10)
+        pdf.cell(0, 8, "Totales (desde 01/11/2022):", 0, 1)
+        pdf.add_metric("Nuevos Expedientes", f"{int(kpis_semana['nuevos_expedientes_totales']):,}".replace(",", "."))
+        pdf.add_metric("Expedientes Despachados", f"{int(kpis_semana['despachados_totales']):,}".replace(",", "."))
+        pdf.add_metric("Coef. Absorcion (Desp/Nuevos)", f"{kpis_semana['c_abs_despachados_tot']:.2f}%".replace(".", ","))
+        pdf.add_metric("Expedientes Cerrados", f"{int(kpis_semana['expedientes_cerrados_totales']):,}".replace(",", "."))
+        pdf.add_metric("Coef. Absorcion (Cer/Asig)", f"{kpis_semana['c_abs_cerrados_tot']:.2f}%".replace(".", ","))
+        
+        pdf.ln(3)
+        
+        # SECCIÓN 2: EXPEDIENTES ESPECIALES (mantener igual)
+        pdf.add_section_title("EXPEDIENTES CON 029, 033, PRE, RSL, PENDIENTE DE FIRMA, DECISION O COMPLETAR TRAMITE")
+        pdf.add_metric("Expedientes Especiales", f"{int(kpis_semana['expedientes_especiales']):,}".replace(",", "."))
+        pdf.add_metric("Porcentaje sobre Abiertos", f"{kpis_semana['porcentaje_especiales']:.2f}%".replace(".", ","))
+        
+        pdf.ln(3)
+        
+        # SECCIÓN 3: TIEMPOS DE TRAMITACION (mantener igual)
+        pdf.add_section_title("TIEMPOS DE TRAMITACION (en dias)")
+        
+        # Expedientes Despachados
+        pdf.set_font('Arial', 'B', 9)
+        pdf.cell(0, 7, "Expedientes Despachados:", 0, 1)
+        pdf.add_metric("Tiempo Medio", f"{kpis_semana['tiempo_medio_despachados']:.0f} dias")
+        pdf.add_metric("Percentil 90", f"{kpis_semana['percentil_90_despachados']:.0f} dias")
+        pdf.add_metric("<=180 dias", f"{kpis_semana['percentil_180_despachados']:.2f}%".replace(".", ","))
+        pdf.add_metric("<=120 dias", f"{kpis_semana['percentil_120_despachados']:.2f}%".replace(".", ","))
+        
+        pdf.ln(3)
+        
+        # Expedientes Cerrados
+        pdf.set_font('Arial', 'B', 9)
+        pdf.cell(0, 7, "Expedientes Cerrados:", 0, 1)
+        pdf.add_metric("Tiempo Medio", f"{kpis_semana['tiempo_medio_cerrados']:.0f} dias")
+        pdf.add_metric("Percentil 90", f"{kpis_semana['percentil_90_cerrados']:.0f} dias")
+        pdf.add_metric("<=180 dias", f"{kpis_semana['percentil_180_cerrados']:.2f}%".replace(".", ","))
+        pdf.add_metric("<=120 dias", f"{kpis_semana['percentil_120_cerrados']:.2f}%".replace(".", ","))
+        
+        pdf.ln(3)
+        
+        # Expedientes Abiertos
+        pdf.set_font('Arial', 'B', 9)
+        pdf.cell(0, 7, "Expedientes Abiertos:", 0, 1)
+        pdf.add_metric("Percentil 90", f"{kpis_semana['percentil_90_abiertos']:.0f} dias")
+        pdf.add_metric("<=180 dias", f"{kpis_semana['percentil_180_abiertos']:.2f}%".replace(".", ","))
+        pdf.add_metric("<=120 dias", f"{kpis_semana['percentil_120_abiertos']:.2f}%".replace(".", ","))
+        
+        # Información del período
+        pdf.ln(3)
+        pdf.set_font('Arial', 'I', 8)
+        if kpis_semana['es_semana_actual']:
+            periodo_texto = f"Periodo de la semana (ACTUAL): {kpis_semana['inicio_semana'].strftime('%d/%m/%Y')} a {kpis_semana['fin_semana'].strftime('%d/%m/%Y')} - {kpis_semana['dias_semana']} dias"
+        else:
+            periodo_texto = f"Periodo de la semana: {kpis_semana['inicio_semana'].strftime('%d/%m/%Y')} a {kpis_semana['fin_semana'].strftime('%d/%m/%Y')} - {kpis_semana['dias_semana']} dias"
+        
+        pdf.cell(0, 5, periodo_texto, 0, 1)
+        
+        # ===== SECCIÓN DE GRÁFICOS OPTIMIZADA =====
+        pdf.add_page()
+        pdf.add_section_title("GRAFICOS DE EVOLUCION - SEMANA " + str(num_semana))
+
+        try:
+            # Usar TODOS los datos, no solo las últimas semanas
+            datos_grafico = df_kpis_semanales.copy()
+            
+            # Generar TODOS los gráficos de forma optimizada
+            with st.spinner("🔄 Generando gráficos completos..."):
+                graficos_generados = generar_todos_graficos_kpi_optimizados(datos_grafico, num_semana, user_env)
+            
+            # DISTRIBUCIÓN OPTIMIZADA DE GRÁFICOS EN EL PDF
+            # Página 1: Gráficos 1, 2 y 3
+            if graficos_generados.get('chart1'):
+                pdf.ln(3)
+                pdf.set_font('Arial', 'B', 10)
+                pdf.cell(0, 8, graficos_generados['chart1']['titulo'], 0, 1)
+                pdf.image(graficos_generados['chart1']['path'], x=10, w=190)
+                pdf.ln(3)
+            
+            if graficos_generados.get('chart2'):
+                pdf.set_font('Arial', 'B', 10)
+                pdf.cell(0, 8, graficos_generados['chart2']['titulo'], 0, 1)
+                pdf.image(graficos_generados['chart2']['path'], x=10, w=190)
+                pdf.ln(3)
+            
+            # Página 2: Gráficos 3, 4 y 5
+            pdf.add_page()
+            
+            if graficos_generados.get('chart3'):
+                pdf.set_font('Arial', 'B', 10)
+                pdf.cell(0, 8, graficos_generados['chart3']['titulo'], 0, 1)
+                pdf.image(graficos_generados['chart3']['path'], x=10, w=190)
+                pdf.ln(3)
+            
+            if graficos_generados.get('chart4'):
+                pdf.set_font('Arial', 'B', 10)
+                pdf.cell(0, 8, graficos_generados['chart4']['titulo'], 0, 1)
+                pdf.image(graficos_generados['chart4']['path'], x=10, w=190)
+                pdf.ln(3)
+            
+            # Página 3: Gráfico 5
+            pdf.add_page()
+            
+            if graficos_generados.get('chart5'):
+                pdf.set_font('Arial', 'B', 10)
+                pdf.cell(0, 8, graficos_generados['chart5']['titulo'], 0, 1)
+                pdf.image(graficos_generados['chart5']['path'], x=10, w=190)
+            
+            # LIMPIEZA OPTIMIZADA DE ARCHIVOS TEMPORALES
+            for grafico_info in graficos_generados.values():
+                if grafico_info and 'path' in grafico_info and os.path.exists(grafico_info['path']):
+                    try:
+                        os.remove(grafico_info['path'])
+                    except:
+                        pass  # Ignorar errores de limpieza
+                        
+        except Exception as chart_error:
+            # Manejo de errores mejorado pero manteniendo tabla alternativa completa
+            pdf.ln(3)
+            pdf.set_font('Arial', 'I', 8)
+            pdf.cell(0, 5, f"Nota: No se pudieron incluir los gráficos. Error: {str(chart_error)}", 0, 1)
+            pdf.cell(0, 5, "Instale Kaleido: pip install kaleido", 0, 1)
+            
+            # Agregar tabla de datos completa como alternativa
+            agregar_tabla_datos_completa_alternativa(pdf, datos_grafico)
+        
+        # Exportar a bytes
+        pdf_output = pdf.output(dest='S')
+        
+        if isinstance(pdf_output, str):
+            pdf_bytes = pdf_output.encode('latin1')
+        else:
+            pdf_bytes = bytes(pdf_output)
+
+        return pdf_bytes
+
+    except Exception as e:
+        st.error(f"Error generando PDF de resumen KPI optimizado: {e}")
+        import traceback
+        st.error(f"Detalle del error: {traceback.format_exc()}")
+        return None
+
+def agregar_tabla_datos_completa_alternativa(pdf, datos_grafico):
+    """Tabla alternativa completa cuando no hay gráficos"""
+    pdf.ln(5)
+    pdf.set_font('Arial', 'B', 9)
+    pdf.cell(0, 6, "Datos de evolución completos:", 0, 1)
     
-    columna_fecha = df.columns[13]
-    df[columna_fecha] = pd.to_datetime(df[columna_fecha], errors='coerce')
-    fecha_max = df[columna_fecha].max()
-    dias_transcurridos = (fecha_max - FECHA_REFERENCIA).days
-    num_semana = dias_transcurridos // 7 + 1
-    fecha_max_str = fecha_max.strftime("%d/%m/%Y") if pd.notna(fecha_max) else "Sin fecha"
-    st.subheader(f"📅 Semana {num_semana} a {fecha_max_str}")
+    # Mostrar tabla con TODOS los datos numéricos importantes
+    datos_tabla = datos_grafico[[
+        'semana_numero', 'nuevos_expedientes', 'despachados_semana', 
+        'expedientes_cerrados', 'total_abiertos', 'c_abs_despachados_sem',
+        'tiempo_medio_despachados', 'percentil_90_despachados'
+    ]]
+    
+    pdf.set_font('Arial', '', 6)
+    
+    # Encabezados de tabla completa
+    headers = ["Sem", "Nuevos", "Despach", "Cerrad", "Abiert", "CoefAbs%", "TmpMed", "P90"]
+    widths = [12, 12, 12, 12, 12, 12, 12, 12]
+    
+    for i, header in enumerate(headers):
+        pdf.cell(widths[i], 5, header, 1)
+    pdf.ln()
+    
+    # Datos completos
+    for _, row in datos_tabla.iterrows():
+        pdf.cell(widths[0], 5, str(int(row['semana_numero'])), 1)
+        pdf.cell(widths[1], 5, str(int(row['nuevos_expedientes'])), 1)
+        pdf.cell(widths[2], 5, str(int(row['despachados_semana'])), 1)
+        pdf.cell(widths[3], 5, str(int(row['expedientes_cerrados'])), 1)
+        pdf.cell(widths[4], 5, str(int(row['total_abiertos'])), 1)
+        pdf.cell(widths[5], 5, f"{row['c_abs_despachados_sem']:.1f}%", 1)
+        pdf.cell(widths[6], 5, f"{row['tiempo_medio_despachados']:.0f}", 1)
+        pdf.cell(widths[7], 5, f"{row['percentil_90_despachados']:.0f}", 1)
+        pdf.ln()
 
+# =============================================
+# PÁGINA 1: CARGA DE ARCHIVOS
+# =============================================
+if eleccion == "Carga de Archivos":
+    st.header("📁 Carga de Archivos")
+    
+    # Mostrar botones de limpieza solo en esta página
+    with st.sidebar:
+        st.markdown("---")
+        st.subheader("🛠️ Herramientas de Mantenimiento")
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            if st.button("🔄 Limpiar cache", help="Limpiar toda la cache y recargar", use_container_width=True):
+                st.cache_data.clear()
+                # Mantener solo los datos esenciales
+                keys_to_keep = ['df_combinado', 'df_usuarios', 'archivos_hash', 'filtro_estado', 'filtro_equipo', 'filtro_usuario']
+                for key in list(st.session_state.keys()):
+                    if key not in keys_to_keep:
+                        del st.session_state[key]
+                st.success("Cache limpiada correctamente")
+                st.rerun()
+        
+        with col2:
+            if st.button("🧹 Limpiar temp", help="Limpiar archivos temporales", use_container_width=True):
+                user_env.cleanup()
+                st.success("Archivos temporales limpiados")
+
+    # NUEVA SECCIÓN: CARGA DE CINCO ARCHIVOS (incluyendo DOCUMENTOS)
+    st.markdown("---")
+    st.subheader("📁 Carga de Archivos")
+
+    # Crear cinco columnas para los archivos
+    col1, col2, col3, col4, col5 = st.columns(5)
+
+    with col1:
+        st.markdown('<div style="text-align: center; background-color: #1f77b4; padding: 10px; border-radius: 5px; margin-bottom: 10px;">'
+                    '<h4 style="color: white; margin: 0;">📊 RECTAUTO</h4>'
+                    '</div>', unsafe_allow_html=True)
+        archivo_rectauto = st.file_uploader(
+            "Archivo principal de expedientes",
+            type=["xlsx", "xls"],
+            key="rectauto_upload",
+            label_visibility="collapsed",
+            help="Sube el archivo principal RECTAUTO"
+        )
+        if archivo_rectauto:
+            st.success(f"✅ {archivo_rectauto.name}")
+        else:
+            st.info("⏳ Esperando archivo RECTAUTO")
+
+    with col2:
+        st.markdown('<div style="text-align: center; background-color: #ff7f0e; padding: 10px; border-radius: 5px; margin-bottom: 10px;">'
+                    '<h4 style="color: white; margin: 0;">📨 NOTIFICA</h4>'
+                    '</div>', unsafe_allow_html=True)
+        archivo_notifica = st.file_uploader(
+            "Archivo de notificaciones",
+            type=["xlsx", "xls"],
+            key="notifica_upload",
+            label_visibility="collapsed",
+            help="Sube el archivo NOTIFICA"
+        )
+        if archivo_notifica:
+            st.success(f"✅ {archivo_notifica.name}")
+        else:
+            st.info("⏳ Esperando archivo NOTIFICA")
+
+    with col3:
+        st.markdown('<div style="text-align: center; background-color: #2ca02c; padding: 10px; border-radius: 5px; margin-bottom: 10px;">'
+                    '<h4 style="color: white; margin: 0;">⚡ TRIAJE</h4>'
+                    '</div>', unsafe_allow_html=True)
+        archivo_triaje = st.file_uploader(
+            "Archivo de triaje",
+            type=["xlsx", "xls"],
+            key="triaje_upload",
+            label_visibility="collapsed",
+            help="Sube el archivo TRIAJE"
+        )
+        if archivo_triaje:
+            st.success(f"✅ {archivo_triaje.name}")
+        else:
+            st.info("⏳ Esperando archivo TRIAJE")
+
+    with col4:
+        st.markdown('<div style="text-align: center; background-color: #9467bd; padding: 10px; border-radius: 5px; margin-bottom: 10px;">'
+                    '<h4 style="color: white; margin: 0;">👥 USUARIOS</h4>'
+                    '</div>', unsafe_allow_html=True)
+        archivo_usuarios = st.file_uploader(
+            "Archivo de configuración de usuarios",
+            type=["xlsx", "xls"],
+            key="usuarios_upload",
+            label_visibility="collapsed",
+            help="Sube el archivo USUARIOS.xlsx"
+        )
+        if archivo_usuarios:
+            st.success(f"✅ {archivo_usuarios.name}")
+        else:
+            st.info("⏳ Esperando archivo USUARIOS")
+
+    with col5:
+        st.markdown('<div style="text-align: center; background-color: #d62728; padding: 10px; border-radius: 5px; margin-bottom: 10px;">'
+                    '<h4 style="color: white; margin: 0;">📄 DOCUMENTOS</h4>'
+                    '</div>', unsafe_allow_html=True)
+        archivo_documentos = st.file_uploader(
+            "Archivo de documentación incorporada",
+            type=["xlsx"],
+            key="documentos_upload",
+            label_visibility="collapsed",
+            help="Sube el archivo DOCUMENTOS.xlsx"
+        )
+        if archivo_documentos:
+            st.success(f"✅ {archivo_documentos.name}")
+        else:
+            st.info("⏳ Esperando archivo DOCUMENTOS")
+
+    # Estado de carga
+    st.markdown("---")
+    st.subheader("📋 Estado de Carga")
+
+    # Mostrar estado con métricas (6 columnas ahora)
+    estado_col1, estado_col2, estado_col3, estado_col4, estado_col5, estado_col6 = st.columns(6)
+
+    with estado_col1:
+        rectauto_status = "✅ Cargado" if archivo_rectauto else "❌ Pendiente"
+        st.metric("RECTAUTO", rectauto_status)
+
+    with estado_col2:
+        notifica_status = "✅ Cargado" if archivo_notifica else "❌ Pendiente"
+        st.metric("NOTIFICA", notifica_status)
+
+    with estado_col3:
+        triaje_status = "✅ Cargado" if archivo_triaje else "❌ Pendiente"
+        st.metric("TRIAJE", triaje_status)
+
+    with estado_col4:
+        usuarios_status = "✅ Cargado" if archivo_usuarios else "❌ Pendiente"
+        st.metric("USUARIOS", usuarios_status)
+
+    with estado_col5:
+        documentos_status = "✅ Cargado" if archivo_documentos else "❌ Pendiente"
+        st.metric("DOCUMENTOS", documentos_status)
+
+    with estado_col6:
+        archivos_cargados = sum([1 for f in [archivo_rectauto, archivo_notifica, archivo_triaje, archivo_usuarios, archivo_documentos] if f])
+        st.metric("Total Cargados", f"{archivos_cargados}/5")
+
+    # Procesar archivos cuando estén listos usando la función optimizada
+    if archivo_rectauto:
+        # Verificar si los archivos han cambiado
+        archivos_actuales = {
+            'rectauto': obtener_hash_archivo(archivo_rectauto),
+            'notifica': obtener_hash_archivo(archivo_notifica) if archivo_notifica else None,
+            'triaje': obtener_hash_archivo(archivo_triaje) if archivo_triaje else None,
+            'usuarios': obtener_hash_archivo(archivo_usuarios) if archivo_usuarios else None,
+            'documentos': obtener_hash_archivo(archivo_documentos) if archivo_documentos else None
+        }
+        
+        archivos_guardados = st.session_state.get("archivos_hash", {})
+        
+        # Si los archivos son nuevos o cambiaron, procesar
+        if (archivos_actuales != archivos_guardados or 
+            "df_combinado" not in st.session_state):
+            
+            with st.spinner("🔄 Procesando archivos combinados..."):
+                try:
+                    # Usar la función optimizada de procesamiento combinado
+                    archivos_dict = {
+                        'rectauto': archivo_rectauto,
+                        'notifica': archivo_notifica,
+                        'triaje': archivo_triaje,
+                        'usuarios': archivo_usuarios,
+                        'documentos': archivo_documentos
+                    }
+                    
+                    df_combinado, df_usuarios, datos_documentos = procesar_archivos_combinado(archivos_dict)
+                    
+                    # Convertir columnas de fecha
+                    df_combinado = convertir_fechas(df_combinado)
+                    
+                    # Guardar en session_state
+                    st.session_state["df_combinado"] = df_combinado
+                    st.session_state["df_usuarios"] = df_usuarios
+                    st.session_state["datos_documentos"] = datos_documentos
+                    st.session_state["archivos_hash"] = archivos_actuales
+                    
+                    st.success(f"✅ Archivos procesados correctamente")
+                    st.info(f"📊 Dataset final: {len(df_combinado)} registros, {len(df_combinado.columns)} columnas")
+                    if df_usuarios is not None:
+                        st.info(f"👥 Usuarios cargados: {len(df_usuarios)} registros")
+                    if datos_documentos is not None:
+                        st.info(f"📄 Documentos cargados: {len(datos_documentos['documentos'])} registros")
+                    
+                except Exception as e:
+                    st.error(f"❌ Error procesando archivos: {e}")
+                    # Fallback: usar solo RECTAUTO
+                    with st.spinner("🔄 Cargando solo RECTAUTO..."):
+                        df_rectauto = cargar_y_procesar_rectauto(archivo_rectauto)
+                        st.session_state["df_combinado"] = df_rectauto
+                        st.session_state["df_usuarios"] = None
+                        st.session_state["datos_documentos"] = None
+                        st.session_state["archivos_hash"] = archivos_actuales
+                        st.warning("⚠️ Usando solo archivo RECTAUTO debido a errores en combinación")
+        
+        else:
+            # Usar datos cacheados
+            df_combinado = st.session_state["df_combinado"]
+            df_usuarios = st.session_state.get("df_usuarios", None)
+            datos_documentos = st.session_state.get("datos_documentos", None)
+            st.sidebar.success("✅ Usando datos combinados cacheados")
+
+    elif "df_combinado" in st.session_state:
+        # Usar datos previamente cargados
+        df_combinado = st.session_state["df_combinado"]
+        df_usuarios = st.session_state.get("df_usuarios", None)
+        datos_documentos = st.session_state.get("datos_documentos", None)
+        st.sidebar.info("📊 Datos combinados cargados desde cache")
+    else:
+        st.warning("⚠️ **Carga obligatoria:** Sube al menos el archivo RECTAUTO para continuar")
+        st.info("💡 **Archivos opcionales:** NOTIFICA, TRIAJE, USUARIOS y DOCUMENTOS enriquecerán el análisis")
+        st.stop()
+
+    # Mostrar información del dataset combinado
+    with st.expander("📊 Información del Dataset Combinado"):
+        col1, col2, col3, col4 = st.columns(4)
+        
+        with col1:
+            st.metric("Total Registros", f"{len(df_combinado):,}".replace(",", "."))
+        
+        with col2:
+            st.metric("Total Columnas", len(df_combinado.columns))
+        
+        with col3:
+            archivos_usados = 1
+            if archivo_notifica and 'FECHA NOTIFICACIÓN' in df_combinado.columns:
+                archivos_usados += 1
+            if archivo_triaje and any(col in df_combinado.columns for col in ['USUARIO-CSV', 'CALIFICACIÓN', 'OBSERVACIONES', 'FECHA ASIG']):
+                archivos_usados += 1
+            if archivo_documentos and 'DOCUM.INCORP.' in df_combinado.columns:
+                archivos_usados += 1
+            st.metric("Archivos Usados", f"{archivos_usados}/4")
+        
+        with col4:
+            documentos_status = "✅ Cargado" if datos_documentos is not None else "❌ No cargado"
+            st.metric("DOCUMENTOS", documentos_status)
+        
+        # Mostrar primeras filas SIN formato condicional para evitar errores
+        st.write("**Vista previa del dataset combinado:**")
+        df_mostrar_preview = df_combinado.head(3).copy()
+        for col in df_mostrar_preview.select_dtypes(include='datetime').columns:
+            df_mostrar_preview[col] = df_mostrar_preview[col].dt.strftime("%d/%m/%Y")
+        
+        st.dataframe(df_mostrar_preview, use_container_width=True)
+        
+        # Mostrar columnas disponibles
+        st.write("**Columnas disponibles:**")
+        columnas_grupos = {}
+        for col in df_combinado.columns:
+            if col == 'FECHA NOTIFICACIÓN':
+                grupo = 'NOTIFICA'
+            elif col in ['USUARIO-CSV', 'CALIFICACIÓN', 'OBSERVACIONES', 'FECHA ASIG']:
+                grupo = 'TRIAJE'
+            elif col == 'DOCUM.INCORP.':
+                grupo = 'DOCUMENTACIÓN'
+            else:
+                grupo = 'RECTAUTO'
+            
+            if grupo not in columnas_grupos:
+                columnas_grupos[grupo] = []
+            columnas_grupos[grupo].append(col)
+        
+        for grupo, columnas in columnas_grupos.items():
+            with st.expander(f"📋 Columnas de {grupo} ({len(columnas)})"):
+                st.write(columnas)
+
+# =============================================
+# PÁGINA 2: VISTA DE EXPEDIENTES
+# =============================================
+elif eleccion == "Vista de Expedientes":
+    st.header("📋 Vista de Expedientes")
+    
+    if "df_combinado" not in st.session_state:
+        st.warning("⚠️ Primero carga los archivos en la sección 'Carga de Archivos'")
+        st.stop()
+    
+    # Usar df_combinado en lugar de df
+    df = st.session_state["df_combinado"]
+    df_usuarios = st.session_state.get("df_usuarios", None)
+    datos_documentos = st.session_state.get("datos_documentos", None)
+    
     # =============================================
-    # FILTROS DINÁMICOS INTERCONECTADOS - VERSIÓN CORREGIDA
+    # FILTROS BIDIRECCIONALES - TODOS INTERCONECTADOS
     # =============================================
     
     st.sidebar.header("Filtros Interconectados")
 
     # Inicializar variables de sesión si no existen
     if 'filtro_estado' not in st.session_state:
-        st.session_state.filtro_estado = ['Abierto'] if 'Abierto' in df['ESTADO'].values else []
+        st.session_state.filtro_estado = ['Abierto']
 
     if 'filtro_equipo' not in st.session_state:
         st.session_state.filtro_equipo = []
@@ -2164,107 +2365,204 @@ if eleccion == "Principal":
     if 'filtro_usuario' not in st.session_state:
         st.session_state.filtro_usuario = []
 
+    if 'filtro_etiq_penultimo' not in st.session_state:
+        st.session_state.filtro_etiq_penultimo = []
+
+    if 'filtro_etiq_ultimo' not in st.session_state:
+        st.session_state.filtro_etiq_ultimo = []
+
     # Botón para resetear filtros
-    if st.sidebar.button("🔄 Mostrar todos / Resetear filtros", use_container_width=True):
-        st.session_state.filtro_estado = sorted(df['ESTADO'].dropna().unique())
-        st.session_state.filtro_equipo = sorted(df['EQUIPO'].dropna().unique())
-        st.session_state.filtro_usuario = sorted(df['USUARIO'].dropna().unique())
+    if st.sidebar.button("🔄 Limpiar todos los filtros", use_container_width=True):
+        st.session_state.filtro_estado = ['Abierto']
+        st.session_state.filtro_equipo = []
+        st.session_state.filtro_usuario = []
+        st.session_state.filtro_etiq_penultimo = []
+        st.session_state.filtro_etiq_ultimo = []
         st.rerun()
 
-    # 1. Primero aplicar filtros secuencialmente para calcular opciones disponibles
-    df_filtrado_temp = df.copy()
+    # FUNCIÓN PARA CALCULAR OPCIONES DISPONIBLES BASADAS EN TODOS LOS FILTROS ACTIVOS
+    def calcular_opciones_disponibles(df_base, filtros_activos):
+        """Calcula las opciones disponibles para cada filtro basándose en TODAS las selecciones activas"""
+        df_temp = df_base.copy()
+        
+        # Aplicar TODOS los filtros excepto el que estamos calculando
+        if filtros_activos['estado']:
+            df_temp = df_temp[df_temp['ESTADO'].isin(filtros_activos['estado'])]
+        
+        if filtros_activos['equipo']:
+            df_temp = df_temp[df_temp['EQUIPO'].isin(filtros_activos['equipo'])]
+        
+        if filtros_activos['usuario']:
+            df_temp = df_temp[df_temp['USUARIO'].isin(filtros_activos['usuario'])]
+        
+        if 'ETIQ. PENÚLTIMO TRAM.' in df_temp.columns and filtros_activos['etiq_penultimo']:
+            df_temp = df_temp[df_temp['ETIQ. PENÚLTIMO TRAM.'].isin(filtros_activos['etiq_penultimo'])]
+        
+        if 'ETIQ. ÚLTIMO TRAM.' in df_temp.columns and filtros_activos['etiq_ultimo']:
+            df_temp = df_temp[df_temp['ETIQ. ÚLTIMO TRAM.'].isin(filtros_activos['etiq_ultimo'])]
+        
+        # Calcular opciones disponibles para cada campo
+        opciones = {
+            'estado': sorted(df_temp['ESTADO'].dropna().unique()),
+            'equipo': sorted(df_temp['EQUIPO'].dropna().unique()),
+            'usuario': sorted(df_temp['USUARIO'].dropna().unique())
+        }
+        
+        if 'ETIQ. PENÚLTIMO TRAM.' in df_temp.columns:
+            opciones['etiq_penultimo'] = sorted(df_temp['ETIQ. PENÚLTIMO TRAM.'].dropna().unique())
+        else:
+            opciones['etiq_penultimo'] = []
+            
+        if 'ETIQ. ÚLTIMO TRAM.' in df_temp.columns:
+            opciones['etiq_ultimo'] = sorted(df_temp['ETIQ. ÚLTIMO TRAM.'].dropna().unique())
+        else:
+            opciones['etiq_ultimo'] = []
+            
+        return opciones
 
-    # Aplicar filtro de ESTADO primero
-    if st.session_state.filtro_estado:
-        df_filtrado_temp = df_filtrado_temp[df_filtrado_temp['ESTADO'].isin(st.session_state.filtro_estado)]
+    # 1. CALCULAR OPCIONES DISPONIBLES BASADAS EN TODOS LOS FILTROS ACTIVOS
+    filtros_activos = {
+        'estado': st.session_state.filtro_estado,
+        'equipo': st.session_state.filtro_equipo,
+        'usuario': st.session_state.filtro_usuario,
+        'etiq_penultimo': st.session_state.filtro_etiq_penultimo,
+        'etiq_ultimo': st.session_state.filtro_etiq_ultimo
+    }
+    
+    opciones_disponibles = calcular_opciones_disponibles(df, filtros_activos)
 
-    # Calcular EQUIPOS disponibles basados en el filtro de ESTADO
-    equipos_disponibles = sorted(df_filtrado_temp['EQUIPO'].dropna().unique())
-
-    # Aplicar filtro de EQUIPO (si hay selección)
-    equipos_seleccionados = [eq for eq in st.session_state.filtro_equipo if eq in equipos_disponibles]
-    if equipos_seleccionados:
-        df_filtrado_temp = df_filtrado_temp[df_filtrado_temp['EQUIPO'].isin(equipos_seleccionados)]
-
-    # Calcular USUARIOS disponibles basados en filtros de ESTADO y EQUIPO
-    usuarios_disponibles = sorted(df_filtrado_temp['USUARIO'].dropna().unique())
-
-    # Aplicar filtro de USUARIO (si hay selección)
-    usuarios_seleccionados = [us for us in st.session_state.filtro_usuario if us in usuarios_disponibles]
-    if usuarios_seleccionados:
-        df_filtrado_temp = df_filtrado_temp[df_filtrado_temp['USUARIO'].isin(usuarios_seleccionados)]
-
-    # 2. Ahora crear los widgets de filtro con opciones actualizadas
+    # 2. CREAR WIDGETS DE FILTRO CON OPCIONES DISPONIBLES
     st.sidebar.markdown("---")
     st.sidebar.subheader("Filtros Activos")
 
-    # FILTRO DE ESTADO (siempre muestra todas las opciones)
-    opciones_estado = sorted(df['ESTADO'].dropna().unique())
+    # FILTRO DE ESTADO (opciones disponibles basadas en otros filtros)
     estado_sel = st.sidebar.multiselect(
         "🔘 Selecciona Estado:",
-        options=opciones_estado,
-        default=st.session_state.filtro_estado,
+        options=opciones_disponibles['estado'],
+        default=[estado for estado in st.session_state.filtro_estado if estado in opciones_disponibles['estado']],
         key='filtro_estado_selector'
     )
 
-    # FILTRO DE EQUIPO (se actualiza según estado seleccionado)
+    # FILTRO DE EQUIPO (opciones disponibles basadas en otros filtros)
     equipo_sel = st.sidebar.multiselect(
         "👥 Selecciona Equipo:",
-        options=equipos_disponibles,
-        default=equipos_seleccionados,
+        options=opciones_disponibles['equipo'],
+        default=[equipo for equipo in st.session_state.filtro_equipo if equipo in opciones_disponibles['equipo']],
         key='filtro_equipo_selector'
     )
 
-    # FILTRO DE USUARIO (se actualiza según estado y equipo seleccionados)
+    # FILTRO DE USUARIO (opciones disponibles basadas en otros filtros)
     usuario_sel = st.sidebar.multiselect(
         "👤 Selecciona Usuario:",
-        options=usuarios_disponibles,
-        default=usuarios_seleccionados,
+        options=opciones_disponibles['usuario'],
+        default=[usuario for usuario in st.session_state.filtro_usuario if usuario in opciones_disponibles['usuario']],
         key='filtro_usuario_selector'
     )
 
-    # 3. Actualizar session_state cuando cambian los filtros
-    if estado_sel != st.session_state.filtro_estado:
+    # FILTRO DE ETIQ. PENÚLTIMO TRAM. (opciones disponibles basadas en otros filtros)
+    if 'ETIQ. PENÚLTIMO TRAM.' in df.columns:
+        etiq_penultimo_sel = st.sidebar.multiselect(
+            "🏷️ ETIQ. PENÚLTIMO TRAM.:",
+            options=opciones_disponibles['etiq_penultimo'],
+            default=[etiq for etiq in st.session_state.filtro_etiq_penultimo if etiq in opciones_disponibles['etiq_penultimo']],
+            key='filtro_etiq_penultimo_selector'
+        )
+    else:
+        etiq_penultimo_sel = []
+        st.sidebar.info("ℹ️ Columna 'ETIQ. PENÚLTIMO TRAM.' no disponible")
+
+    # FILTRO DE ETIQ. ÚLTIMO TRAM. (opciones disponibles basadas en otros filtros)
+    if 'ETIQ. ÚLTIMO TRAM.' in df.columns:
+        etiq_ultimo_sel = st.sidebar.multiselect(
+            "🏷️ ETIQ. ÚLTIMO TRAM.:",
+            options=opciones_disponibles['etiq_ultimo'],
+            default=[etiq for etiq in st.session_state.filtro_etiq_ultimo if etiq in opciones_disponibles['etiq_ultimo']],
+            key='filtro_etiq_ultimo_selector'
+        )
+    else:
+        etiq_ultimo_sel = []
+        st.sidebar.info("ℹ️ Columna 'ETIQ. ÚLTIMO TRAM.' no disponible")
+
+    # 3. ACTUALIZAR session_state - SIN LIMPIAR FILTROS, SOLO ACTUALIZAR SELECCIONES VÁLIDAS
+    # Cada filtro se actualiza independientemente, manteniendo solo las selecciones válidas
+    
+    estado_cambiado = estado_sel != st.session_state.filtro_estado
+    equipo_cambiado = equipo_sel != st.session_state.filtro_equipo
+    usuario_cambiado = usuario_sel != st.session_state.filtro_usuario
+    etiq_penultimo_cambiado = 'ETIQ. PENÚLTIMO TRAM.' in df.columns and etiq_penultimo_sel != st.session_state.filtro_etiq_penultimo
+    etiq_ultimo_cambiado = 'ETIQ. ÚLTIMO TRAM.' in df.columns and etiq_ultimo_sel != st.session_state.filtro_etiq_ultimo
+
+    # Actualizar session_state solo si hubo cambios
+    if estado_cambiado:
         st.session_state.filtro_estado = estado_sel
-        # Cuando cambia el estado, resetear equipo y usuario para evitar inconsistencias
-        st.session_state.filtro_equipo = []
-        st.session_state.filtro_usuario = []
-        st.rerun()
-
-    if equipo_sel != st.session_state.filtro_equipo:
+        
+    if equipo_cambiado:
         st.session_state.filtro_equipo = equipo_sel
-        # Cuando cambia el equipo, resetear usuario
-        st.session_state.filtro_usuario = []
-        st.rerun()
-
-    if usuario_sel != st.session_state.filtro_usuario:
+        
+    if usuario_cambiado:
         st.session_state.filtro_usuario = usuario_sel
+        
+    if etiq_penultimo_cambiado:
+        st.session_state.filtro_etiq_penultimo = etiq_penultimo_sel
+        
+    if etiq_ultimo_cambiado:
+        st.session_state.filtro_etiq_ultimo = etiq_ultimo_sel
+
+    # Si hubo algún cambio, recargar para actualizar las opciones disponibles
+    if any([estado_cambiado, equipo_cambiado, usuario_cambiado, etiq_penultimo_cambiado, etiq_ultimo_cambiado]):
         st.rerun()
 
-    # 4. Aplicar filtros finales al DataFrame principal
+    # 4. APLICAR TODOS LOS FILTROS CONJUNTAMENTE AL DATAFRAME FINAL
     df_filtrado = df.copy()
 
+    # Aplicar filtro de ESTADO si hay selección
     if st.session_state.filtro_estado:
         df_filtrado = df_filtrado[df_filtrado['ESTADO'].isin(st.session_state.filtro_estado)]
 
+    # Aplicar filtro de EQUIPO si hay selección
     if st.session_state.filtro_equipo:
         df_filtrado = df_filtrado[df_filtrado['EQUIPO'].isin(st.session_state.filtro_equipo)]
 
+    # Aplicar filtro de USUARIO si hay selección
     if st.session_state.filtro_usuario:
         df_filtrado = df_filtrado[df_filtrado['USUARIO'].isin(st.session_state.filtro_usuario)]
+
+    # Aplicar filtro de ETIQ. PENÚLTIMO TRAM. si hay selección
+    if 'ETIQ. PENÚLTIMO TRAM.' in df.columns and st.session_state.filtro_etiq_penultimo:
+        df_filtrado = df_filtrado[df_filtrado['ETIQ. PENÚLTIMO TRAM.'].isin(st.session_state.filtro_etiq_penultimo)]
+
+    # Aplicar filtro de ETIQ. ÚLTIMO TRAM. si hay selección
+    if 'ETIQ. ÚLTIMO TRAM.' in df.columns and st.session_state.filtro_etiq_ultimo:
+        df_filtrado = df_filtrado[df_filtrado['ETIQ. ÚLTIMO TRAM.'].isin(st.session_state.filtro_etiq_ultimo)]
 
     # Mostrar resumen de filtros activos
     st.sidebar.markdown("---")
     st.sidebar.subheader("📊 Resumen Filtros")
     
+    filtros_activos = 0
+    
     if st.session_state.filtro_estado:
         st.sidebar.write(f"**Estados:** {len(st.session_state.filtro_estado)} seleccionados")
+        filtros_activos += 1
     
     if st.session_state.filtro_equipo:
         st.sidebar.write(f"**Equipos:** {len(st.session_state.filtro_equipo)} seleccionados")
+        filtros_activos += 1
     
     if st.session_state.filtro_usuario:
         st.sidebar.write(f"**Usuarios:** {len(st.session_state.filtro_usuario)} seleccionados")
+        filtros_activos += 1
+    
+    if 'ETIQ. PENÚLTIMO TRAM.' in df.columns and st.session_state.filtro_etiq_penultimo:
+        st.sidebar.write(f"**ETIQ. PENÚLTIMO:** {len(st.session_state.filtro_etiq_penultimo)} seleccionados")
+        filtros_activos += 1
+    
+    if 'ETIQ. ÚLTIMO TRAM.' in df.columns and st.session_state.filtro_etiq_ultimo:
+        st.sidebar.write(f"**ETIQ. ÚLTIMO:** {len(st.session_state.filtro_etiq_ultimo)} seleccionados")
+        filtros_activos += 1
+    
+    if filtros_activos == 0:
+        st.sidebar.info("ℹ️ No hay filtros activos")
     
     st.sidebar.write(f"**Registros:** {len(df_filtrado):,}".replace(",", "."))
 
@@ -2284,6 +2582,16 @@ if eleccion == "Principal":
             st.write("**Usuarios seleccionados:**")
             for usuario in st.session_state.filtro_usuario:
                 st.write(f"- {usuario}")
+        
+        if 'ETIQ. PENÚLTIMO TRAM.' in df.columns and st.session_state.filtro_etiq_penultimo:
+            st.write("**ETIQ. PENÚLTIMO TRAM. seleccionados:**")
+            for etiq in st.session_state.filtro_etiq_penultimo:
+                st.write(f"- {etiq}")
+        
+        if 'ETIQ. ÚLTIMO TRAM.' in df.columns and st.session_state.filtro_etiq_ultimo:
+            st.write("**ETIQ. ÚLTIMO TRAM. seleccionados:**")
+            for etiq in st.session_state.filtro_etiq_ultimo:
+                st.write(f"- {etiq}")
 
     # NUEVO: Opciones de ordenamiento y auto-filtros
     st.sidebar.markdown("---")
@@ -2292,7 +2600,7 @@ if eleccion == "Principal":
     # Checkbox para ordenar por prioridad
     ordenar_prioridad = st.sidebar.checkbox("Ordenar por prioridad (RUE amarillo primero)", value=True, key="ordenar_prioridad_checkbox")
 
-    # Aplicar ordenamiento si está activado - CORREGIDO
+    # Aplicar ordenamiento si está activado
     if ordenar_prioridad:
         df_filtrado = ordenar_dataframe_por_prioridad_y_antiguedad(df_filtrado)
         st.sidebar.success("✅ Ordenado por prioridad")
@@ -2307,13 +2615,13 @@ if eleccion == "Principal":
     # Auto-filtros para mostrar solo filas con formato condicional
     st.sidebar.markdown("**Auto-filtros:**")
 
-    # Usar keys únicos para los checkboxes y definir las variables
+    # Usar keys únicos para los checkboxes
     mostrar_solo_amarillos = st.sidebar.checkbox("Solo RUE prioritarios", value=False, key="filtro_amarillos")
     mostrar_solo_rojos = st.sidebar.checkbox("Solo USUARIO-CSV discrepantes", value=False, key="filtro_rojos") 
-    mostrar_solo_docum = st.sidebar.checkbox("Solo con DOCUM.INCORP.", value=False, key="filtro_docum")
+    mostrar_solo_90_incdocu = st.sidebar.checkbox("Solo con 90 INCDOCU", value=False, key="filtro_90_incdocu")
 
-    # Aplicar auto-filtros - VERSIÓN CORREGIDA
-    if mostrar_solo_amarillos or mostrar_solo_rojos or mostrar_solo_docum:
+    # Aplicar auto-filtros
+    if mostrar_solo_amarillos or mostrar_solo_rojos or mostrar_solo_90_incdocu:
         # Crear una COPIA para los filtros sin afectar el DataFrame principal
         df_filtrado_temp = df_filtrado.copy(deep=True)
         
@@ -2339,20 +2647,45 @@ if eleccion == "Principal":
                     df_filtrado_temp = df_filtrado_temp[mask_rojo]
                     filtros_aplicados.append(f"USUARIO-CSV discrepantes: {mask_rojo.sum()}")
         
-        if mostrar_solo_docum:
-            # Filtrar solo expedientes con documentación incorporada
-            if 'DOCUM.INCORP.' in df_filtrado_temp.columns:
-                docum_incorp = df_filtrado_temp['DOCUM.INCORP.'].astype(str).str.strip().fillna('')
-                mask_docum = (docum_incorp != '') & (docum_incorp != 'nan')
+        if mostrar_solo_90_incdocu:
+            # Filtrar solo expedientes con "ETIQ. PENÚLTIMO TRAM." = "90 INCDOCU"
+            if 'ETIQ. PENÚLTIMO TRAM.' in df_filtrado_temp.columns:
+                mask_90_incdocu = df_filtrado_temp['ETIQ. PENÚLTIMO TRAM.'] == "90 INCDOCU"
                 
-                if mask_docum.any():
-                    df_filtrado_temp = df_filtrado_temp[mask_docum]
-                    filtros_aplicados.append(f"Con documentación: {mask_docum.sum()}")
+                if mask_90_incdocu.any():
+                    df_filtrado_temp = df_filtrado_temp[mask_90_incdocu]
+                    filtros_aplicados.append(f"Con 90 INCDOCU: {mask_90_incdocu.sum()}")
+                else:
+                    st.sidebar.warning("No hay expedientes con ETIQ. PENÚLTIMO TRAM. = '90 INCDOCU'")
+            else:
+                st.sidebar.warning("Columna 'ETIQ. PENÚLTIMO TRAM.' no disponible")
         
         # Solo actualizar si se aplicaron filtros
         if filtros_aplicados:
             df_filtrado = df_filtrado_temp
             st.sidebar.success(" | ".join(filtros_aplicados))
+
+    # Mostrar estadísticas de los filtros aplicados
+    st.sidebar.markdown("---")
+    st.sidebar.subheader("Estadísticas")
+    
+    # Contar filas prioritarias
+    df_priorizado = identificar_filas_prioritarias(df_filtrado)
+    filas_amarillas = df_priorizado['_prioridad'].sum()
+    filas_totales = len(df_filtrado)
+    
+    st.sidebar.write(f"Total filas: {filas_totales}")
+    st.sidebar.write(f"RUE prioritarios: {filas_amarillas}")
+    
+    # Contar USUARIO-CSV rojos
+    if 'USUARIO' in df_filtrado.columns and 'USUARIO-CSV' in df_filtrado.columns:
+        filas_rojas = (df_filtrado['USUARIO'] != df_filtrado['USUARIO-CSV']).sum()
+        st.sidebar.write(f"USUARIO-CSV discrepantes: {filas_rojas}")
+    
+    # Contar 90 INCDOCU
+    if 'ETIQ. PENÚLTIMO TRAM.' in df_filtrado.columns:
+        filas_90_incdocu = (df_filtrado['ETIQ. PENÚLTIMO TRAM.'] == "90 INCDOCU").sum()
+        st.sidebar.write(f"Con 90 INCDOCU: {filas_90_incdocu}")
 
     # Gráficos Generales - CORREGIDOS: datos siempre frescos según filtros
     st.subheader("📈 Gráficos Generales")
@@ -2372,6 +2705,21 @@ if eleccion == "Principal":
             if fig:
                 columnas_graficos[i].plotly_chart(fig, use_container_width=True)
 
+    # NUEVOS GRÁFICOS PARA LAS ETIQUETAS
+    if 'ETIQ. PENÚLTIMO TRAM.' in df_filtrado.columns:
+        conteo_penultimo = df_filtrado['ETIQ. PENÚLTIMO TRAM.'].value_counts().reset_index()
+        conteo_penultimo.columns = ['ETIQ. PENÚLTIMO TRAM.', 'Cantidad']
+        fig_penultimo = crear_grafico_dinamico(conteo_penultimo, 'ETIQ. PENÚLTIMO TRAM.', 'Distribución por ETIQ. PENÚLTIMO TRAM.')
+        if fig_penultimo:
+            st.plotly_chart(fig_penultimo, use_container_width=True)
+
+    if 'ETIQ. ÚLTIMO TRAM.' in df_filtrado.columns:
+        conteo_ultimo = df_filtrado['ETIQ. ÚLTIMO TRAM.'].value_counts().reset_index()
+        conteo_ultimo.columns = ['ETIQ. ÚLTIMO TRAM.', 'Cantidad']
+        fig_ultimo = crear_grafico_dinamico(conteo_ultimo, 'ETIQ. ÚLTIMO TRAM.', 'Distribución por ETIQ. ÚLTIMO TRAM.')
+        if fig_ultimo:
+            st.plotly_chart(fig_ultimo, use_container_width=True)
+
     if "NOTIFICADO" in df_filtrado.columns:
         conteo_notificado = df_filtrado["NOTIFICADO"].value_counts().reset_index()
         conteo_notificado.columns = ["NOTIFICADO", "Cantidad"]
@@ -2379,7 +2727,7 @@ if eleccion == "Principal":
         if fig:
             st.plotly_chart(fig, use_container_width=True)
 
-    # VISTA GENERAL - SOLUCIÓN STREAMLIT NATIVO OPTIMIZADA
+    # VISTA GENERAL - SOLO VERSIÓN EXPANDIDA
     st.subheader("📋 Vista general de expedientes")
 
     # Crear copia y formatear fechas
@@ -2389,7 +2737,7 @@ if eleccion == "Principal":
     for col in df_mostrar.select_dtypes(include='datetime').columns:
         df_mostrar[col] = df_mostrar[col].dt.strftime("%d/%m/%Y")
 
-    # 🔥 CORRECCIÓN 3: Redondear columnas numéricas con decimales (ANTES DE MOSTRAR)
+    # 🔥 CORRECCIÓN: Redondear columnas numéricas con decimales
     columnas_antiguedad = [col for col in df_mostrar.columns if 'ANTIGÜEDAD' in col.upper() or 'DÍAS' in col.upper()]
 
     for col in df_mostrar.columns:
@@ -2405,143 +2753,27 @@ if eleccion == "Principal":
                     lambda x: int(round(x)) if pd.notna(x) else 0
                 )
 
-    # Mostrar tabla principal SIN formato condicional pero CON fechas formateadas
-    st.dataframe(df_mostrar, use_container_width=True, height=400)
+    # Calcular altura dinámica basada en el número de filas
+    num_filas = len(df_mostrar)
+    altura_fila = 35  # altura aproximada por fila en píxeles
+    altura_cabecera = 100  # altura de la cabecera
+    altura_maxima = 800  # altura máxima para no hacerlo demasiado grande
+    
+    # Calcular altura ideal - mostrar todas las filas que quepan
+    altura_ideal = min(altura_cabecera + (num_filas * altura_fila), altura_maxima)
+    
     registros_mostrados = f"{len(df_mostrar):,}".replace(",", ".")
     registros_totales = f"{len(df):,}".replace(",", ".")
     st.write(f"Mostrando {registros_mostrados} de {registros_totales} registros")
-
-    # Sección de RESUMEN de formatos condicionales
-    st.markdown("---")
-    st.subheader("🔍 Resumen de Expedientes con Formatos Condicionales")
-
-    # Crear pestañas para cada tipo de formato condicional
-    tab1, tab2, tab3 = st.tabs(["🟡 RUE Prioritarios", "🔴 USUARIO-CSV Discrepantes", "🔵 Con Documentación"])
-
-    with tab1:
-        # RUE amarillos - CON TODAS LAS CONDICIONES
-        st.write("**Expedientes con RUE prioritario (amarillo):**")
-        df_amarillos = df_filtrado.copy()
-        mask_amarillo = pd.Series(False, index=df_amarillos.index)
-        
-        for idx, row in df_amarillos.iterrows():
-            try:
-                etiq_penultimo = row.get('ETIQ. PENÚLTIMO TRAM.', '')
-                fecha_notif = row.get('FECHA NOTIFICACIÓN', None)
-                docum_incorp = row.get('DOCUM.INCORP.', '')
-                
-                # CONDICIÓN 1: "80 PROPRES" con fecha límite superada
-                if (str(etiq_penultimo).strip() == "80 PROPRES" and 
-                    pd.notna(fecha_notif) and 
-                    isinstance(fecha_notif, (pd.Timestamp, datetime))):
-                    
-                    fecha_limite = fecha_notif + timedelta(days=23)
-                    if datetime.now() > fecha_limite:
-                        mask_amarillo[idx] = True
-                
-                # CONDICIÓN 2: "50 REQUERIR" con fecha límite superada
-                elif (str(etiq_penultimo).strip() == "50 REQUERIR" and 
-                    pd.notna(fecha_notif) and 
-                    isinstance(fecha_notif, (pd.Timestamp, datetime))):
-                    
-                    fecha_limite = fecha_notif + timedelta(days=23)
-                    if datetime.now() > fecha_limite:
-                        mask_amarillo[idx] = True
-                
-                # CONDICIÓN 3: "70 ALEGACI" o "60 CONTESTA"
-                elif str(etiq_penultimo).strip() in ["70 ALEGACI", "60 CONTESTA"]:
-                    mask_amarillo[idx] = True
-                
-                # CONDICIÓN 4: DOCUM.INCORP. no vacío Y distinto de "SOLICITUD" o "REITERA SOLICITUD"
-                elif (pd.notna(docum_incorp) and 
-                    str(docum_incorp).strip() != '' and
-                    str(docum_incorp).strip().upper() not in ["SOLICITUD", "REITERA SOLICITUD"]):
-                    mask_amarillo[idx] = True
-                    
-            except:
-                pass
-        
-        # FILTRAR Y MOSTRAR EL DATAFRAME - CORREGIDO: APLICAR ORDENAMIENTO
-        if mask_amarillo.any():
-            df_temp = df_amarillos[mask_amarillo].copy()
-            
-            # 🔥 CORRECCIÓN: APLICAR ORDENAMIENTO POR PRIORIDAD
-            df_temp = ordenar_dataframe_por_prioridad_y_antiguedad(df_temp)
-            
-            # Formatear fechas para mostrar
-            for col in df_temp.select_dtypes(include='datetime').columns:
-                df_temp[col] = df_temp[col].dt.strftime("%d/%m/%Y")
-            
-            st.dataframe(df_temp, use_container_width=True)
-            st.warning(f"**Total: {mask_amarillo.sum()} expedientes prioritarios**")
-        else:
-            st.success("✅ No hay expedientes con RUE prioritario")
-
-    with tab2:
-        # USUARIO-CSV rojos
-        st.write("**Expedientes con discrepancia USUARIO/USUARIO-CSV (rojo):**")
-        
-        if 'USUARIO' in df_filtrado.columns and 'USUARIO-CSV' in df_filtrado.columns:
-            mask_rojo = df_filtrado['USUARIO'] != df_filtrado['USUARIO-CSV']
-            
-            if mask_rojo.any():
-                df_temp = df_filtrado[mask_rojo].copy()
-                # Formatear fechas para mostrar
-                for col in df_temp.select_dtypes(include='datetime').columns:
-                    df_temp[col] = df_temp[col].dt.strftime("%d/%m/%Y")
-                
-                # Mostrar solo columnas relevantes
-                columnas_relevantes = ['RUE', 'USUARIO', 'USUARIO-CSV', 'EQUIPO', 'ESTADO']
-                columnas_disponibles = [col for col in columnas_relevantes if col in df_temp.columns]
-                
-                st.dataframe(df_temp[columnas_disponibles], use_container_width=True)
-                st.error(f"**Total: {mask_rojo.sum()} expedientes con discrepancia**")
-                
-                # Análisis de discrepancias
-                st.write("**Análisis de discrepancias:**")
-                discrepancia_detalle = df_temp.groupby(['USUARIO', 'USUARIO-CSV']).size().reset_index(name='Cantidad')
-                st.dataframe(discrepancia_detalle, use_container_width=True)
-            else:
-                st.success("✅ No hay discrepancias entre USUARIO y USUARIO-CSV")
-        else:
-            st.info("Columnas USUARIO y/o USUARIO-CSV no disponibles")
-
-    with tab3:
-        # DOCUM.INCORP. azules
-        st.write("**Expedientes con documentación incorporada (azul):**")
-        
-        if 'DOCUM.INCORP.' in df_filtrado.columns:
-            mask_docum = df_filtrado['DOCUM.INCORP.'].notna() & (df_filtrado['DOCUM.INCORP.'] != '')
-            
-            if mask_docum.any():
-                df_temp = df_filtrado[mask_docum].copy()
-                # Formatear fechas para mostrar
-                for col in df_temp.select_dtypes(include='datetime').columns:
-                    df_temp[col] = df_temp[col].dt.strftime("%d/%m/%Y")
-                
-                # Mostrar solo columnas relevantes
-                columnas_relevantes = ['RUE', 'DOCUM.INCORP.', 'USUARIO', 'EQUIPO', 'ETIQ. PENÚLTIMO TRAM.']
-                columnas_disponibles = [col for col in columnas_relevantes if col in df_temp.columns]
-                
-                st.dataframe(df_temp[columnas_disponibles], use_container_width=True)
-                st.info(f"**Total: {mask_docum.sum()} expedientes con documentación**")
-                
-                # Análisis por tipo de documentación
-                if 'DOCUM.INCORP.' in df_temp.columns:
-                    st.write("**Tipos de documentación:**")
-                    conteo_docum = df_temp['DOCUM.INCORP.'].value_counts()
-                    for doc_type, count in conteo_docum.head(10).items():  # Mostrar top 10
-                        st.write(f"- {doc_type}: {count} expedientes")
-            else:
-                st.info("No hay expedientes con documentación incorporada")
-        else:
-            st.info("Columna DOCUM.INCORP. no disponible")
-
+  
+    # Mostrar tabla principal con altura dinámica
+    st.dataframe(df_mostrar, use_container_width=True, height=altura_ideal)
+ 
     # Estadísticas generales
     st.markdown("---")
     st.subheader("📊 Estadísticas Generales")
 
-    col1, col2, col3, col4 = st.columns(4)
+    col1, col2, col3, col4, = st.columns(4)
 
     with col1:
         registros_mostrados = f"{len(df_mostrar):,}".replace(",", ".")
@@ -2598,44 +2830,18 @@ if eleccion == "Principal":
             st.metric("Discrepancias", "N/A")
 
     with col4:
-        # Contar DOCUM.INCORP. azules
-        if 'DOCUM.INCORP.' in df_filtrado.columns:
-            mask_docum = df_filtrado['DOCUM.INCORP.'].notna().sum()
-            st.metric("Con documentación", f"{mask_docum:,}".replace(",", "."))
+        # Contar 90 INCDOCU (sustituye a DOCUM.INCORP.)
+        if 'ETIQ. PENÚLTIMO TRAM.' in df_filtrado.columns:
+            mask_90_incdocu = (df_filtrado['ETIQ. PENÚLTIMO TRAM.'] == "90 INCDOCU").sum()
+            st.metric("Con trám. 90 INCDOCU", f"{mask_90_incdocu:,}".replace(",", "."))
         else:
-            st.metric("Con documentación", "N/A")
-
-    # Mostrar estadísticas de los filtros aplicados
-    st.sidebar.markdown("---")
-    st.sidebar.subheader("Estadísticas")
-    
-    # Contar filas prioritarias
-    df_priorizado = identificar_filas_prioritarias(df_filtrado)
-    filas_amarillas = df_priorizado['_prioridad'].sum()
-    filas_totales = len(df_filtrado)
-    
-    st.sidebar.write(f"Total filas: {filas_totales}")
-    st.sidebar.write(f"RUE prioritarios: {filas_amarillas}")
-    
-    # Contar USUARIO-CSV rojos
-    if 'USUARIO' in df_filtrado.columns and 'USUARIO-CSV' in df_filtrado.columns:
-        filas_rojas = (df_filtrado['USUARIO'] != df_filtrado['USUARIO-CSV']).sum()
-        st.sidebar.write(f"USUARIO-CSV discrepantes: {filas_rojas}")
-    
-    # Contar DOCUM.INCORP.
-    if 'DOCUM.INCORP.' in df_filtrado.columns:
-        filas_docum = df_filtrado['DOCUM.INCORP.'].notna().sum()
-        st.sidebar.write(f"Con DOCUM.INCORP.: {filas_docum}")
-
-    registros_mostrados = f"{len(df_mostrar):,}".replace(",", ".")
-    registros_totales = f"{len(df):,}".replace(",", ".")
-    st.write(f"Mostrando {registros_mostrados} de {registros_totales} registros")
+            st.metric("Con trám. 90 INCDOCU", "N/A")
 
     # NUEVA SECCIÓN: GESTIÓN DE DOCUMENTACIÓN INCORPORADA
     st.markdown("---")
     st.header("📄 Gestión de Documentación Incorporada")
 
-    if archivo_documentos and datos_documentos:
+    if datos_documentos:
         # Filtro para expedientes con ETIQ. PENÚLTIMO TRAM. = "90 INCDOCU"
         df_incdocu = df_filtrado[
             df_filtrado['ETIQ. PENÚLTIMO TRAM.'] == "90 INCDOCU"
@@ -2681,6 +2887,7 @@ if eleccion == "Principal":
                 with col3:
                     if st.button("💾 Guardar", key=f"btn_{rue}"):
                         # Actualizar el DataFrame combinado
+                        df_combinado = st.session_state["df_combinado"]
                         df_combinado.loc[df_combinado['RUE'] == rue, 'DOCUM.INCORP.'] = nueva_docum
                         st.session_state["df_combinado"] = df_combinado
                         st.success(f"✅ Documentación actualizada para RUE {rue}")
@@ -2694,13 +2901,14 @@ if eleccion == "Principal":
                 if st.button("💾 Guardar Todos los Cambios en DOCUMENTOS.xlsx", type="primary", key="guardar_documentos"):
                     with st.spinner("Guardando cambios..."):
                         # Crear DataFrame SOLO con los registros que tienen DOCUM.INCORP. actualmente
+                        df_combinado = st.session_state["df_combinado"]
                         df_documentos_actualizado = df_combinado[['RUE', 'DOCUM.INCORP.']].copy()
                         df_documentos_actualizado = df_documentos_actualizado.dropna(subset=['DOCUM.INCORP.'])
                         df_documentos_actualizado = df_documentos_actualizado[df_documentos_actualizado['DOCUM.INCORP.'] != '']
                         
                         # Guardar en el archivo DOCUMENTOS.xlsx (esto reemplazará completamente el contenido anterior)
                         contenido_actualizado = guardar_documentos_actualizados(
-                            archivo_documentos, 
+                            datos_documentos['archivo'], 
                             df_documentos_actualizado
                         )
                         
@@ -2743,499 +2951,18 @@ if eleccion == "Principal":
     else:
         st.warning("⚠️ Carga el archivo DOCUMENTOS.xlsx para gestionar la documentación incorporada")
 
-    # Descarga de informes
-    st.markdown("---")
-    st.header("Descarga de Informes")
-    st.subheader("Generar Informes PDF Pendientes por Usuario")
-
-    df_pendientes = df[df["ESTADO"].isin(ESTADOS_PENDIENTES)].copy()
-    usuarios_pendientes = df_pendientes["USUARIO"].dropna().unique()
-
-    # NUEVO: Generar también PDFs por equipo (solo prioritarios) y resumen KPI
-    equipos_pendientes = df_pendientes["EQUIPO"].dropna().unique()
-    
-    if st.button(f"Generar {len(usuarios_pendientes)} Informes PDF + Equipos + Resumen KPI", key="generar_pdfs_completos"):
-        if usuarios_pendientes.size == 0:
-            st.info("No se encontraron expedientes pendientes para generar informes.")
-        else:
-            with st.spinner('Generando PDFs y comprimiendo...'):
-                zip_buffer = io.BytesIO()
-
-            with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zip_file:
-                # 1. PDFs por usuario (todos los pendientes)
-                for usuario in usuarios_pendientes:
-                    pdf_data = generar_pdf_usuario(usuario, df_pendientes, num_semana, fecha_max_str)
-                    if pdf_data:
-                        file_name = f"{num_semana}{usuario}.pdf"
-                        zip_file.writestr(file_name, pdf_data)
-                
-                # 2. PDFs por equipo (solo expedientes prioritarios)
-                for equipo in equipos_pendientes:
-                    pdf_data = generar_pdf_equipo_prioritarios(equipo, df_pendientes, num_semana, fecha_max_str)
-                    if pdf_data:
-                        file_name = f"{num_semana}{equipo}_PRIORITARIOS.pdf"
-                        zip_file.writestr(file_name, pdf_data)
-                
-                # 3. PDF de resumen de KPIs
-                # Calcular KPIs para la semana actual
-                columna_fecha = df.columns[13]
-                df[columna_fecha] = pd.to_datetime(df[columna_fecha], errors='coerce')
-                fecha_max = df[columna_fecha].max()
-                
-                # Crear rango de semanas disponibles
-                fecha_inicio = pd.to_datetime("2022-11-01")
-                semanas_disponibles = pd.date_range(
-                    start=fecha_inicio,
-                    end=fecha_max,
-                    freq='W-FRI'
-                ).tolist()
-                
-                # Calcular KPIs para todas las semanas
-                df_kpis_semanales = calcular_kpis_todas_semanas_optimizado(df, semanas_disponibles, FECHA_REFERENCIA, fecha_max)
-                
-                # Generar PDF de resumen KPI
-                pdf_resumen = generar_pdf_resumen_kpi(
-                    df_kpis_semanales, 
-                    num_semana, 
-                    fecha_max_str, 
-                    df_combinado, 
-                    semanas_disponibles, 
-                    FECHA_REFERENCIA, 
-                    fecha_max
-                )
-                if pdf_resumen:
-                    file_name = f"{num_semana}RESUMEN_KPI.pdf"
-                    zip_file.writestr(file_name, pdf_resumen)
-
-            zip_buffer.seek(0)
-            zip_file_name = f"Informes_Completos_Semana_{num_semana}.zip"
-            st.download_button(
-                label=f"⬇️ Descargar {len(usuarios_pendientes)} Informes PDF + Equipos + Resumen KPI (ZIP)",
-                data=zip_buffer.read(),
-                file_name=zip_file_name,
-                mime="application/zip",
-                help="Descarga todos los informes PDF listos.",
-                key='pdf_download_button_completo'
-            )
-
-    # SECCIÓN: ENVÍO DE CORREOS INTEGRADA - VERSIÓN CORREGIDA
-    # CORRECCIÓN: Filtrar usuarios activos de forma más robusta
-    try:
-        if df_usuarios is None or df_usuarios.empty:
-            st.error("❌ No se ha cargado el archivo USUARIOS o está vacío")
-            st.stop()
-
-        df_usuarios = df_usuarios.copy()
-
-        # Normalizar campos de control
-        for col in ['ENVIAR', 'ENVÍO RESUMEN']:
-            if col not in df_usuarios.columns:
-                df_usuarios[col] = ""
-            df_usuarios[col] = df_usuarios[col].astype(str).str.upper().str.strip()
-
-        valores_si = ['SÍ', 'SI', 'S', 'YES', 'Y', 'TRUE', '1', 'VERDADERO']
-
-        # Usuarios que reciben su listado individual
-        usuarios_enviar = df_usuarios[df_usuarios['ENVIAR'].isin(valores_si)]
-
-        # Usuarios que reciben resumen KPI
-        usuarios_resumen = df_usuarios[df_usuarios['ENVÍO RESUMEN'].isin(valores_si)]
-
-        st.success(f"✅ {len(usuarios_enviar)} usuarios recibirán expedientes individuales")
-        st.success(f"📊 {len(usuarios_resumen)} usuarios recibirán resumen KPI")
-
-        if usuarios_enviar.empty and usuarios_resumen.empty:
-            st.warning("⚠️ No hay usuarios con ENVIAR o ENVÍO RESUMEN = 'SÍ'")
-            st.stop()
-
-    except Exception as e:
-        st.error(f"❌ Error procesando usuarios: {e}")
-        st.stop()
-
-    # SI LLEGAMOS AQUÍ, HAY USUARIOS ACTIVOS - CONTINUAR CON EL PROCESAMIENTO
-
-    # AÑADIR ESTA LÍNEA FALTANTE - DEFINIR usuarios_activos
-    usuarios_activos = pd.concat([usuarios_enviar, usuarios_resumen]).drop_duplicates(subset=['USUARIOS', 'EMAIL'])
-
-    # Función para verificar envío de resumen - MÁS ROBUSTA
-    def verificar_envio_resumen(usuario_row):
-        """Verifica si el usuario debe recibir resumen KPI"""
-        try:
-            if 'ENVÍO RESUMEN' not in usuario_row.index:
-                return False
-            
-            valor = str(usuario_row['ENVÍO RESUMEN']).upper().strip() if pd.notna(usuario_row['ENVÍO RESUMEN']) else ""
-            valores_positivos = ['SÍ', 'SI', 'S', 'YES', 'Y', 'TRUE', '1', 'VERDADERO', 'OK', 'X', '✔', '✅']
-            return valor in valores_positivos
-        except:
-            return False
-
-    # Procesar usuarios para envío - SEPARAR CLARAMENTE LOS DOS GRUPOS
-    usuarios_para_envio_individual = []  # Usuarios con expedientes que reciben su PDF
-    usuarios_para_resumen_solo = []       # Usuarios que solo reciben resumen (jefes sin expedientes)
-
-    # INICIALIZAR Y DEFINIR usuarios_con_pendientes DE FORMA SEGURA
-    usuarios_con_pendientes = []
-    try:
-        # Primero, identificar todos los usuarios con expedientes pendientes
-        if not df_pendientes.empty and 'USUARIO' in df_pendientes.columns:
-            usuarios_con_pendientes = df_pendientes['USUARIO'].dropna().unique().tolist()
-            st.info(f"📋 {len(usuarios_con_pendientes)} usuarios tienen expedientes pendientes")
-        else:
-            st.warning("ℹ️ No se encontraron expedientes pendientes o falta la columna 'USUARIO'")
-            usuarios_con_pendientes = []
-    except Exception as e:
-        st.error(f"❌ Error al obtener usuarios con expedientes pendientes: {e}")
-        usuarios_con_pendientes = []
-
-    # VERIFICAR COLUMNAS REQUERIDAS EN EL ARCHIVO DE USUARIOS
-    columnas_requeridas = ['USUARIOS', 'EMAIL']
-    columnas_faltantes = [col for col in columnas_requeridas if col not in df_usuarios.columns]
-
-    if columnas_faltantes:
-        st.error(f"❌ Faltan columnas requeridas en el archivo USUARIOS: {', '.join(columnas_faltantes)}")
-        st.stop()
-
-    # MODIFICACIÓN EN LA SECCIÓN DE DEPURACIÓN - MOSTRAR TODOS LOS USUARIOS
-    st.markdown("---")
-    st.subheader("🔍 Información de Depuración")
-    st.write(f"Usuarios activos: {len(usuarios_activos)}")
-    st.write(f"Usuarios con expedientes pendientes: {len(usuarios_con_pendientes)}")
-
-    if not usuarios_activos.empty:
-        st.write("Primeros 5 usuarios activos:")
-        st.dataframe(usuarios_activos[['USUARIOS', 'EMAIL', 'ENVIAR', 'ENVÍO RESUMEN']].head())
-
-    # REEMPLAZO OPTIMIZADO: Mostrar todos los usuarios en lugar de solo 10
-    if usuarios_con_pendientes:
-        with st.expander(f"📋 Todos los usuarios con expedientes pendientes ({len(usuarios_con_pendientes)})", expanded=False):
-            # Crear DataFrame para mejor visualización
-            df_usuarios_pendientes = pd.DataFrame({
-                'Usuario': usuarios_con_pendientes,
-                'Cantidad Expedientes': [len(df_pendientes[df_pendientes['USUARIO'] == usuario]) 
-                                        for usuario in usuarios_con_pendientes]
-            })
-            
-            # Ordenar por cantidad de expedientes (descendente)
-            df_usuarios_pendientes = df_usuarios_pendientes.sort_values('Cantidad Expedientes', ascending=False)
-            
-            st.dataframe(
-                df_usuarios_pendientes, 
-                use_container_width=True,
-                height=min(400, 35 * len(df_usuarios_pendientes) + 38)  # Altura dinámica
-            )
-
-    # PROCESAR CADA USUARIO ACTIVO - CORRECCIÓN IMPORTANTE
-    for _, usuario_row in usuarios_activos.iterrows():
-        try:
-            usuario_nombre = usuario_row['USUARIOS']  # Del archivo USUARIOS
-            usuario_email = usuario_row['EMAIL']
-            
-            # Verificar datos básicos
-            if pd.isna(usuario_nombre) or pd.isna(usuario_email):
-                st.warning(f"⚠️ Usuario con nombre o email vacío: {usuario_nombre}")
-                continue
-                
-            # Normalizar para comparación
-            usuario_normalizado = str(usuario_nombre).strip().upper()
-            
-            # Verificar si tiene expedientes - COMPARAR CON 'USUARIO' de df_pendientes
-            tiene_expedientes = False
-            num_expedientes = 0
-            
-            # CORREGIDO: Verificar de forma segura si usuarios_con_pendientes está definido y no está vacío
-            if usuarios_con_pendientes and len(usuarios_con_pendientes) > 0:
-                try:
-                    # CORREGIDO: Comparar con 'USUARIO' de los expedientes pendientes
-                    tiene_expedientes = any(
-                        str(user_pendiente).strip().upper() == usuario_normalizado 
-                        for user_pendiente in usuarios_con_pendientes
-                    )
-                    
-                    if tiene_expedientes:
-                        # Contar expedientes del usuario - USANDO 'USUARIO' de df_pendientes
-                        num_expedientes = len(df_pendientes[
-                            df_pendientes['USUARIO'].apply(
-                                lambda x: str(x).strip().upper() if pd.notna(x) else ''
-                            ) == usuario_normalizado
-                        ])
-                except Exception as e:
-                    st.error(f"❌ Error al verificar expedientes para {usuario_nombre}: {e}")
-                    tiene_expedientes = False
-                    num_expedientes = 0
-            
-            # Verificar si debe recibir resumen - CORRECCIÓN IMPORTANTE
-            # Usamos la función verificar_envio_resumen para determinar esto
-            recibir_resumen = verificar_envio_resumen(usuario_row)
-            
-            # Procesar asunto y mensaje
-            asunto_template = usuario_row['ASUNTO'] if pd.notna(usuario_row.get('ASUNTO', '')) else f"Situación RECTAUTO asignados en la semana {num_semana} a {fecha_max_str}"
-            asunto_procesado = asunto_template.replace("&num_semana&", str(num_semana)).replace("&fecha_max&", fecha_max_str)
-            
-            # Generar cuerpo del mensaje
-            mensaje_base = ""
-            if pd.notna(usuario_row.get('MENSAJE1', '')):
-                mensaje_base += f"{usuario_row['MENSAJE1']}\n\n"
-            if pd.notna(usuario_row.get('MENSAJE2', '')):
-                mensaje_base += f"{usuario_row['MENSAJE2']}\n\n"
-            if pd.notna(usuario_row.get('MENSAJE3', '')):
-                mensaje_base += f"{usuario_row['MENSAJE3']}\n\n"
-            if pd.notna(usuario_row.get('DESPEDIDA', '')):
-                mensaje_base += f"{usuario_row['DESPEDIDA']}\n\n"
-            
-            if not mensaje_base.strip():
-                mensaje_base = "Se adjunta informe de expedientes pendientes."
-            
-            mensaje_base += "__________________\n\nEquipo RECTAUTO."
-            cuerpo_mensaje = f"Buenos días,\n\n{mensaje_base}"
-            
-            # CORRECCIÓN CRÍTICA: DETERMINAR A QUÉ LISTA PERTENECE
-            # Primero verificar si el usuario está marcado para recibir resumen
-            debe_recibir_resumen = verificar_envio_resumen(usuario_row)
-            
-            # Ahora determinar a qué lista va
-            if tiene_expedientes:
-                # Usuario con expedientes: va a la lista de envío individual
-                usuarios_para_envio_individual.append({
-                    'usuario': usuario_nombre,
-                    'email': usuario_email,
-                    'cc': usuario_row.get('CC', ''),
-                    'bcc': usuario_row.get('BCC', ''),
-                    'expedientes': num_expedientes,
-                    'asunto': asunto_procesado,
-                    'cuerpo_mensaje': cuerpo_mensaje,
-                    'recibir_resumen': debe_recibir_resumen  # Puede que también reciba resumen
-                })
-                st.success(f"✅ {usuario_nombre} - Tiene {num_expedientes} expedientes" + 
-                        (" y recibirá resumen" if debe_recibir_resumen else ""))
-            
-            # CORRECCIÓN: Usuarios que NO tienen expedientes pero SÍ deben recibir resumen
-            elif debe_recibir_resumen:
-                # Usuario sin expedientes pero que debe recibir resumen
-                usuarios_para_resumen_solo.append({
-                    'usuario': usuario_nombre,
-                    'email': usuario_email,
-                    'cc': usuario_row.get('CC', ''),
-                    'bcc': usuario_row.get('BCC', ''),
-                    'asunto': f"Resumen KPI Semana {num_semana} - {fecha_max_str}",
-                    'cuerpo_mensaje': f"Buenos días,\n\nSe adjunta el resumen de KPIs de la semana {num_semana} y los listados de expedientes prioritarios de todos los equipos.\n\n__________________\n\nEquipo RECTAUTO.",
-                    'recibir_resumen': True
-                })
-                st.info(f"📊 {usuario_nombre} - Recibirá resumen KPI + expedientes prioritarios de todos los equipos")
-            
-            else:
-                # Usuario sin expedientes y sin marcar para resumen
-                st.warning(f"⚠️ {usuario_nombre} - No tiene expedientes ni está marcado para resumen")
-                
-        except Exception as e:
-            st.error(f"❌ Error procesando usuario {usuario_row.get('USUARIOS', 'Desconocido')}: {e}")
-            continue
-
-    # MOSTRAR RESUMEN DE LO QUE SE VA A ENVIAR
-    st.markdown("---")
-    st.subheader("📋 Resumen de Envíos Programados")
-
-    if usuarios_para_envio_individual:
-        st.success(f"✅ {len(usuarios_para_envio_individual)} usuarios recibirán sus expedientes pendientes")
-        with st.expander("📋 Ver usuarios con expedientes"):
-            df_envio = pd.DataFrame(usuarios_para_envio_individual)
-            st.dataframe(df_envio[['usuario', 'email', 'expedientes', 'recibir_resumen']], use_container_width=True)
-
-    if usuarios_para_resumen_solo:
-        st.success(f"📊 {len(usuarios_para_resumen_solo)} usuarios recibirán solo el resumen KPI")
-        with st.expander("📋 Ver usuarios para resumen"):
-            df_resumen = pd.DataFrame(usuarios_para_resumen_solo)
-            st.dataframe(df_resumen[['usuario', 'email']], use_container_width=True)
-
-    if not usuarios_para_envio_individual and not usuarios_para_resumen_solo:
-        st.warning("⚠️ No hay usuarios para enviar correos")
-        st.stop()
-
-    # BOTÓN DE ENVÍO - SIEMPRE VISIBLE SI HAY USUARIOS EN ALGUNA LISTA
-    st.markdown("---")
-    st.subheader("🚀 Envío de Correos")
-
-    st.warning("""
-    **⚠️ Importante antes de enviar:**
-    - Se usará la cuenta de Outlook predeterminada
-    - No es necesario tener Outlook abierto
-    - Los correos se enviarán inmediatamente
-    - **Usuarios con expedientes pendientes:** Recibirán su PDF individual
-    - **Usuarios Gerente y Jefes de Equipo:** Recibirán el resumen KPI y los Expedientes Prioritarios de todos los equipos
-    - **Verifica que los datos sean correctos**
-    """)
-
-    if st.button("📤 Enviar Todos los Correos", type="primary", key="enviar_correos"):
-        progress_bar = st.progress(0)
-        status_text = st.empty()
-        results_container = st.container()
-        
-        correos_enviados = 0
-        correos_fallidos = 0
-        
-        # Generar PDF de resumen KPI (una sola vez para todos)
-        pdf_resumen = None
-        with st.spinner("Generando resumen KPI..."):
-            # Calcular KPIs para la semana actual
-            columna_fecha = df.columns[13]
-            df[columna_fecha] = pd.to_datetime(df[columna_fecha], errors='coerce')
-            fecha_max = df[columna_fecha].max()
-            
-            fecha_inicio = pd.to_datetime("2022-11-01")
-            semanas_disponibles = pd.date_range(
-                start=fecha_inicio,
-                end=fecha_max,
-                freq='W-FRI'
-            ).tolist()
-            
-            df_kpis_semanales = calcular_kpis_todas_semanas_optimizado(df, semanas_disponibles, FECHA_REFERENCIA, fecha_max)
-            pdf_resumen = generar_pdf_resumen_kpi(
-                df_kpis_semanales, 
-                num_semana, 
-                fecha_max_str, 
-                df_combinado, 
-                semanas_disponibles, 
-                FECHA_REFERENCIA, 
-                fecha_max
-            )
-        
-        total_a_procesar = len(usuarios_para_envio_individual) + len(usuarios_para_resumen_solo)
-        
-        # PRIMERO: Enviar a usuarios con expedientes
-        for i, usuario_info in enumerate(usuarios_para_envio_individual):
-            status_text.text(f"📨 Enviando a: {usuario_info['usuario']}")
-            
-            # Generar PDF individual
-            pdf_individual = generar_pdf_usuario(usuario_info['usuario'], df_pendientes, num_semana, fecha_max_str)
-            
-            if pdf_individual:
-                archivos_adjuntos = []
-                
-                # 1. PDF individual
-                nombre_individual = f"Expedientes_Pendientes_{usuario_info['usuario']}_Semana_{num_semana}.pdf"
-                archivos_adjuntos.append((nombre_individual, pdf_individual))
-                
-                # 2. Resumen KPI si corresponde
-                if usuario_info['recibir_resumen'] and pdf_resumen:
-                    nombre_resumen = f"Resumen_KPI_Semana_{num_semana}.pdf"
-                    archivos_adjuntos.append((nombre_resumen, pdf_resumen))
-                
-                # Enviar correo
-                exito = enviar_correo_outlook(
-                    destinatario=usuario_info['email'],
-                    asunto=usuario_info['asunto'],
-                    cuerpo_mensaje=usuario_info['cuerpo_mensaje'],
-                    archivos_adjuntos=archivos_adjuntos,
-                    cc=usuario_info.get('cc'),
-                    bcc=usuario_info.get('bcc')
-                )
-                
-                if exito:
-                    correos_enviados += 1
-                    with results_container:
-                        st.success(f"✅ {usuario_info['usuario']} - Expedientes" + 
-                                (" + Resumen" if usuario_info['recibir_resumen'] and pdf_resumen else ""))
-                else:
-                    correos_fallidos += 1
-                    with results_container:
-                        st.error(f"❌ Falló: {usuario_info['usuario']}")
-            else:
-                correos_fallidos += 1
-                with results_container:
-                    st.error(f"❌ No se pudo generar PDF para {usuario_info['usuario']}")
-            
-            progress_bar.progress((i + 1) / total_a_procesar)
-        
-        # SEGUNDO: Enviar solo resúmenes a usuarios sin expedientes - CON EXPEDIENTES PRIORITARIOS DE TODOS LOS EQUIPOS
-        for i, usuario_info in enumerate(usuarios_para_resumen_solo):
-            status_text.text(f"📊 Enviando resumen a: {usuario_info['usuario']}")
-            
-            # Crear lista de adjuntos FRESCA para cada usuario
-            archivos_adjuntos = []
-            
-            if pdf_resumen:
-                # 1. Adjuntar resumen KPI
-                nombre_resumen = f"Resumen_KPI_Semana_{num_semana}.pdf"
-                archivos_adjuntos.append((nombre_resumen, pdf_resumen))
-                
-                # 🔥 NUEVO: Adjuntar expedientes prioritarios de TODOS los equipos
-                # Obtener la lista de equipos únicos con expedientes pendientes
-                equipos = df_pendientes['EQUIPO'].dropna().unique()
-                
-                for equipo in equipos:
-                    with st.spinner(f"Generando expedientes prioritarios para {equipo}..."):
-                        pdf_prioritarios_equipo = generar_pdf_equipo_prioritarios(
-                            equipo, 
-                            df_pendientes, 
-                            num_semana, 
-                            fecha_max_str
-                        )
-                        
-                        if pdf_prioritarios_equipo:
-                            nombre_prioritarios = f"Expedientes_Prioritarios_{equipo}_Semana_{num_semana}.pdf"
-                            archivos_adjuntos.append((nombre_prioritarios, pdf_prioritarios_equipo))
-                            st.success(f"✅ Expedientes prioritarios de {equipo} generados")
-                        else:
-                            st.warning(f"⚠️ No hay expedientes prioritarios para el equipo {equipo}")
-                
-                # Actualizar el cuerpo del mensaje para reflejar los nuevos adjuntos
-                cuerpo_mensaje_actualizado = f"Buenos días,\n\nSe adjunta el resumen de KPIs de la semana {num_semana} y los listados de expedientes prioritarios de todos los equipos.\n\n__________________\n\nEquipo RECTAUTO."
-                
-                # Enviar correo con todos los adjuntos
-                exito = enviar_correo_outlook(
-                    destinatario=usuario_info['email'],
-                    asunto=usuario_info['asunto'],
-                    cuerpo_mensaje=cuerpo_mensaje_actualizado,
-                    archivos_adjuntos=archivos_adjuntos,
-                    cc=usuario_info.get('cc'),
-                    bcc=usuario_info.get('bcc')
-                )
-                
-                if exito:
-                    correos_enviados += 1
-                    with results_container:
-                        st.success(f"📊 Resumen KPI y {len(equipos)} equipos de expedientes prioritarios enviados a {usuario_info['usuario']}")
-                else:
-                    correos_fallidos += 1
-                    with results_container:
-                        st.error(f"❌ Falló resumen: {usuario_info['usuario']}")
-            else:
-                correos_fallidos += 1
-                with results_container:
-                    st.error(f"❌ No hay resumen para {usuario_info['usuario']}")
-            
-            progress_bar.progress((len(usuarios_para_envio_individual) + i + 1) / total_a_procesar)
-        
-        status_text.text("")
-        
-        # RESUMEN FINAL
-        st.markdown("---")
-        st.subheader("📊 Resumen del Envío")
-        
-        col1, col2, col3 = st.columns(3)
-        with col1:
-            st.metric("Total procesados", total_a_procesar)
-        with col2:
-            st.metric("Correos enviados", correos_enviados)
-        with col3:
-            st.metric("Correos fallidos", correos_fallidos)
-        
-        # Calcular resúmenes enviados
-        resumenes_enviados = sum(1 for u in usuarios_para_envio_individual if u.get('recibir_resumen', False))
-        resumenes_enviados += len(usuarios_para_resumen_solo)
-        
-        st.info(f"📊 Resúmenes KPI enviados: {resumenes_enviados}")
-        
-        if correos_enviados > 0:
-            st.balloons()
-            st.success("🎉 ¡Envío de correos completado!")
-
+# =============================================
+# PÁGINA 3: INDICADORES CLAVE (KPI)
+# =============================================
 elif eleccion == "Indicadores clave (KPI)":
-    # ... (el código existente de la sección KPI se mantiene igual)
-    # Usar df_combinado en lugar de df
-    df = df_combinado
+    st.header("📊 Indicadores clave (KPI)")
     
-    st.subheader("Indicadores clave (KPI)")
+    if "df_combinado" not in st.session_state:
+        st.warning("⚠️ Primero carga los archivos en la sección 'Carga de Archivos'")
+        st.stop()
+    
+    # Usar df_combinado en lugar de df
+    df = st.session_state["df_combinado"]
     
     # Obtener fecha de referencia para cálculos
     columna_fecha = df.columns[13]
@@ -3694,3 +3421,556 @@ elif eleccion == "Indicadores clave (KPI)":
             annotation_position="top left"
         )
         st.plotly_chart(fig_percentiles, use_container_width=True)
+
+# =============================================
+# PÁGINA 4: ANÁLISIS DEL RENDIMIENTO
+# =============================================
+elif eleccion == "Análisis del Rendimiento":
+    st.header("📈 Análisis del Rendimiento")
+    
+    if "df_combinado" not in st.session_state:
+        st.warning("⚠️ Primero carga los archivos en la sección 'Carga de Archivos'")
+        st.stop()
+    
+    st.info("🔧 **Esta sección está en desarrollo.**")
+    st.write("Próximamente se incluirán análisis avanzados de rendimiento y productividad.")
+    
+    # Aquí puedes agregar el contenido específico para el análisis de rendimiento
+    st.write("Funcionalidades planificadas:")
+    st.write("- Análisis comparativo entre equipos")
+    st.write("- Tendencias de productividad")
+    st.write("- Análisis de bottlenecks")
+    st.write("- Recomendaciones de optimización")
+
+# =============================================
+# PÁGINA 5: INFORMES Y CORREOS - VERSIÓN OPTIMIZADA
+# =============================================
+elif eleccion == "Informes y Correos":
+    st.header("📧 Informes y Correos")
+    
+    if "df_combinado" not in st.session_state:
+        st.warning("⚠️ Primero carga los archivos en la sección 'Carga de Archivos'")
+        st.stop()
+    
+    # Usar df_combinado en lugar de df
+    df = st.session_state["df_combinado"]
+    df_usuarios = st.session_state.get("df_usuarios", None)
+    
+    # =================================================================
+    # OPTIMIZACIÓN: PRECÁLCULO DE KPIs (UNA SOLA VEZ)
+    # =================================================================
+    if "kpis_precalculados" not in st.session_state:
+        with st.spinner("📊 Calculando KPIs para todas las semanas (solo primera vez)..."):
+            # Obtener información de la semana actual
+            columna_fecha = df.columns[13]
+            df[columna_fecha] = pd.to_datetime(df[columna_fecha], errors='coerce')
+            fecha_max = df[columna_fecha].max()
+            dias_transcurridos = (fecha_max - FECHA_REFERENCIA).days
+            num_semana = dias_transcurridos // 7 + 1
+            fecha_max_str = fecha_max.strftime("%d/%m/%Y") if pd.notna(fecha_max) else "Sin fecha"
+            
+            # Crear rango de semanas disponibles
+            fecha_inicio = pd.to_datetime("2022-11-01")
+            semanas_disponibles = pd.date_range(
+                start=fecha_inicio,
+                end=fecha_max,
+                freq='W-FRI'
+            ).tolist()
+            
+            # Calcular KPIs para todas las semanas (SOLO UNA VEZ)
+            df_kpis_semanales = calcular_kpis_todas_semanas_optimizado(
+                df, semanas_disponibles, FECHA_REFERENCIA, fecha_max
+            )
+            
+            # Guardar en session_state para reutilizar
+            st.session_state.kpis_precalculados = {
+                'df_kpis_semanales': df_kpis_semanales,
+                'semanas_disponibles': semanas_disponibles,
+                'fecha_max': fecha_max,
+                'fecha_max_str': fecha_max_str,
+                'num_semana': num_semana
+            }
+            st.success("✅ KPIs precalculados correctamente")
+    
+    # USAR DATOS CACHEADOS (MUCHO MÁS RÁPIDO)
+    kpis_data = st.session_state.kpis_precalculados
+    df_kpis_semanales = kpis_data['df_kpis_semanales']
+    semanas_disponibles = kpis_data['semanas_disponibles']
+    fecha_max = kpis_data['fecha_max']
+    fecha_max_str = kpis_data['fecha_max_str']
+    num_semana = kpis_data['num_semana']
+    
+    st.sidebar.info(f"📊 KPIs cacheados: {len(df_kpis_semanales)} semanas")
+    
+    # Obtener información de la semana actual
+    columna_fecha = df.columns[13]
+    df[columna_fecha] = pd.to_datetime(df[columna_fecha], errors='coerce')
+    fecha_max = df[columna_fecha].max()
+    dias_transcurridos = (fecha_max - FECHA_REFERENCIA).days
+    num_semana = dias_transcurridos // 7 + 1
+    fecha_max_str = fecha_max.strftime("%d/%m/%Y") if pd.notna(fecha_max) else "Sin fecha"
+    
+    # Descarga de informes
+    st.subheader("📄 Generación de Informes PDF")
+    
+    df_pendientes = df[df["ESTADO"].isin(ESTADOS_PENDIENTES)].copy()
+    usuarios_pendientes = df_pendientes["USUARIO"].dropna().unique()
+
+    # NUEVO: Generar también PDFs por equipo (solo prioritarios) y resumen KPI
+    equipos_pendientes = df_pendientes["EQUIPO"].dropna().unique()
+    
+    if st.button(f"Generar {len(usuarios_pendientes)} Informes PDF + Equipos + Resumen KPI", key="generar_pdfs_completos"):
+        if usuarios_pendientes.size == 0:
+            st.info("No se encontraron expedientes pendientes para generar informes.")
+        else:
+            with st.spinner('Generando PDFs y comprimiendo...'):
+                zip_buffer = io.BytesIO()
+
+            with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zip_file:
+                # 1. PDFs por usuario (todos los pendientes)
+                for usuario in usuarios_pendientes:
+                    pdf_data = generar_pdf_usuario(usuario, df_pendientes, num_semana, fecha_max_str)
+                    if pdf_data:
+                        file_name = f"{num_semana}{usuario}.pdf"
+                        zip_file.writestr(file_name, pdf_data)
+                
+                # 2. PDFs por equipo (solo expedientes prioritarios)
+                for equipo in equipos_pendientes:
+                    pdf_data = generar_pdf_equipo_prioritarios(equipo, df_pendientes, num_semana, fecha_max_str)
+                    if pdf_data:
+                        file_name = f"{num_semana}{equipo}_PRIORITARIOS.pdf"
+                        zip_file.writestr(file_name, pdf_data)
+                
+                # 3. PDF de resumen de KPIs - USANDO DATOS YA CACHEADOS
+                # (No es necesario recalcular, ya tenemos todo en st.session_state.kpis_precalculados)
+                st.info("✅ Usando KPIs precalculados para generar resumen PDF")
+                
+                # Generar PDF de resumen KPI
+                pdf_resumen = generar_pdf_resumen_kpi_completo_optimizado(
+                    df_kpis_semanales, num_semana, fecha_max_str, 
+                    df, semanas_disponibles, FECHA_REFERENCIA, fecha_max
+                )
+                if pdf_resumen:
+                    file_name = f"{num_semana}RESUMEN_KPI.pdf"
+                    zip_file.writestr(file_name, pdf_resumen)
+
+            zip_buffer.seek(0)
+            zip_file_name = f"Informes_Completos_Semana_{num_semana}.zip"
+            st.download_button(
+                label=f"⬇️ Descargar {len(usuarios_pendientes)} Informes PDF + Equipos + Resumen KPI (ZIP)",
+                data=zip_buffer.read(),
+                file_name=zip_file_name,
+                mime="application/zip",
+                help="Descarga todos los informes PDF listos.",
+                key='pdf_download_button_completo'
+            )
+
+    # SECCIÓN: ENVÍO DE CORREOS INTEGRADA - VERSIÓN CORREGIDA
+    st.markdown("---")
+    st.subheader("📧 Envío de Correos Electrónicos")
+    
+    # CORRECCIÓN: Filtrar usuarios activos de forma más robusta
+    try:
+        if df_usuarios is None or df_usuarios.empty:
+            st.error("❌ No se ha cargado el archivo USUARIOS o está vacío")
+            st.stop()
+
+        df_usuarios = df_usuarios.copy()
+
+        # Normalizar campos de control
+        for col in ['ENVIAR', 'ENVÍO RESUMEN']:
+            if col not in df_usuarios.columns:
+                df_usuarios[col] = ""
+            df_usuarios[col] = df_usuarios[col].astype(str).str.upper().str.strip()
+
+        valores_si = ['SÍ', 'SI', 'S', 'YES', 'Y', 'TRUE', '1', 'VERDADERO']
+
+        # Usuarios que reciben su listado individual
+        usuarios_enviar = df_usuarios[df_usuarios['ENVIAR'].isin(valores_si)]
+
+        # Usuarios que reciben resumen KPI
+        usuarios_resumen = df_usuarios[df_usuarios['ENVÍO RESUMEN'].isin(valores_si)]
+
+        st.success(f"✅ {len(usuarios_enviar)} usuarios recibirán expedientes individuales")
+        st.success(f"📊 {len(usuarios_resumen)} usuarios recibirán resumen KPI")
+
+        if usuarios_enviar.empty and usuarios_resumen.empty:
+            st.warning("⚠️ No hay usuarios con ENVIAR o ENVÍO RESUMEN = 'SÍ'")
+            st.stop()
+
+    except Exception as e:
+        st.error(f"❌ Error procesando usuarios: {e}")
+        st.stop()
+
+    # Función para verificar envío de resumen - MÁS ROBUSTA
+    def verificar_envio_resumen(usuario_row):
+        """Verifica si el usuario debe recibir resumen KPI"""
+        try:
+            if 'ENVÍO RESUMEN' not in usuario_row.index:
+                return False
+            
+            valor = str(usuario_row['ENVÍO RESUMEN']).upper().strip() if pd.notna(usuario_row['ENVÍO RESUMEN']) else ""
+            valores_positivos = ['SÍ', 'SI', 'S', 'YES', 'Y', 'TRUE', '1', 'VERDADERO', 'OK', 'X', '✔', '✅']
+            return valor in valores_positivos
+        except:
+            return False
+
+    # Procesar usuarios para envío - SEPARAR CLARAMENTE LOS DOS GRUPOS
+    usuarios_para_envio_individual = []  # Usuarios con expedientes que reciben su PDF
+    usuarios_para_resumen_solo = []       # Usuarios que solo reciben resumen (jefes sin expedientes)
+
+    # INICIALIZAR Y DEFINIR usuarios_con_pendientes DE FORMA SEGURA
+    usuarios_con_pendientes = []
+    try:
+        # Primero, identificar todos los usuarios con expedientes pendientes
+        if not df_pendientes.empty and 'USUARIO' in df_pendientes.columns:
+            usuarios_con_pendientes = df_pendientes['USUARIO'].dropna().unique().tolist()
+            st.info(f"📋 {len(usuarios_con_pendientes)} usuarios tienen expedientes pendientes")
+        else:
+            st.warning("ℹ️ No se encontraron expedientes pendientes o falta la columna 'USUARIO'")
+            usuarios_con_pendientes = []
+    except Exception as e:
+        st.error(f"❌ Error al obtener usuarios con expedientes pendientes: {e}")
+        usuarios_con_pendientes = []
+
+    # VERIFICAR COLUMNAS REQUERIDAS EN EL ARCHIVO DE USUARIOS
+    columnas_requeridas = ['USUARIOS', 'EMAIL']
+    columnas_faltantes = [col for col in columnas_requeridas if col not in df_usuarios.columns]
+
+    if columnas_faltantes:
+        st.error(f"❌ Faltan columnas requeridas en el archivo USUARIOS: {', '.join(columnas_faltantes)}")
+        st.stop()
+
+    # PROCESAR CADA USUARIO ACTIVO - CORRECCIÓN IMPORTANTE
+    for _, usuario_row in usuarios_enviar.iterrows():
+        try:
+            usuario_nombre = usuario_row['USUARIOS']  # Del archivo USUARIOS
+            usuario_email = usuario_row['EMAIL']
+            
+            # Verificar datos básicos
+            if pd.isna(usuario_nombre) or pd.isna(usuario_email):
+                st.warning(f"⚠️ Usuario con nombre o email vacío: {usuario_nombre}")
+                continue
+                
+            # Normalizar para comparación
+            usuario_normalizado = str(usuario_nombre).strip().upper()
+            
+            # Verificar si tiene expedientes - COMPARAR CON 'USUARIO' de df_pendientes
+            tiene_expedientes = False
+            num_expedientes = 0
+            
+            # CORREGIDO: Verificar de forma segura si usuarios_con_pendientes está definido y no está vacío
+            if usuarios_con_pendientes and len(usuarios_con_pendientes) > 0:
+                try:
+                    # CORREGIDO: Comparar con 'USUARIO' de los expedientes pendientes
+                    tiene_expedientes = any(
+                        str(user_pendiente).strip().upper() == usuario_normalizado 
+                        for user_pendiente in usuarios_con_pendientes
+                    )
+                    
+                    if tiene_expedientes:
+                        # Contar expedientes del usuario - USANDO 'USUARIO' de df_pendientes
+                        num_expedientes = len(df_pendientes[
+                            df_pendientes['USUARIO'].apply(
+                                lambda x: str(x).strip().upper() if pd.notna(x) else ''
+                            ) == usuario_normalizado
+                        ])
+                except Exception as e:
+                    st.error(f"❌ Error al verificar expedientes para {usuario_nombre}: {e}")
+                    tiene_expedientes = False
+                    num_expedientes = 0
+            
+            # Verificar si debe recibir resumen - CORRECCIÓN IMPORTANTE
+            # Usamos la función verificar_envio_resumen para determinar esto
+            recibir_resumen = verificar_envio_resumen(usuario_row)
+            
+            # Procesar asunto y mensaje
+            asunto_template = usuario_row['ASUNTO'] if pd.notna(usuario_row.get('ASUNTO', '')) else f"Situación RECTAUTO asignados en la semana {num_semana} a {fecha_max_str}"
+            asunto_procesado = asunto_template.replace("&num_semana&", str(num_semana)).replace("&fecha_max&", fecha_max_str)
+            
+            # Generar cuerpo del mensaje
+            mensaje_base = ""
+            if pd.notna(usuario_row.get('MENSAJE1', '')):
+                mensaje_base += f"{usuario_row['MENSAJE1']}\n\n"
+            if pd.notna(usuario_row.get('MENSAJE2', '')):
+                mensaje_base += f"{usuario_row['MENSAJE2']}\n\n"
+            if pd.notna(usuario_row.get('MENSAJE3', '')):
+                mensaje_base += f"{usuario_row['MENSAJE3']}\n\n"
+            if pd.notna(usuario_row.get('DESPEDIDA', '')):
+                mensaje_base += f"{usuario_row['DESPEDIDA']}\n\n"
+            
+            if not mensaje_base.strip():
+                mensaje_base = "Se adjunta informe de expedientes pendientes."
+            
+            mensaje_base += "__________________\n\nEquipo RECTAUTO."
+            cuerpo_mensaje = f"Buenos días,\n\n{mensaje_base}"
+            
+            # CORRECCIÓN CRÍTICA: DETERMINAR A QUÉ LISTA PERTENECE
+            # Primero verificar si el usuario está marcado para recibir resumen
+            debe_recibir_resumen = verificar_envio_resumen(usuario_row)
+            
+            # Ahora determinar a qué lista va
+            if tiene_expedientes:
+                # Usuario con expedientes: va a la lista de envío individual
+                usuarios_para_envio_individual.append({
+                    'usuario': usuario_nombre,
+                    'email': usuario_email,
+                    'cc': usuario_row.get('CC', ''),
+                    'bcc': usuario_row.get('BCC', ''),
+                    'expedientes': num_expedientes,
+                    'asunto': asunto_procesado,
+                    'cuerpo_mensaje': cuerpo_mensaje,
+                    'recibir_resumen': debe_recibir_resumen  # Puede que también reciba resumen
+                })
+                st.success(f"✅ {usuario_nombre} - Tiene {num_expedientes} expedientes" + 
+                        (" y recibirá resumen" if debe_recibir_resumen else ""))
+            
+            # CORRECCIÓN: Usuarios que NO tienen expedientes pero SÍ deben recibir resumen
+            elif debe_recibir_resumen:
+                # Usuario sin expedientes pero que debe recibir resumen
+                usuarios_para_resumen_solo.append({
+                    'usuario': usuario_nombre,
+                    'email': usuario_email,
+                    'cc': usuario_row.get('CC', ''),
+                    'bcc': usuario_row.get('BCC', ''),
+                    'asunto': f"Resumen KPI Semana {num_semana} - {fecha_max_str}",
+                    'cuerpo_mensaje': f"Buenos días,\n\nSe adjunta el resumen de KPIs de la semana {num_semana} y los listados de expedientes prioritarios de todos los equipos.\n\n__________________\n\nEquipo RECTAUTO.",
+                    'recibir_resumen': True
+                })
+                st.info(f"📊 {usuario_nombre} - Recibirá resumen KPI + expedientes prioritarios de todos los equipos")
+            
+            else:
+                # Usuario sin expedientes y sin marcar para resumen
+                st.warning(f"⚠️ {usuario_nombre} - No tiene expedientes ni está marcado para resumen")
+                
+        except Exception as e:
+            st.error(f"❌ Error procesando usuario {usuario_row.get('USUARIOS', 'Desconocido')}: {e}")
+            continue
+
+    # Procesar también usuarios que solo reciben resumen (no están en ENVIAR pero sí en ENVÍO RESUMEN)
+    for _, usuario_row in usuarios_resumen.iterrows():
+        try:
+            usuario_nombre = usuario_row['USUARIOS']
+            usuario_email = usuario_row['EMAIL']
+            
+            # Verificar que no esté ya en la lista de envío individual
+            if any(u['usuario'] == usuario_nombre for u in usuarios_para_envio_individual):
+                continue  # Ya está procesado
+                
+            if any(u['usuario'] == usuario_nombre for u in usuarios_para_resumen_solo):
+                continue  # Ya está procesado
+                
+            # Verificar datos básicos
+            if pd.isna(usuario_nombre) or pd.isna(usuario_email):
+                st.warning(f"⚠️ Usuario con nombre o email vacío: {usuario_nombre}")
+                continue
+            
+            # Solo agregar si no tiene expedientes (para evitar duplicados)
+            usuario_normalizado = str(usuario_nombre).strip().upper()
+            tiene_expedientes = any(
+                str(user_pendiente).strip().upper() == usuario_normalizado 
+                for user_pendiente in usuarios_con_pendientes
+            ) if usuarios_con_pendientes else False
+            
+            if not tiene_expedientes:
+                usuarios_para_resumen_solo.append({
+                    'usuario': usuario_nombre,
+                    'email': usuario_email,
+                    'cc': usuario_row.get('CC', ''),
+                    'bcc': usuario_row.get('BCC', ''),
+                    'asunto': f"Resumen KPI Semana {num_semana} - {fecha_max_str}",
+                    'cuerpo_mensaje': f"Buenos días,\n\nSe adjunta el resumen de KPIs de la semana {num_semana} y los listados de expedientes prioritarios de todos los equipos.\n\n__________________\n\nEquipo RECTAUTO.",
+                    'recibir_resumen': True
+                })
+                st.info(f"📊 {usuario_nombre} - Recibirá solo resumen KPI (sin expedientes propios)")
+                
+        except Exception as e:
+            st.error(f"❌ Error procesando usuario resumen {usuario_row.get('USUARIOS', 'Desconocido')}: {e}")
+            continue
+
+    # MOSTRAR RESUMEN DE LO QUE SE VA A ENVIAR
+    st.markdown("---")
+    st.subheader("📋 Resumen de Envíos Programados")
+
+    if usuarios_para_envio_individual:
+        st.success(f"✅ {len(usuarios_para_envio_individual)} usuarios recibirán sus expedientes pendientes")
+        with st.expander("📋 Ver usuarios con expedientes"):
+            df_envio = pd.DataFrame(usuarios_para_envio_individual)
+            st.dataframe(df_envio[['usuario', 'email', 'expedientes', 'recibir_resumen']], use_container_width=True)
+
+    if usuarios_para_resumen_solo:
+        st.success(f"📊 {len(usuarios_para_resumen_solo)} usuarios recibirán solo el resumen KPI")
+        with st.expander("📋 Ver usuarios para resumen"):
+            df_resumen = pd.DataFrame(usuarios_para_resumen_solo)
+            st.dataframe(df_resumen[['usuario', 'email']], use_container_width=True)
+
+    if not usuarios_para_envio_individual and not usuarios_para_resumen_solo:
+        st.warning("⚠️ No hay usuarios para enviar correos")
+        st.stop()
+
+    # BOTÓN DE ENVÍO - SIEMPRE VISIBLE SI HAY USUARIOS EN ALGUNA LISTA
+    st.markdown("---")
+    st.subheader("🚀 Envío de Correos")
+
+    st.warning("""
+    **⚠️ Importante antes de enviar:**
+    - Se usará la cuenta de Outlook predeterminada
+    - No es necesario tener Outlook abierto
+    - Los correos se enviarán inmediatamente
+    - **Usuarios con expedientes pendientes:** Recibirán su PDF individual
+    - **Usuarios Gerente y Jefes de Equipo:** Recibirán el resumen KPI y los Expedientes Prioritarios de todos los equipos
+    - **Verifica que los datos sean correctos**
+    """)
+
+    if st.button("📤 Enviar Todos los Correos", type="primary", key="enviar_correos"):
+        progress_bar = st.progress(0)
+        status_text = st.empty()
+        results_container = st.container()
+        
+        correos_enviados = 0
+        correos_fallidos = 0
+        
+        # Generar PDF de resumen KPI - USANDO DATOS CACHEADOS
+        pdf_resumen = None
+        with st.spinner("Generando resumen KPI desde cache..."):
+            # USAR DATOS YA CALCULADOS, NO RECALCULAR
+            pdf_resumen = generar_pdf_resumen_kpi_completo_optimizado(
+                df_kpis_semanales, 
+                num_semana, 
+                fecha_max_str, 
+                df, 
+                semanas_disponibles, 
+                FECHA_REFERENCIA, 
+                fecha_max
+            )
+        
+        total_a_procesar = len(usuarios_para_envio_individual) + len(usuarios_para_resumen_solo)
+        
+        # PRIMERO: Enviar a usuarios con expedientes
+        for i, usuario_info in enumerate(usuarios_para_envio_individual):
+            status_text.text(f"📨 Enviando a: {usuario_info['usuario']}")
+            
+            # Generar PDF individual
+            pdf_individual = generar_pdf_usuario(usuario_info['usuario'], df_pendientes, num_semana, fecha_max_str)
+            
+            if pdf_individual:
+                archivos_adjuntos = []
+                
+                # 1. PDF individual
+                nombre_individual = f"Expedientes_Pendientes_{usuario_info['usuario']}_Semana_{num_semana}.pdf"
+                archivos_adjuntos.append((nombre_individual, pdf_individual))
+                
+                # 2. Resumen KPI si corresponde
+                if usuario_info['recibir_resumen'] and pdf_resumen:
+                    nombre_resumen = f"Resumen_KPI_Semana_{num_semana}.pdf"
+                    archivos_adjuntos.append((nombre_resumen, pdf_resumen))
+                
+                # Enviar correo
+                exito = enviar_correo_outlook(
+                    destinatario=usuario_info['email'],
+                    asunto=usuario_info['asunto'],
+                    cuerpo_mensaje=usuario_info['cuerpo_mensaje'],
+                    archivos_adjuntos=archivos_adjuntos,
+                    cc=usuario_info.get('cc'),
+                    bcc=usuario_info.get('bcc')
+                )
+                
+                if exito:
+                    correos_enviados += 1
+                    with results_container:
+                        st.success(f"✅ {usuario_info['usuario']} - Expedientes" + 
+                                (" + Resumen" if usuario_info['recibir_resumen'] and pdf_resumen else ""))
+                else:
+                    correos_fallidos += 1
+                    with results_container:
+                        st.error(f"❌ Falló: {usuario_info['usuario']}")
+            else:
+                correos_fallidos += 1
+                with results_container:
+                    st.error(f"❌ No se pudo generar PDF para {usuario_info['usuario']}")
+            
+            progress_bar.progress((i + 1) / total_a_procesar)
+        
+        # SEGUNDO: Enviar solo resúmenes a usuarios sin expedientes - CON EXPEDIENTES PRIORITARIOS DE TODOS LOS EQUIPOS
+        for i, usuario_info in enumerate(usuarios_para_resumen_solo):
+            status_text.text(f"📊 Enviando resumen a: {usuario_info['usuario']}")
+            
+            # Crear lista de adjuntos FRESCA para cada usuario
+            archivos_adjuntos = []
+            
+            if pdf_resumen:
+                # 1. Adjuntar resumen KPI
+                nombre_resumen = f"Resumen_KPI_Semana_{num_semana}.pdf"
+                archivos_adjuntos.append((nombre_resumen, pdf_resumen))
+                
+                # 🔥 NUEVO: Adjuntar expedientes prioritarios de TODOS los equipos
+                # Obtener la lista de equipos únicos con expedientes pendientes
+                equipos = df_pendientes['EQUIPO'].dropna().unique()
+                
+                for equipo in equipos:
+                    with st.spinner(f"Generando expedientes prioritarios para {equipo}..."):
+                        pdf_prioritarios_equipo = generar_pdf_equipo_prioritarios(
+                            equipo, 
+                            df_pendientes, 
+                            num_semana, 
+                            fecha_max_str
+                        )
+                        
+                        if pdf_prioritarios_equipo:
+                            nombre_prioritarios = f"Expedientes_Prioritarios_{equipo}_Semana_{num_semana}.pdf"
+                            archivos_adjuntos.append((nombre_prioritarios, pdf_prioritarios_equipo))
+                            st.success(f"✅ Expedientes prioritarios de {equipo} generados")
+                        else:
+                            st.warning(f"⚠️ No hay expedientes prioritarios para el equipo {equipo}")
+                
+                # Actualizar el cuerpo del mensaje para reflejar los nuevos adjuntos
+                cuerpo_mensaje_actualizado = f"Buenos días,\n\nSe adjunta el resumen de KPIs de la semana {num_semana} y los listados de expedientes prioritarios de todos los equipos.\n\n__________________\n\nEquipo RECTAUTO."
+                
+                # Enviar correo con todos los adjuntos
+                exito = enviar_correo_outlook(
+                    destinatario=usuario_info['email'],
+                    asunto=usuario_info['asunto'],
+                    cuerpo_mensaje=cuerpo_mensaje_actualizado,
+                    archivos_adjuntos=archivos_adjuntos,
+                    cc=usuario_info.get('cc'),
+                    bcc=usuario_info.get('bcc')
+                )
+                
+                if exito:
+                    correos_enviados += 1
+                    with results_container:
+                        st.success(f"📊 Resumen KPI y {len(equipos)} equipos de expedientes prioritarios enviados a {usuario_info['usuario']}")
+                else:
+                    correos_fallidos += 1
+                    with results_container:
+                        st.error(f"❌ Falló resumen: {usuario_info['usuario']}")
+            else:
+                correos_fallidos += 1
+                with results_container:
+                    st.error(f"❌ No hay resumen para {usuario_info['usuario']}")
+            
+            progress_bar.progress((len(usuarios_para_envio_individual) + i + 1) / total_a_procesar)
+        
+        status_text.text("")
+        
+        # RESUMEN FINAL
+        st.markdown("---")
+        st.subheader("📊 Resumen del Envío")
+        
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            st.metric("Total procesados", total_a_procesar)
+        with col2:
+            st.metric("Correos enviados", correos_enviados)
+        with col3:
+            st.metric("Correos fallidos", correos_fallidos)
+        
+        # Calcular resúmenes enviados
+        resumenes_enviados = sum(1 for u in usuarios_para_envio_individual if u.get('recibir_resumen', False))
+        resumenes_enviados += len(usuarios_para_resumen_solo)
+        
+        st.info(f"📊 Resúmenes KPI enviados: {resumenes_enviados}")
+        
+        if correos_enviados > 0:
+            st.balloons()
+            st.success("🎉 ¡Envío de correos completado!")
