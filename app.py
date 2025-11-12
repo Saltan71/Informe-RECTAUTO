@@ -2559,29 +2559,16 @@ elif eleccion == "Vista de Expedientes":
     registros_totales = f"{len(df):,}".replace(",", ".")
     st.write(f"Mostrando {registros_mostrados} de {registros_totales} registros")
 
-    # 🔥 CONVERTIR FECHAS A TEXTO EN FORMATO ESPAÑOL 
+    # 🔥 CORREGIDO: CONVERTIR FECHAS A TEXTO EN FORMATO ESPAÑOL SOLO FECHA
     columnas_fechas = ['FECHA INICIO TRAMITACIÓN', 'FECHA APERTURA', 'FECHA RESOLUCIÓN', 
                     'FECHA FIN TRAMITACIÓN', 'FECHA CIERRE', 'FECHA PENÚLTIMO TRAM.', 
                     'FECHA ÚLTIMO TRAM.', 'FECHA NOTIFICACIÓN', 'FECHA ASIG']
 
     for col in columnas_fechas:
         if col in df_mostrar.columns:
-            # Convertir a texto en formato español
+            # Convertir a texto en formato español SOLO FECHA
             df_mostrar[col] = df_mostrar[col].apply(
                 lambda x: x.strftime('%d/%m/%Y') if pd.notna(x) else ''
-            )
-
-    # 🔥 CREAR COLUMNAS ADICIONALES PARA FILTRADO MÁS FÁCIL
-    # Columna de mes y año para filtros más sencillos
-    for col in columnas_fechas:
-        if col in df_mostrar.columns:
-            # Mes en texto (Enero, Febrero, etc.)
-            df_mostrar[f'{col}_MES'] = df_filtrado[col].apply(
-                lambda x: x.strftime('%B').capitalize() if pd.notna(x) else ''
-            )
-            # Año para filtros por año
-            df_mostrar[f'{col}_AÑO'] = df_filtrado[col].apply(
-                lambda x: str(x.year) if pd.notna(x) else ''
             )
 
     # Redondear columnas numéricas
@@ -2593,7 +2580,7 @@ elif eleccion == "Vista de Expedientes":
             else:
                 df_mostrar[col] = df_mostrar[col].apply(lambda x: int(round(x)) if pd.notna(x) else 0)
 
-    # CONFIGURACIÓN AGGRID MEJORADA
+    # CONFIGURACIÓN AGGRID CON FILTROS DE TEXTO
     gb = GridOptionsBuilder.from_dataframe(df_mostrar)
 
     # Configurar todas las columnas con filtros de texto
@@ -2605,7 +2592,7 @@ elif eleccion == "Vista de Expedientes":
         min_column_width=100
     )
 
-    # 🔥 CONFIGURACIÓN MEJORADA PARA FECHAS
+    # 🔥 CONFIGURAR FECHAS COMO TEXTO CON COMPARADOR INTELIGENTE MEJORADO
     for col in columnas_fechas:
         if col in df_mostrar.columns:
             gb.configure_column(
@@ -2615,91 +2602,68 @@ elif eleccion == "Vista de Expedientes":
                     "buttons": ['apply', 'reset'],
                     "defaultOption": "contains",
                     "caseSensitive": False,
-                    "debounceMs": 300,
-                    "textFormatter": """
-                    function(value) {
-                        if (!value) return '';
-                        // Permitir búsquedas con / o sin /
-                        return value.replace(/\\//g, '');
-                    }
-                    """
+                    "debounceMs": 300
                 },
-                # 🔥 COMPARADOR INTELIGENTE MEJORADO
+                # 🔥 COMPARADOR INTELIGENTE MEJORADO PARA FECHAS EN TEXTO
                 comparator="""
                 function(valueA, valueB) {
+                    // Manejar valores vacíos
                     if (!valueA && !valueB) return 0;
                     if (!valueA) return -1;
                     if (!valueB) return 1;
                     
+                    // Función para convertir formato DD/MM/AAAA a timestamp
                     function toTimestamp(dateStr) {
                         if (!dateStr) return 0;
-                        // Manejar diferentes formatos: DD/MM/AAAA, DD-MM-AAAA, etc.
-                        const cleanStr = dateStr.replace(/[-/]/g, '/');
-                        const parts = cleanStr.split('/');
+                        const parts = dateStr.split('/');
                         if (parts.length !== 3) return 0;
                         
                         const day = parseInt(parts[0], 10);
-                        const month = parseInt(parts[1], 10) - 1;
+                        const month = parseInt(parts[1], 10) - 1; // Meses van de 0-11
                         const year = parseInt(parts[2], 10);
                         
+                        // Validar que los números sean válidos
                         if (isNaN(day) || isNaN(month) || isNaN(year)) return 0;
+                        if (day < 1 || day > 31) return 0;
+                        if (month < 0 || month > 11) return 0;
+                        if (year < 1900 || year > 2100) return 0;
                         
                         return new Date(year, month, day).getTime();
                     }
                     
-                    return toTimestamp(valueA) - toTimestamp(valueB);
+                    const timestampA = toTimestamp(valueA);
+                    const timestampB = toTimestamp(valueB);
+                    
+                    return timestampA - timestampB;
                 }
                 """
             )
 
-    # 🔥 CONFIGURAR COLUMNAS DE MES Y AÑO PARA FILTRADO FÁCIL
-    for col in columnas_fechas:
-        if col in df_mostrar.columns:
-            # Columna de Mes
-            gb.configure_column(
-                f'{col}_MES',
-                headerName=f'{col} - Mes',
-                filter="agSetColumnFilter",
-                filterParams={
-                    "values": ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
-                            'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'],
-                    "buttons": ['apply', 'reset'],
-                    "closeOnApply": True
-                },
-                hide=False  # Mostrar estas columnas adicionales
-            )
-            
-            # Columna de Año
-            gb.configure_column(
-                f'{col}_AÑO', 
-                headerName=f'{col} - Año',
-                filter="agSetColumnFilter",
-                filterParams={
-                    "buttons": ['apply', 'reset'],
-                    "closeOnApply": True
-                },
-                hide=False
-            )
-
-    # Configurar otras columnas
+    # Configurar otras columnas con sus filtros apropiados
     columnas_texto = ['ESTADO', 'EQUIPO', 'USUARIO', 'ETIQ. PENÚLTIMO TRAM.', 'ETIQ. ÚLTIMO TRAM.', 'NOTIFICADO']
     for col in columnas_texto:
         if col in df_mostrar.columns:
             gb.configure_column(
                 col,
                 filter="agTextColumnFilter",
-                filterParams={"defaultOption": "contains"}
+                filterParams={
+                    "defaultOption": "contains",
+                    "caseSensitive": False
+                }
             )
 
     columnas_numericas = [col for col in df_mostrar.columns 
                         if any(word in col.upper() for word in ['ANTIGÜEDAD', 'DÍAS', 'NÚMERO', 'CANTIDAD'])
-                        and col not in columnas_fechas and col not in columnas_texto
-                        and '_MES' not in col and '_AÑO' not in col]
+                        and col not in columnas_fechas and col not in columnas_texto]
     for col in columnas_numericas:
         if col in df_mostrar.columns:
             gb.configure_column(
                 col,
-                filter="agNumberColumnFilter"
+                filter="agNumberColumnFilter",
+                filterParams={
+                    "buttons": ['apply', 'reset'],
+                    "defaultOption": "equals"
+                }
             )
 
     gb.configure_side_bar()
@@ -2714,15 +2678,6 @@ elif eleccion == "Vista de Expedientes":
     )
 
     grid_options = gb.build()
-
-    # Mostrar instrucciones para el usuario
-    st.info("""
-    **💡 Consejos para filtrar fechas:**
-    - **Búsqueda por fecha exacta**: `15/03/2023` o `15032023`
-    - **Búsqueda por mes**: Usa las columnas adicionales de **Mes** y **Año**
-    - **Búsqueda por año**: `2023` o `2024`
-    - **Búsqueda parcial**: `03/2023` o `marzo`
-    """)
 
     # Mostrar tabla
     grid_response = AgGrid(
