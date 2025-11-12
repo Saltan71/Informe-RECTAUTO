@@ -2586,11 +2586,10 @@ elif eleccion == "Vista de Expedientes":
     gb.configure_default_column(
         filterable=True,
         sortable=True,
-        resizable=True,
+        resizable=True,  # Permitir que el usuario redimensione
         editable=False,
-        groupable=False,
-        min_column_width=80,
-        flex=1
+        min_column_width=120,  # Ancho mínimo decente
+        max_column_width=500   # Ancho máximo
     )
     
     # Configurar paginación
@@ -2612,20 +2611,19 @@ elif eleccion == "Vista de Expedientes":
     
     grid_options = gb.build()
     
-    # Mostrar tabla con AgGrid
-    try:
-        grid_response = AgGrid(
-            df_mostrar,
-            gridOptions=grid_options,
-            height=600,
-            width='100%',
-            data_return_mode='AS_INPUT',
-            update_mode='MODEL_CHANGED',
-            fit_columns_on_grid_load=False,
-            allow_unsafe_jscode=True,
-            enable_enterprise_modules=True,
-            theme='streamlit'
-        )
+    # Mostrar SIN fit_columns_on_grid_load
+    grid_response = AgGrid(
+        df_mostrar_aggrid,
+        gridOptions=grid_options,
+        height=600,
+        width='100%',
+        data_return_mode='AS_INPUT',
+        update_mode='MODEL_CHANGED',
+        fit_columns_on_grid_load=False,  # ← CLAVE: False
+        allow_unsafe_jscode=False,       # ← Puedes probar con False también
+        enable_enterprise_modules=True,
+        theme='streamlit'
+    )
         
         # DEPURACIÓN: Mostrar qué contiene grid_response
         st.sidebar.write("🔍 Debug AgGrid response:")
