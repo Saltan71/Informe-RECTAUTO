@@ -547,34 +547,43 @@ def procesar_archivos_combinado(archivos_dict, _user_key=user_env.session_id):
         return df_rectauto, None, None
 
 def guardar_documentos_actualizados(archivo_original, df_documentos_actualizado):
-    """Guarda los datos actualizados en el archivo DOCUMENTOS.xlsx"""
+    """Guarda los datos actualizados en el archivo DOCUMENTOS.xlsx REEMPLAZANDO completamente el contenido anterior"""
     try:
         # Usar directorio temporal único por usuario
         tmp_file = tempfile.NamedTemporaryFile(delete=False, suffix=".xlsx", dir=user_env.working_dir)
         tmp_path = tmp_file.name
-        tmp_file.close()  # 🔹 Muy importante: libera el archivo en Windows
+        tmp_file.close()
 
-        # Escribir las dos hojas en el archivo temporal
-        with pd.ExcelWriter(tmp_path, engine="openpyxl") as writer:
-            # Hoja DOCUMENTOS actualizada - SOLO los registros actuales
-            df_documentos_actualizado.to_excel(writer, sheet_name="DOCUMENTOS", index=False)
-
-            # Hoja DOCU - MANTENER las opciones del desplegable del original
+        # 🔥 CORRECCIÓN: Crear un NUEVO ExcelWriter que SOBREESCRIBA el archivo
+        with pd.ExcelWriter(tmp_path, engine="openpyxl", mode='w') as writer:
+            # 🔥 PRIMERO: Hoja DOCU - MANTENER las opciones del desplegable del original
             archivo_original.seek(0)
             df_docu_original = pd.read_excel(archivo_original, sheet_name="DOCU")
             df_docu_original.to_excel(writer, sheet_name="DOCU", index=False)
+            
+            # 🔥 SEGUNDO: Hoja DOCUMENTOS - ESCRIBIR SOLO los datos actuales
+            # Filtrar solo registros con documentación no vacía
+            df_para_guardar = df_documentos_actualizado[
+                df_documentos_actualizado['DOCUM.INCORP.'].notna() & 
+                (df_documentos_actualizado['DOCUM.INCORP.'] != '')
+            ].copy()
+            
+            # 🔥 LIMPIAR COMPLETAMENTE la hoja DOCUMENTOS y escribir solo los datos actuales
+            df_para_guardar.to_excel(writer, sheet_name="DOCUMENTOS", index=False)
 
         # Leer contenido ya guardado
         with open(tmp_path, "rb") as f:
             contenido = f.read()
 
-        # Eliminar el archivo temporal (libre ya de bloqueos)
+        # Eliminar el archivo temporal
         os.remove(tmp_path)
 
         return contenido
 
     except Exception as e:
         st.error(f"Error guardando DOCUMENTOS: {e}")
+        import traceback
+        st.error(f"Detalle: {traceback.format_exc()}")
         return None
 
 @st.cache_data(ttl=CACHE_TTL)
