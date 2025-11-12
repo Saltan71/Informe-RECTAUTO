@@ -2579,86 +2579,253 @@ elif eleccion == "Vista de Expedientes":
     registros_totales = f"{len(df):,}".replace(",", ".")
     st.write(f"Mostrando {registros_mostrados} de {registros_totales} registros")
 
-    # CONFIGURACIÓN DE AGGRID
+    # CONFIGURACIÓN CON FILTROS EN CABECERAS Y ANCHOS ESPECÍFICOS
     gb = GridOptionsBuilder.from_dataframe(df_mostrar)
-    
-    # Configurar todas las columnas
+
+    # CONFIGURACIÓN POR DEFECTO CON FILTROS EN CABECERAS
     gb.configure_default_column(
-        filterable=True,
+        filter=True,           # ← ACTIVAR FILTROS
+        floatingFilter=True,   # ← FILTROS VISIBLES EN CABECERAS
         sortable=True,
         resizable=True,
         editable=False,
         groupable=False,
-        min_column_width=100
+        min_column_width=90,
+        suppressSizeToFit=False,
+        wrapHeaderText=True,
+        autoHeaderHeight=False,
+        wrapText=True,
+        autoHeight=False,
+        cellStyle={'whiteSpace': 'normal', 'lineHeight': '1.2', 'maxHeight': '60px'},
+        headerClass='header-limited-lines'
     )
-    
-    # Configurar paginación
-    gb.configure_pagination(
-        paginationAutoPageSize=False,
-        paginationPageSize=50
+
+    # COLUMNAS FIJAS CON FILTROS
+    if 'RUE' in df_mostrar.columns:
+        gb.configure_column(
+            'RUE',
+            pinned='left',
+            width=220,
+            minWidth=220,
+            maxWidth=220,
+            suppressSizeToFit=True,
+            suppressMovable=True,
+            lockPinned=True,
+            cellStyle={'backgroundColor': '#f8f9fa', 'whiteSpace': 'normal', 'lineHeight': '1.2', 'maxHeight': '60px'},
+            wrapText=True,
+            headerClass='header-limited-lines',
+            filter=True,
+            floatingFilter=True
+        )
+
+    if 'USUARIO' in df_mostrar.columns:
+        gb.configure_column(
+            'USUARIO',
+            pinned='right',
+            width=70,
+            minWidth=70,
+            maxWidth=80,
+            suppressSizeToFit=True,
+            suppressMovable=True,
+            lockPinned=True,
+            cellStyle={'backgroundColor': '#f8f9fa', 'whiteSpace': 'normal', 'lineHeight': '1.2', 'maxHeight': '60px'},
+            wrapText=True,
+            headerClass='header-limited-lines',
+            filter=True,
+            floatingFilter=True
+        )
+
+    # CONFIGURACIÓN INTELIGENTE POR TIPO DE COLUMNA CON FILTROS
+    # Columnas de texto largo - más anchas pero con wrap
+    columnas_texto_largo = ['OBSERVACIONES', 'CALIFICACIÓN']
+    for col in columnas_texto_largo:
+        if col in df_mostrar.columns:
+            gb.configure_column(
+                col,
+                width=200,
+                minWidth=150,
+                maxWidth=300,
+                wrapText=True,
+                autoHeight=False,
+                cellStyle={'whiteSpace': 'normal', 'lineHeight': '1.2', 'maxHeight': '60px'},
+                headerClass='header-limited-lines',
+                filter=True,
+                floatingFilter=True
+            )
+
+    # Columnas de fechas - anchos moderados
+    columnas_fechas = ['ESTADO', 'FECHA INICIO TRAMITACIÓN', 'FECHA APERTURA', 'FECHA RESOLUCIÓN', 
+                    'FECHA PENÚLTIMO TRAM.', 'ANTIGÜEDAD EXP. (DÍAS)', 'DÍAS DIF. F. PENÚLT.TRÁM. Y F. APERT', 'FECHA ÚLTIMO TRAM.', 
+                    'FECHA NOTIFICACIÓN', 'FECHA ASIG', 'USUARIO-CSV']
+    for col in columnas_fechas:
+        if col in df_mostrar.columns:
+            gb.configure_column(
+                col,
+                width=110,
+                minWidth=100,
+                maxWidth=140,
+                wrapText=True,
+                cellStyle={'whiteSpace': 'normal', 'lineHeight': '1.2', 'maxHeight': '60px'},
+                headerClass='header-limited-lines',
+                filter=True,
+                floatingFilter=True
+            )
+
+    # Columnas de categorías - anchos compactos
+    columnas_categorias = ['EQUIPO', 'IMPUESTO', 'IMPUESTO ORIGEN', 'NATURALEZA', 
+                        'ETIQ. PENÚLTIMO TRAM.', 'ETIQ. ÚLTIMO TRAM.']
+    for col in columnas_categorias:
+        if col in df_mostrar.columns:
+            gb.configure_column(
+                col,
+                width=130,
+                minWidth=130,
+                maxWidth=160,
+                wrapText=True,
+                cellStyle={'whiteSpace': 'normal', 'lineHeight': '1.2', 'maxHeight': '60px'},
+                headerClass='header-limited-lines',
+                filter=True,
+                floatingFilter=True
+            )
+
+    # Configurar DOCUM.INCORP. si existe
+    if 'DOCUM.INCORP.' in df_mostrar.columns:
+        gb.configure_column(
+            'DOCUM.INCORP.',
+            width=150,
+            minWidth=120,
+            maxWidth=200,
+            wrapText=True,
+            cellStyle={'whiteSpace': 'normal', 'lineHeight': '1.2', 'maxHeight': '60px'},
+            headerClass='header-limited-lines',
+            filter=True,
+            floatingFilter=True
+        )
+
+    # CONFIGURACIÓN DEL GRID
+    gb.configure_side_bar(
+        filters_panel=True, 
+        columns_panel=True,
+        defaultToolPanel='filters'
     )
-    
-    # Configurar barra lateral de filtros
-    gb.configure_side_bar()
-    
-    # Configurar selección
+
     gb.configure_selection(
         selection_mode="multiple",
         use_checkbox=True,
         groupSelectsChildren=True,
         groupSelectsFiltered=True
     )
-    
+
+    # Configuración adicional para mejor experiencia de filtrado
+    gb.configure_grid_options(
+        enableFilter=True,
+        enableSorting=True,
+        enableRangeSelection=True,
+        tooltipShowDelay=0,
+        tooltipHideDelay=5000,
+        enableBrowserTooltips=True,
+        animateRows=True,
+        rowSelection='multiple',
+        floatingFilter = True  # Asegurar filtros flotantes globalmente
+    )
+
     grid_options = gb.build()
-    
-    # Mostrar tabla con AgGrid
+
+    # AÑADIR CSS PERSONALIZADO PARA LIMITAR LÍNEAS (igual que antes)
+    st.markdown("""
+    <style>
+        /* Limitar encabezados a 2 líneas máximo */
+        .header-limited-lines .ag-header-cell-text {
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            line-height: 1.2;
+            max-height: 2.4em;
+            white-space: normal;
+            word-break: break-word;
+        }
+        
+        /* Limitar celdas a 3 líneas máximo */
+        .ag-cell {
+            display: -webkit-box;
+            -webkit-line-clamp: 3;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            line-height: 1.2;
+            max-height: 3.6em;
+            white-space: normal;
+            word-break: break-word;
+        }
+        
+        /* Asegurar que las celdas tengan altura consistente */
+        .ag-row {
+            height: auto !important;
+            min-height: 36px !important;
+        }
+        
+        .ag-cell-wrapper {
+            min-height: 36px;
+        }
+        
+        /* Mejorar visibilidad de filtros flotantes */
+        .ag-floating-filter input {
+            font-size: 12px;
+            padding: 2px 4px;
+        }
+        
+        .ag-floating-filter-body {
+            margin-right: 2px;
+        }
+    </style>
+    """, unsafe_allow_html=True)
+
+    # Mostrar tabla con AgGrid - CON FILTROS EN CABECERAS
     try:
         grid_response = AgGrid(
             df_mostrar,
             gridOptions=grid_options,
-            height=600,
+            height=700,
             width='100%',
             data_return_mode='AS_INPUT',
             update_mode='MODEL_CHANGED',
-            fit_columns_on_grid_load=False,
+            fit_columns_on_grid_load=True,
             allow_unsafe_jscode=True,
             enable_enterprise_modules=True,
-            theme='streamlit'
+            theme='streamlit',
+            reload_data=False,
+            key='aggrid_filtros_cabeceras'
         )
         
-        # DEPURACIÓN: Mostrar qué contiene grid_response
-        st.sidebar.write("🔍 Debug AgGrid response:")
-        st.sidebar.write(f"Tipo: {type(grid_response)}")
-        if hasattr(grid_response, '__dict__'):
-            st.sidebar.write(f"Atributos: {grid_response.__dict__.keys()}")
-        
-        # MÚLTIPLES FORMAS DE OBTENER LAS FILAS SELECCIONADAS
+        # MANEJO SEGURO DE selected_rows
         selected_rows = []
+        try:
+            if hasattr(grid_response, 'get'):
+                selected_rows = grid_response.get('selected_rows', [])
+            elif hasattr(grid_response, 'selected_rows'):
+                selected_rows = grid_response.selected_rows
+        except:
+            selected_rows = []
         
-        # Método 1: Intentar con get()
-        if isinstance(grid_response, dict):
-            selected_rows = grid_response.get('selected_rows', [])
-        # Método 2: Intentar con atributo
-        elif hasattr(grid_response, 'selected_rows'):
-            selected_rows = grid_response.selected_rows
-        # Método 3: Intentar con getattr
-        else:
-            selected_rows = getattr(grid_response, 'selected_rows', [])
-        
-        # Asegurarnos que selected_rows es una lista
         if not isinstance(selected_rows, list):
             selected_rows = []
         
-        # Mostrar estadísticas de selección si hay filas seleccionadas
         if len(selected_rows) > 0:
             st.info(f"📌 {len(selected_rows)} fila(s) seleccionada(s)")
-        else:
-            # Opcional: mostrar que no hay selección
-            st.sidebar.info("ℹ️ No hay filas seleccionadas")
             
     except Exception as e:
-        st.error(f"❌ Error en AgGrid: {e}")
-        selected_rows = []
+        st.error(f"❌ Error al mostrar la tabla: {e}")
+        st.dataframe(df_mostrar, use_container_width=True, height=600)
+
+    # Información para el usuario sobre los filtros
+    st.sidebar.info("""
+    🔍 **Filtros disponibles:**
+    - Filtros visibles en cada cabecera de columna
+    - Panel lateral adicional con más opciones
+    - Click en ≡ para ver panel completo de filtros
+    """)
 
     # Estadísticas generales
     st.markdown("---")
