@@ -2578,7 +2578,7 @@ elif eleccion == "Vista de Expedientes":
     registros_mostrados = f"{len(df_mostrar):,}".replace(",", ".")
     registros_totales = f"{len(df):,}".replace(",", ".")
     st.write(f"Mostrando {registros_mostrados} de {registros_totales} registros")
-    
+
     # CONFIGURACIÓN DE AGGRID
     gb = GridOptionsBuilder.from_dataframe(df_mostrar)
     
@@ -2586,10 +2586,10 @@ elif eleccion == "Vista de Expedientes":
     gb.configure_default_column(
         filterable=True,
         sortable=True,
-        resizable=True,  # Permitir que el usuario redimensione
+        resizable=True,
         editable=False,
-        min_column_width=120,  # Ancho mínimo decente
-        max_column_width=500   # Ancho máximo
+        groupable=False,
+        min_column_width=100
     )
     
     # Configurar paginación
@@ -2611,19 +2611,54 @@ elif eleccion == "Vista de Expedientes":
     
     grid_options = gb.build()
     
-    # Mostrar SIN fit_columns_on_grid_load
-    grid_response = AgGrid(
-        df_mostrar_aggrid,
-        gridOptions=grid_options,
-        height=600,
-        width='100%',
-        data_return_mode='AS_INPUT',
-        update_mode='MODEL_CHANGED',
-        fit_columns_on_grid_load=False,  # ← CLAVE: False
-        allow_unsafe_jscode=False,       # ← Puedes probar con False también
-        enable_enterprise_modules=True,
-        theme='streamlit'
-    )
+    # Mostrar tabla con AgGrid
+    try:
+        grid_response = AgGrid(
+            df_mostrar,
+            gridOptions=grid_options,
+            height=600,
+            width='100%',
+            data_return_mode='AS_INPUT',
+            update_mode='MODEL_CHANGED',
+            fit_columns_on_grid_load=False,
+            allow_unsafe_jscode=True,
+            enable_enterprise_modules=True,
+            theme='streamlit'
+        )
+        
+        # DEPURACIÓN: Mostrar qué contiene grid_response
+        st.sidebar.write("🔍 Debug AgGrid response:")
+        st.sidebar.write(f"Tipo: {type(grid_response)}")
+        if hasattr(grid_response, '__dict__'):
+            st.sidebar.write(f"Atributos: {grid_response.__dict__.keys()}")
+        
+        # MÚLTIPLES FORMAS DE OBTENER LAS FILAS SELECCIONADAS
+        selected_rows = []
+        
+        # Método 1: Intentar con get()
+        if isinstance(grid_response, dict):
+            selected_rows = grid_response.get('selected_rows', [])
+        # Método 2: Intentar con atributo
+        elif hasattr(grid_response, 'selected_rows'):
+            selected_rows = grid_response.selected_rows
+        # Método 3: Intentar con getattr
+        else:
+            selected_rows = getattr(grid_response, 'selected_rows', [])
+        
+        # Asegurarnos que selected_rows es una lista
+        if not isinstance(selected_rows, list):
+            selected_rows = []
+        
+        # Mostrar estadísticas de selección si hay filas seleccionadas
+        if len(selected_rows) > 0:
+            st.info(f"📌 {len(selected_rows)} fila(s) seleccionada(s)")
+        else:
+            # Opcional: mostrar que no hay selección
+            st.sidebar.info("ℹ️ No hay filas seleccionadas")
+            
+    except Exception as e:
+        st.error(f"❌ Error en AgGrid: {e}")
+        selected_rows = []
 
     # Estadísticas generales
     st.markdown("---")
