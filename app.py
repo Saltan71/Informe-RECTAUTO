@@ -2579,10 +2579,10 @@ elif eleccion == "Vista de Expedientes":
     registros_totales = f"{len(df):,}".replace(",", ".")
     st.write(f"Mostrando {registros_mostrados} de {registros_totales} registros")
 
-# CONFIGURACIÓN COMPLETA CORREGIDA PARA FILTROS
-gb = GridOptionsBuilder.from_dataframe(df_mostrar_aggrid)
+# CONFIGURACIÓN COMPLETA CON FILTROS MEJORADOS Y MANEJO DE FECHAS
+gb = GridOptionsBuilder.from_dataframe(df_mostrar)
 
-# Configuración por defecto MEJORADA
+# Configuración por defecto para columnas de TEXTO
 gb.configure_default_column(
     filter=True,
     floatingFilter=True,
@@ -2598,171 +2598,219 @@ gb.configure_default_column(
         'buttons': ['apply', 'reset'],
         'closeOnApply': True,
         'debounceMs': 400,
-        'defaultOption': 'contains',
+        'defaultOption': 'contains',  # ← COMPORTAMIENTO COMO *TEXTO*
         'filterOptions': [
-            'contains', 'notContains', 'startsWith', 'endsWith', 'equals', 'notEqual'
+            'contains',      # texto (como *texto*)
+            'notContains',   # !texto (como !*texto*)
+            'startsWith',    # ^texto (como texto*)
+            'endsWith',      # texto$ (como *texto)
+            'equals',        # =texto
+            'notEqual'       # !=texto
         ],
-        'caseSensitive': False,
-        # ↓↓ EVITAR FILTROS MÚLTIPLES AUTOMÁTICOS ↓↓
-        'suppressAndOrCondition': True,
-        'alwaysShowBothConditions': False
+        'caseSensitive': False
     }
 )
 
-# COLUMNAS FIJAS (igual que antes)
-if 'RUE' in df_mostrar_aggrid.columns:
-    gb.configure_column('RUE', pinned='left', width=130, suppressSizeToFit=True)
-if 'USUARIO' in df_mostrar_aggrid.columns:
-    gb.configure_column('USUARIO', pinned='right', width=140, suppressSizeToFit=True)
+# COLUMNAS FIJAS
+if 'RUE' in df_mostrar.columns:
+    gb.configure_column(
+        'RUE',
+        pinned='left',
+        width=130,
+        minWidth=130,
+        maxWidth=160,
+        suppressSizeToFit=True,
+        suppressMovable=True,
+        lockPinned=True,
+        cellStyle={'backgroundColor': '#f8f9fa'},
+        filter=True,
+        floatingFilter=True
+    )
 
-# FILTROS DE FECHA CORREGIDOS - SIN AND/OR
+if 'USUARIO' in df_mostrar.columns:
+    gb.configure_column(
+        'USUARIO',
+        pinned='right',
+        width=140,
+        minWidth=140,
+        maxWidth=180,
+        suppressSizeToFit=True,
+        suppressMovable=True,
+        lockPinned=True,
+        cellStyle={'backgroundColor': '#f8f9fa'},
+        filter=True,
+        floatingFilter=True
+    )
+
+# CONFIGURACIÓN ESPECÍFICA PARA COLUMNAS DE FECHA
+columnas_fechas = ['FECHA INICIO TRAMITACIÓN', 'FECHA APERTURA', 'FECHA RESOLUCIÓN', 
+                   'FECHA PENÚLTIMO TRAM.', 'FECHA ÚLTIMO TRAM.', 'FECHA NOTIFICACIÓN', 'FECHA ASIG']
+
 for col in columnas_fechas:
-    if col in df_mostrar_aggrid.columns:
+    if col in df_mostrar.columns:
         gb.configure_column(
             col,
             width=110,
             minWidth=100,
             maxWidth=140,
             wrapText=True,
-            filter='agDateColumnFilter',
+            filter='agDateColumnFilter',  # ← FILTRO ESPECIAL PARA FECHAS
             filterParams={
                 'buttons': ['apply', 'reset'],
                 'closeOnApply': True,
-                'defaultOption': 'inRange',
+                'defaultOption': 'inRange',  # Rango por defecto para fechas
                 'filterOptions': [
-                    'inRange', 'greaterThan', 'lessThan', 'equals', 
-                    'notEqual', 'blank', 'notBlank'  # Incluir opciones para vacíos
+                    'inRange',      # Entre dos fechas
+                    'greaterThan',  # Mayor que
+                    'lessThan',     # Menor que
+                    'equals'        # Igual a fecha específica
                 ],
-                'browserDatePicker': True,
-                'minValidYear': 2000,
-                'maxValidYear': 2030,
-                'inRangeInclusive': True,
-                # ↓↓ CLAVE: ELIMINAR COMPORTAMIENTO AND/OR ↓↓
-                'suppressAndOrCondition': True,
-                'alwaysShowBothConditions': False,
-                'defaultJoinOperator': 'OR'  # Por si acaso, forzar OR si aparece
+                'browserDatePicker': True,  # Selector visual de fechas
+                'minValidYear': 2000,       # Año mínimo
+                'maxValidYear': 2030        # Año máximo
             },
-            floatingFilter=True,
-            valueFormatter="function(params) { return params.value ? new Date(params.value).toLocaleDateString('es-ES') : 'N/A'; }"
+            floatingFilter=True  # También mostrar filtro flotante para fechas
         )
 
-# FILTROS DE TEXTO TAMBIÉN CORREGIDOS
-columnas_texto = ['OBSERVACIONES', 'CALIFICACIÓN', 'ESTADO', 'EQUIPO', 'IMPUESTO', 
-                  'IMPUESTO ORIGEN', 'NATURALEZA', 'ETIQ. PENÚLTIMO TRAM.', 
-                  'ETIQ. ÚLTIMO TRAM.', 'USUARIO-CSV']
+# CONFIGURACIÓN PARA COLUMNAS NUMÉRICAS (como ANTIGÜEDAD)
+if 'ANTIGÜEDAD EXP. (DÍAS)' in df_mostrar.columns:
+    gb.configure_column(
+        'ANTIGÜEDAD EXP. (DÍAS)',
+        width=110,
+        minWidth=100,
+        maxWidth=140,
+        filter='agNumberColumnFilter',  # ← FILTRO PARA NÚMEROS
+        filterParams={
+            'buttons': ['apply', 'reset'],
+            'closeOnApply': True,
+            'defaultOption': 'equals',
+            'filterOptions': [
+                'equals',
+                'notEqual',
+                'lessThan',
+                'lessThanOrEqual',
+                'greaterThan',
+                'greaterThanOrEqual',
+                'inRange'
+            ]
+        },
+        floatingFilter=True
+    )
 
-for col in columnas_texto:
-    if col in df_mostrar_aggrid.columns:
+# COLUMNAS DE TEXTO LARGO (mantienen filtro de texto)
+columnas_texto_largo = ['OBSERVACIONES', 'CALIFICACIÓN']
+for col in columnas_texto_largo:
+    if col in df_mostrar.columns:
         gb.configure_column(
             col,
-            filter='agTextColumnFilter',
-            filterParams={
-                'buttons': ['apply', 'reset'],
-                'closeOnApply': True,
-                'debounceMs': 400,
-                'defaultOption': 'contains',
-                'filterOptions': [
-                    'contains', 'notContains', 'startsWith', 'endsWith', 
-                    'equals', 'notEqual', 'blank', 'notBlank'
-                ],
-                'caseSensitive': False,
-                # ↓↓ EVITAR AND/OR EN TEXTO TAMBIÉN ↓↓
-                'suppressAndOrCondition': True,
-                'alwaysShowBothConditions': False
-            },
+            width=200,
+            minWidth=150,
+            maxWidth=300,
+            wrapText=True,
+            # Mantiene la configuración por defecto (filtro de texto)
+            filter=True,
             floatingFilter=True
         )
 
-# CONFIGURACIÓN DEL GRID PARA EVITAR COMPORTAMIENTOS NO DESEADOS
-gb.configure_grid_options(
-    enableFilter=True,
-    enableSorting=True,
-    enableRangeSelection=True,
-    tooltipShowDelay=0,
-    tooltipHideDelay=5000,
-    enableBrowserTooltips=True,
-    animateRows=True,
-    rowSelection='multiple',
-    # ↓↓ CONFIGURACIÓN GLOBAL PARA FILTROS ↓↓
-    'suppressMultiRangeSelection': True,
-    'suppressDragLeaveHidesColumns': True
+# COLUMNAS DE CATEGORÍAS (mantienen filtro de texto)
+columnas_categorias = ['ESTADO', 'EQUIPO', 'IMPUESTO', 'IMPUESTO ORIGEN', 'NATURALEZA', 
+                       'ETIQ. PENÚLTIMO TRAM.', 'ETIQ. ÚLTIMO TRAM.', 'USUARIO-CSV']
+for col in columnas_categorias:
+    if col in df_mostrar.columns:
+        gb.configure_column(
+            col,
+            width=130,
+            minWidth=130,
+            maxWidth=160,
+            wrapText=True,
+            # Mantiene la configuración por defecto (filtro de texto)
+            filter=True,
+            floatingFilter=True
+        )
+
+# CONFIGURACIÓN DEL GRID
+gb.configure_side_bar(
+    filters_panel=True, 
+    columns_panel=True,
+    defaultToolPanel='filters'
+)
+
+gb.configure_selection(
+    selection_mode="multiple",
+    use_checkbox=True,
+    groupSelectsChildren=True,
+    groupSelectsFiltered=True
 )
 
 grid_options = gb.build()
 
-    # CSS para mejorar la experiencia visual
-    st.markdown("""
-    <style>
-        .header-limited-lines .ag-header-cell-text {
-            display: -webkit-box;
-            -webkit-line-clamp: 2;
-            -webkit-box-orient: vertical;
-            overflow: hidden;
-            text-overflow: ellipsis;
-            line-height: 1.2;
-            max-height: 2.4em;
-            white-space: normal;
-            word-break: break-word;
-        }
-        
-        .ag-cell {
-            display: -webkit-box;
-            -webkit-line-clamp: 3;
-            -webkit-box-orient: vertical;
-            overflow: hidden;
-            text-overflow: ellipsis;
-            line-height: 1.2;
-            max-height: 3.6em;
-            white-space: normal;
-            word-break: break-word;
-        }
-        
-        /* Mejorar el aspecto de los filtros de fecha */
-        .ag-floating-filter-date input {
-            width: 100% !important;
-        }
-        
-        .ag-date-filter .ag-filter-filter {
-            min-width: 180px !important;
-        }
-        
-        /* Ocultar opciones AND/OR si aparecen */
-        .ag-filter-condition-operand,
-        .ag-filter-condition-operator {
-            display: none !important;
-        }
-    </style>
+# CSS para mejorar la experiencia visual
+st.markdown("""
+<style>
+    .header-limited-lines .ag-header-cell-text {
+        display: -webkit-box;
+        -webkit-line-clamp: 2;
+        -webkit-box-orient: vertical;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        line-height: 1.2;
+        max-height: 2.4em;
+        white-space: normal;
+        word-break: break-word;
+    }
+    
+    .ag-cell {
+        display: -webkit-box;
+        -webkit-line-clamp: 3;
+        -webkit-box-orient: vertical;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        line-height: 1.2;
+        max-height: 3.6em;
+        white-space: normal;
+        word-break: break-word;
+    }
+    
+    /* Mejorar selectores de fecha */
+    .ag-floating-filter-date input {
+        font-size: 11px;
+    }
+    
+    .ag-date-input {
+        font-size: 11px !important;
+    }
+</style>
 
-    <div style="background-color: #e3f2fd; padding: 8px; border-radius: 4px; margin: 10px 0; font-size: 12px;">
-    💡 <strong>Tipos de filtro:</strong><br>
-    • <strong>Texto:</strong> Escribe directamente para "contiene"<br>
-    • <strong>Fechas:</strong> Selector visual con calendario<br>
-    • <strong>Números:</strong> Filtros por rango y comparación
-    </div>
-    """, unsafe_allow_html=True)
+<div style="background-color: #e3f2fd; padding: 8px; border-radius: 4px; margin: 10px 0; font-size: 12px;">
+💡 <strong>Tipos de filtro:</strong><br>
+• <strong>Texto:</strong> Escribe directamente para "contiene"<br>
+• <strong>Fechas:</strong> Selector visual con calendario<br>
+• <strong>Números:</strong> Filtros por rango y comparación
+</div>
+""", unsafe_allow_html=True)
 
-    # Mostrar tabla
-    try:
-        grid_response = AgGrid(
-            df_mostrar,
-            gridOptions=grid_options,
-            height=700,
-            width='100%',
-            data_return_mode='AS_INPUT',
-            update_mode='MODEL_CHANGED',
-            fit_columns_on_grid_load=True,
-            allow_unsafe_jscode=True,
-            enable_enterprise_modules=True,
-            theme='streamlit',
-            reload_data=False,
-            key='aggrid_filtros_mejorados'
-        )
-        
-        # [Mantener el manejo de selected_rows...]
-        
-    except Exception as e:
-        st.error(f"❌ Error al mostrar la tabla: {e}")
-        st.dataframe(df_mostrar, use_container_width=True, height=600)
+# Mostrar tabla
+try:
+    grid_response = AgGrid(
+        df_mostrar,
+        gridOptions=grid_options,
+        height=700,
+        width='100%',
+        data_return_mode='AS_INPUT',
+        update_mode='MODEL_CHANGED',
+        fit_columns_on_grid_load=True,
+        allow_unsafe_jscode=True,
+        enable_enterprise_modules=True,
+        theme='streamlit',
+        reload_data=False,
+        key='aggrid_filtros_mejorados'
+    )
+    
+    # [Mantener el manejo de selected_rows...]
+    
+except Exception as e:
+    st.error(f"❌ Error al mostrar la tabla: {e}")
+    st.dataframe(df_mostrar, use_container_width=True, height=600)
 
     # Estadísticas generales
     st.markdown("---")
