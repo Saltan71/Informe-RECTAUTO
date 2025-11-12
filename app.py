@@ -2552,42 +2552,16 @@ elif eleccion == "Vista de Expedientes":
     # VISTA GENERAL - CON AGGRID
     st.subheader("📋 Vista general de expedientes")
 
-    # Crear copia y formatear datos para AgGrid
-    df_mostrar = df_filtrado.copy()
-
-    # Formatear TODAS las columnas de fecha
-    for col in df_mostrar.select_dtypes(include='datetime').columns:
-        df_mostrar[col] = df_mostrar[col].dt.strftime("%d/%m/%Y")
-
-    # 🔥 CORRECCIÓN: Redondear columnas numéricas con decimales
-    columnas_antiguedad = [col for col in df_mostrar.columns if 'ANTIGÜEDAD' in col.upper() or 'DÍAS' in col.upper()]
-
-    for col in df_mostrar.columns:
-        if df_mostrar[col].dtype in ['float64', 'float32']:
-            if col in columnas_antiguedad:
-                # Redondear antigüedad y convertir a entero
-                df_mostrar[col] = df_mostrar[col].apply(
-                    lambda x: int(round(x)) if pd.notna(x) else 0
-                )
-            else:
-                # Redondear otras columnas flotantes
-                df_mostrar[col] = df_mostrar[col].apply(
-                    lambda x: int(round(x)) if pd.notna(x) else 0
-                )
-
-    registros_mostrados = f"{len(df_mostrar):,}".replace(",", ".")
-    registros_totales = f"{len(df):,}".replace(",", ".")
-    st.write(f"Mostrando {registros_mostrados} de {registros_totales} registros")
-
     # PRIMERO: CREAR LA COPIA PROCESADA CON FECHAS CONVERTIDAS - VERSIÓN MEJORADA
     df_mostrar_aggrid = df_mostrar.copy()
-    
-    # CONFIGURACIÓN DE AGGRID
-    gb = GridOptionsBuilder.from_dataframe(df_mostrar)
 
-    # Definir las columnas de fecha
-    columnas_fechas = ['FECHA INICIO TRAMITACIÓN', 'FECHA APERTURA', 'FECHA RESOLUCIÓN', 'FECHA FIN TRAMITACIÓN', 'FECHA CIERRE'
-                   'FECHA PENÚLTIMO TRAM.', 'FECHA ÚLTIMO TRAM.', 'FECHA NOTIFICACIÓN', 'FECHA ASIG']
+    # CONFIGURACIÓN DE AGGRID
+    gb = GridOptionsBuilder.from_dataframe(df_mostrar_aggrid)  # ← USAR df_mostrar_aggrid AQUÍ
+
+    # Definir las columnas de fecha (corregí un error de sintaxis - faltaba coma)
+    columnas_fechas = ['FECHA INICIO TRAMITACIÓN', 'FECHA APERTURA', 'FECHA RESOLUCIÓN', 
+                    'FECHA FIN TRAMITACIÓN', 'FECHA CIERRE',  # ← AÑADÍ COMA AQUÍ
+                    'FECHA PENÚLTIMO TRAM.', 'FECHA ÚLTIMO TRAM.', 'FECHA NOTIFICACIÓN', 'FECHA ASIG']
 
     # Convertir columnas de fecha - MANERA MÁS ROBUSTA
     for col in columnas_fechas:
@@ -2608,26 +2582,37 @@ elif eleccion == "Vista de Expedientes":
                 
             except Exception as e:
                 st.sidebar.error(f"❌ Error en {col}: {e}")
-    
-    # Configurar todas las columnas
+
+    # Configurar todas las columnas para autoajuste
     gb.configure_default_column(
         filterable=True,
         sortable=True,
         resizable=True,
         editable=False,
         groupable=False,
-        min_column_width=100
+        min_column_width=100,
+        autoHeight=True  # ← AÑADIR PARA MEJOR AJUSTE
     )
-    
+
+    # CONFIGURACIÓN ESPECÍFICA PARA COLUMNAS DE FECHA
+    for col in columnas_fechas:
+        if col in df_mostrar_aggrid.columns:
+            gb.configure_column(
+                col,
+                type=["dateColumn", "filterDateColumn"],
+                filter="agDateColumnFilter",
+                pivot=True
+            )
+
     # Configurar paginación
     gb.configure_pagination(
         paginationAutoPageSize=False,
         paginationPageSize=50
     )
-    
+
     # Configurar barra lateral de filtros
     gb.configure_side_bar()
-    
+
     # Configurar selección
     gb.configure_selection(
         selection_mode="multiple",
@@ -2635,19 +2620,19 @@ elif eleccion == "Vista de Expedientes":
         groupSelectsChildren=True,
         groupSelectsFiltered=True
     )
-    
+
     grid_options = gb.build()
-    
+
     # Mostrar tabla con AgGrid
     try:
         grid_response = AgGrid(
-            df_mostrar,
+            df_mostrar_aggrid,  # ← USAR df_mostrar_aggrid AQUÍ (NO df_mostrar)
             gridOptions=grid_options,
             height=600,
             width='100%',
             data_return_mode='AS_INPUT',
             update_mode='MODEL_CHANGED',
-            fit_columns_on_grid_load=False,
+            fit_columns_on_grid_load=True,  # ← CAMBIAR A True PARA AUTO-AJUSTE
             allow_unsafe_jscode=True,
             enable_enterprise_modules=True,
             theme='streamlit'
