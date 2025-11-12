@@ -2552,92 +2552,116 @@ elif eleccion == "Vista de Expedientes":
     # VISTA GENERAL - CON AGGRID
     st.subheader("📋 Vista general de expedientes")
 
-    # Crear copia y formatear datos para AgGrid
-    df_mostrar = df_filtrado.copy()
-
-    # Formatear TODAS las columnas de fecha
-    for col in df_mostrar.select_dtypes(include='datetime').columns:
-        df_mostrar[col] = df_mostrar[col].dt.strftime("%d/%m/%Y")
-
-    # 🔥 CORRECCIÓN: Redondear columnas numéricas con decimales
-    columnas_antiguedad = [col for col in df_mostrar.columns if 'ANTIGÜEDAD' in col.upper() or 'DÍAS' in col.upper()]
-
-    for col in df_mostrar.columns:
-        if df_mostrar[col].dtype in ['float64', 'float32']:
-            if col in columnas_antiguedad:
-                # Redondear antigüedad y convertir a entero
-                df_mostrar[col] = df_mostrar[col].apply(
-                    lambda x: int(round(x)) if pd.notna(x) else 0
-                )
-            else:
-                # Redondear otras columnas flotantes
-                df_mostrar[col] = df_mostrar[col].apply(
-                    lambda x: int(round(x)) if pd.notna(x) else 0
-                )
-
-    registros_mostrados = f"{len(df_mostrar):,}".replace(",", ".")
-    registros_totales = f"{len(df):,}".replace(",", ".")
-    st.write(f"Mostrando {registros_mostrados} de {registros_totales} registros")
-
     # Crear copia para mostrar
     df_mostrar = df_filtrado.copy()
 
-    # 🔥 MANTENER FECHAS ORIGINALES PARA FILTRADO PERO CREAR COLUMNAS AMIGABLES
+    # 🔥 CORREGIDO: CONVERTIR FECHAS A TEXTO EN FORMATO ESPAÑOL SOLO FECHA
     columnas_fechas = ['FECHA INICIO TRAMITACIÓN', 'FECHA APERTURA', 'FECHA RESOLUCIÓN', 
                     'FECHA FIN TRAMITACIÓN', 'FECHA CIERRE', 'FECHA PENÚLTIMO TRAM.', 
                     'FECHA ÚLTIMO TRAM.', 'FECHA NOTIFICACIÓN', 'FECHA ASIG']
 
-    # Crear columnas amigables para mostrar
     for col in columnas_fechas:
         if col in df_mostrar.columns:
-            df_mostrar[f'{col}_DISPLAY'] = df_mostrar[col].apply(
+            # Convertir a texto en formato español SOLO FECHA
+            df_mostrar[col] = df_mostrar[col].apply(
                 lambda x: x.strftime('%d/%m/%Y') if pd.notna(x) else ''
             )
-            # Mantener original para posibles filtros numéricos
-            df_mostrar[col] = pd.to_datetime(df_mostrar[col], errors='coerce')
 
     # Redondear columnas numéricas
-    columnas_antiguedad = [col for col in df_mostrar.columns if 'ANTIGÜEDAD' in col.upper() or 'DÍAS' in col.upper() and '_DISPLAY' not in col]
+    columnas_antiguedad = [col for col in df_mostrar.columns if 'ANTIGÜEDAD' in col.upper() or 'DÍAS' in col.upper()]
     for col in df_mostrar.columns:
-        if df_mostrar[col].dtype in ['float64', 'float32'] and '_DISPLAY' not in col:
+        if df_mostrar[col].dtype in ['float64', 'float32']:
             if col in columnas_antiguedad:
                 df_mostrar[col] = df_mostrar[col].apply(lambda x: int(round(x)) if pd.notna(x) else 0)
             else:
                 df_mostrar[col] = df_mostrar[col].apply(lambda x: int(round(x)) if pd.notna(x) else 0)
 
-    # CONFIGURACIÓN AGGRID - MOSTRAR COLUMNAS AMIGABLES, FILTRAR POR OTRAS
+    # CONFIGURACIÓN AGGRID CON FILTROS DE TEXTO
     gb = GridOptionsBuilder.from_dataframe(df_mostrar)
 
-    # Ocultar columnas datetime originales y mostrar las formateadas
-    column_defs = []
+    # Configurar todas las columnas con filtros de texto
+    gb.configure_default_column(
+        filterable=True,
+        sortable=True,
+        resizable=True,
+        editable=False,
+        min_column_width=100
+    )
 
-    for col in df_mostrar.columns:
-        if '_DISPLAY' in col:
-            # Mostrar columnas formateadas
-            col_name = col.replace('_DISPLAY', '')
-            column_defs.append({
-                'field': col,
-                'headerName': col_name,
-                'filter': False,
-                'sortable': True
-            })
-        elif col in columnas_fechas:
-            # Ocultar columnas datetime originales
-            column_defs.append({
-                'field': col,
-                'headerName': f'{col} (Filtro)',
-                'hide': True,
-                'filter': 'agDateColumnFilter'
-            })
-        else:
-            # Otras columnas normales
-            column_defs.append({
-                'field': col,
-                'headerName': col,
-                'filter': True
-            })
+    # 🔥 CONFIGURAR FECHAS COMO TEXTO CON COMPARADOR INTELIGENTE MEJORADO
+    for col in columnas_fechas:
+        if col in df_mostrar.columns:
+            gb.configure_column(
+                col,
+                filter="agTextColumnFilter",
+                filterParams={
+                    "buttons": ['apply', 'reset'],
+                    "defaultOption": "contains",
+                    "caseSensitive": False,
+                    "debounceMs": 300
+                },
+                # 🔥 COMPARADOR INTELIGENTE MEJORADO PARA FECHAS EN TEXTO
+                comparator="""
+                function(valueA, valueB) {
+                    // Manejar valores vacíos
+                    if (!valueA && !valueB) return 0;
+                    if (!valueA) return -1;
+                    if (!valueB) return 1;
+                    
+                    // Función para convertir formato DD/MM/AAAA a timestamp
+                    function toTimestamp(dateStr) {
+                        if (!dateStr) return 0;
+                        const parts = dateStr.split('/');
+                        if (parts.length !== 3) return 0;
+                        
+                        const day = parseInt(parts[0], 10);
+                        const month = parseInt(parts[1], 10) - 1; // Meses van de 0-11
+                        const year = parseInt(parts[2], 10);
+                        
+                        // Validar que los números sean válidos
+                        if (isNaN(day) || isNaN(month) || isNaN(year)) return 0;
+                        if (day < 1 || day > 31) return 0;
+                        if (month < 0 || month > 11) return 0;
+                        if (year < 1900 || year > 2100) return 0;
+                        
+                        return new Date(year, month, day).getTime();
+                    }
+                    
+                    const timestampA = toTimestamp(valueA);
+                    const timestampB = toTimestamp(valueB);
+                    
+                    return timestampA - timestampB;
+                }
+                """
+            )
 
-    gb.configure_columns(column_defs)
+    # Configurar otras columnas con sus filtros apropiados
+    columnas_texto = ['ESTADO', 'EQUIPO', 'USUARIO', 'ETIQ. PENÚLTIMO TRAM.', 'ETIQ. ÚLTIMO TRAM.', 'NOTIFICADO']
+    for col in columnas_texto:
+        if col in df_mostrar.columns:
+            gb.configure_column(
+                col,
+                filter="agTextColumnFilter",
+                filterParams={
+                    "defaultOption": "contains",
+                    "caseSensitive": False
+                }
+            )
+
+    columnas_numericas = [col for col in df_mostrar.columns 
+                        if any(word in col.upper() for word in ['ANTIGÜEDAD', 'DÍAS', 'NÚMERO', 'CANTIDAD'])
+                        and col not in columnas_fechas and col not in columnas_texto]
+    for col in columnas_numericas:
+        if col in df_mostrar.columns:
+            gb.configure_column(
+                col,
+                filter="agNumberColumnFilter",
+                filterParams={
+                    "buttons": ['apply', 'reset'],
+                    "defaultOption": "equals"
+                }
+            )
+
     gb.configure_side_bar()
 
     grid_options = gb.build()
