@@ -14,7 +14,7 @@ import shutil
 import uuid
 import getpass
 from PIL import Image
-
+from st_aggrid import AgGrid, GridOptionsBuilder, GridUpdateMode, ColumnsAutoSizeMode
 
 # === NUEVA CLASE PARA ENTORNO DE USUARIO ===
 class UserEnvironment:
@@ -2549,10 +2549,10 @@ elif eleccion == "Vista de Expedientes":
         if fig:
             st.plotly_chart(fig, use_container_width=True)
 
-    # VISTA GENERAL - SOLO VERSIÓN EXPANDIDA
+    # VISTA GENERAL - CON AGGRID
     st.subheader("📋 Vista general de expedientes")
 
-    # Crear copia y formatear fechas
+    # Crear copia y formatear datos para AgGrid
     df_mostrar = df_filtrado.copy()
 
     # Formatear TODAS las columnas de fecha
@@ -2575,21 +2575,60 @@ elif eleccion == "Vista de Expedientes":
                     lambda x: int(round(x)) if pd.notna(x) else 0
                 )
 
-    # Calcular altura dinámica basada en el número de filas
-    num_filas = len(df_mostrar)
-    altura_fila = 35  # altura aproximada por fila en píxeles
-    altura_cabecera = 100  # altura de la cabecera
-    altura_maxima = 800  # altura máxima para no hacerlo demasiado grande
-    
-    # Calcular altura ideal - mostrar todas las filas que quepan
-    altura_ideal = min(altura_cabecera + (num_filas * altura_fila), altura_maxima)
-    
     registros_mostrados = f"{len(df_mostrar):,}".replace(",", ".")
     registros_totales = f"{len(df):,}".replace(",", ".")
     st.write(f"Mostrando {registros_mostrados} de {registros_totales} registros")
 
-    # Mostrar tabla principal con altura dinámica
-    st.dataframe(df_mostrar, use_container_width=True, height=altura_ideal)
+    # CONFIGURACIÓN DE AGGRID
+    gb = GridOptionsBuilder.from_dataframe(df_mostrar)
+    
+    # Configurar todas las columnas
+    gb.configure_default_column(
+        filterable=True,
+        sortable=True,
+        resizable=True,
+        editable=False,
+        groupable=False,
+        min_column_width=100
+    )
+    
+    # Configurar paginación
+    gb.configure_pagination(
+        paginationAutoPageSize=False,
+        paginationPageSize=50
+    )
+    
+    # Configurar barra lateral de filtros
+    gb.configure_side_bar()
+    
+    # Configurar selección
+    gb.configure_selection(
+        selection_mode="multiple",
+        use_checkbox=True,
+        groupSelectsChildren=True,
+        groupSelectsFiltered=True
+    )
+    
+    grid_options = gb.build()
+    
+    # Mostrar tabla con AgGrid
+    grid_response = AgGrid(
+        df_mostrar,
+        gridOptions=grid_options,
+        height=600,
+        width='100%',
+        data_return_mode='AS_INPUT',
+        update_mode='MODEL_CHANGED',
+        fit_columns_on_grid_load=False,
+        allow_unsafe_jscode=True,
+        enable_enterprise_modules=True,
+        theme='streamlit'
+    )
+
+    # Mostrar estadísticas de selección si hay filas seleccionadas
+    selected_rows = grid_response['selected_rows']
+    if len(selected_rows) > 0:
+        st.info(f"📌 {len(selected_rows)} fila(s) seleccionada(s)")
 
     # Estadísticas generales
     st.markdown("---")
