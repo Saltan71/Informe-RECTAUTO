@@ -2609,7 +2609,34 @@ elif eleccion == "Vista de Expedientes":
     registros_totales = f"{len(df):,}".replace(",", ".")
     st.write(f"Mostrando {registros_mostrados} de {registros_totales} registros")
 
-    # CONFIGURACIÓN DE AGGRID CON FILTROS DE FECHA
+    # Crear copia para mostrar
+    df_mostrar = df_filtrado.copy()
+
+    # 🔥 MANTENER una copia de las fechas como datetime para los filtros
+    df_fechas_original = df_mostrar.copy()
+
+    # 🔥 CONVERTIR EXPLÍCITAMENTE COLUMNAS DE FECHA A DATETIME PARA FILTROS
+    columnas_fechas = ['FECHA INICIO TRAMITACIÓN', 'FECHA APERTURA', 'FECHA RESOLUCIÓN', 
+                    'FECHA FIN TRAMITACIÓN', 'FECHA CIERRE', 'FECHA PENÚLTIMO TRAM.', 
+                    'FECHA ÚLTIMO TRAM.', 'FECHA NOTIFICACIÓN', 'FECHA ASIG']
+
+    for col in columnas_fechas:
+        if col in df_mostrar.columns:
+            # Convertir a datetime para filtros
+            df_mostrar[col] = pd.to_datetime(df_mostrar[col], errors='coerce')
+            # Reemplazar NaT por None (más amigable)
+            df_mostrar[col] = df_mostrar[col].where(df_mostrar[col].notna(), None)
+
+    # Redondear columnas numéricas
+    columnas_antiguedad = [col for col in df_mostrar.columns if 'ANTIGÜEDAD' in col.upper() or 'DÍAS' in col.upper()]
+    for col in df_mostrar.columns:
+        if df_mostrar[col].dtype in ['float64', 'float32']:
+            if col in columnas_antiguedad:
+                df_mostrar[col] = df_mostrar[col].apply(lambda x: int(round(x)) if pd.notna(x) else 0)
+            else:
+                df_mostrar[col] = df_mostrar[col].apply(lambda x: int(round(x)) if pd.notna(x) else 0)
+
+    # CONFIGURACIÓN AGGRID CON FORMATEO AMIGABLE
     gb = GridOptionsBuilder.from_dataframe(df_mostrar)
 
     # Configurar todas las columnas
@@ -2619,47 +2646,53 @@ elif eleccion == "Vista de Expedientes":
         resizable=True,
         editable=False,
         groupable=False,
-        min_column_width=100
+        min_column_width=100,
+        cellRenderer=None
     )
 
-    # 🔥 CONFIGURACIÓN ESPECÍFICA PARA COLUMNAS DE FECHA
-    columnas_fechas = ['FECHA INICIO TRAMITACIÓN', 'FECHA APERTURA', 'FECHA RESOLUCIÓN', 
-                    'FECHA FIN TRAMITACIÓN', 'FECHA CIERRE', 'FECHA PENÚLTIMO TRAM.', 
-                    'FECHA ÚLTIMO TRAM.', 'FECHA NOTIFICACIÓN', 'FECHA ASIG']
-
+    # 🔥 CONFIGURACIÓN ESPECIAL PARA FECHAS CON FORMATEO AMIGABLE
     for col in columnas_fechas:
         if col in df_mostrar.columns:
-            # Verificar si la columna es de tipo datetime
-            if pd.api.types.is_datetime64_any_dtype(df_mostrar[col]):
+            gb.configure_column(
+                col,
+                type=["dateColumn", "filterDateColumn"],
+                filter="agDateColumnFilter",
+                filterParams={
+                    "buttons": ['apply', 'reset'],
+                    "closeOnApply": True,
+                    "defaultOption": "inRange",
+                    "browserDatePicker": True  # ← Calendario nativo del navegador
+                },
+                # 🔥 FORMATEADOR PARA MOSTRAR FECHAS EN FORMATO ESPAÑOL
+                valueFormatter="function(params) { " +
+                            "if (params.value) { " +
+                            "return new Date(params.value).toLocaleDateString('es-ES', { " +
+                            "day: '2-digit', month: '2-digit', year: 'numeric' " +
+                            "}); " +
+                            "} else { " +
+                            "return ''; " +  # ← Vacío en lugar de NaT
+                            "} " +
+                            "}",
+                # 🔥 COMPARADOR PARA ORDENAR CORRECTAMENTE
+                comparator="function(dateA, dateB) { " +
+                        "if (dateA === null && dateB === null) return 0; " +
+                        "if (dateA === null) return -1; " +
+                        "if (dateB === null) return 1; " +
+                        "return new Date(dateA).getTime() - new Date(dateB).getTime(); " +
+                        "}"
+            )
+
+    # Configurar otras columnas (no fecha)
+    for col in df_mostrar.columns:
+        if col not in columnas_fechas:
+            # Para columnas que podrían tener NaN, formatear también
+            if df_mostrar[col].isna().any():
                 gb.configure_column(
                     col,
-                    type=["dateColumn", "filterDateColumn"],
-                    filter="agDateColumnFilter",
-                    filterParams={
-                        "buttons": ['apply', 'reset'],
-                        "closeOnApply": True,
-                        "defaultOption": "inRange"
-                    },
-                    # Formatear para visualización pero mantener como fecha para filtros
-                    valueFormatter="data ? data.toLocaleDateString('es-ES') : ''"
+                    valueFormatter="function(params) { " +
+                                "return params.value === null || params.value === undefined ? '' : params.value; " +
+                                "}"
                 )
-            else:
-                # Si no es datetime, intentar convertir
-                try:
-                    df_mostrar[col] = pd.to_datetime(df_mostrar[col], errors='coerce')
-                    gb.configure_column(
-                        col,
-                        type=["dateColumn", "filterDateColumn"],
-                        filter="agDateColumnFilter",
-                        filterParams={
-                            "buttons": ['apply', 'reset'],
-                            "closeOnApply": True
-                        },
-                        valueFormatter="data ? data.toLocaleDateString('es-ES') : ''"
-                    )
-                except:
-                    # Si no se puede convertir, dejar como texto
-                    pass
 
     # Configurar paginación
     gb.configure_pagination(
@@ -2692,11 +2725,10 @@ elif eleccion == "Vista de Expedientes":
             fit_columns_on_grid_load=False,
             allow_unsafe_jscode=True,
             enable_enterprise_modules=True,
-            theme='streamlit',
-            enable_quicksearch=True
+            theme='streamlit'
         )
         
-        # OBTENER FILAS SELECCIONADAS (versión simplificada)
+        # OBTENER FILAS SELECCIONADAS
         selected_rows = grid_response.get('selected_rows', [])
         
         if selected_rows:
