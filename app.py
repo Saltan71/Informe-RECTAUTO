@@ -15,6 +15,7 @@ import uuid
 import getpass
 from PIL import Image
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from streamlit_dynamic_filters import DynamicFilters
 
 
 # === NUEVA CLASE PARA ENTORNO DE USUARIO ===
