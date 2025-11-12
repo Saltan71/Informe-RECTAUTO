@@ -2552,12 +2552,12 @@ elif eleccion == "Vista de Expedientes":
     # VISTA GENERAL - CON AGGRID
     st.subheader("📋 Vista general de expedientes")
 
+    # Crear copia para mostrar
+    df_mostrar = df_filtrado.copy()
+
     registros_mostrados = f"{len(df_mostrar):,}".replace(",", ".")
     registros_totales = f"{len(df):,}".replace(",", ".")
     st.write(f"Mostrando {registros_mostrados} de {registros_totales} registros")
-
-    # Crear copia para mostrar
-    df_mostrar = df_filtrado.copy()
 
     # 🔥 CORREGIDO: CONVERTIR FECHAS A TEXTO EN FORMATO ESPAÑOL SOLO FECHA
     columnas_fechas = ['FECHA INICIO TRAMITACIÓN', 'FECHA APERTURA', 'FECHA RESOLUCIÓN', 
