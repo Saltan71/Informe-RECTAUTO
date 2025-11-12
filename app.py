@@ -2552,6 +2552,10 @@ elif eleccion == "Vista de Expedientes":
     # VISTA GENERAL - CON AGGRID
     st.subheader("📋 Vista general de expedientes")
 
+    registros_mostrados = f"{len(df_mostrar):,}".replace(",", ".")
+    registros_totales = f"{len(df):,}".replace(",", ".")
+    st.write(f"Mostrando {registros_mostrados} de {registros_totales} registros")
+
     # Crear copia para mostrar
     df_mostrar = df_filtrado.copy()
 
