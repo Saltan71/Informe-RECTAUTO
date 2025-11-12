@@ -2671,6 +2671,7 @@ elif eleccion == "Vista de Expedientes":
         use_checkbox=True,
         groupSelectsChildren=True,
         groupSelectsFiltered=True
+    )
 
     grid_options = gb.build()
 
