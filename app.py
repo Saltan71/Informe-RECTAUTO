@@ -2584,8 +2584,31 @@ elif eleccion == "Vista de Expedientes":
                     'FECHA FIN TRAMITACIÓN', 'FECHA CIERRE', 'FECHA PENÚLTIMO TRAM.', 
                     'FECHA ÚLTIMO TRAM.', 'FECHA NOTIFICACIÓN', 'FECHA ASIG']
 
-    # CONFIGURACIÓN AGGRID CON FILTROS MEJORADOS
+    # CONFIGURACIÓN DE AGGRID - VERSIÓN EXPLÍCITA
     gb = GridOptionsBuilder.from_dataframe(df_mostrar)
+
+    # Crear copia para mostrar PERO mantener las fechas como datetime para AgGrid
+    df_mostrar = df_filtrado.copy()
+
+    # 🔥 CORRECCIÓN: NO formatear las fechas como texto para AgGrid
+    # Solo redondear columnas numéricas
+    columnas_antiguedad = [col for col in df_mostrar.columns if 'ANTIGÜEDAD' in col.upper() or 'DÍAS' in col.upper()]
+
+    for col in df_mostrar.columns:
+        if df_mostrar[col].dtype in ['float64', 'float32']:
+            if col in columnas_antiguedad:
+                # Redondear antigüedad y convertir a entero
+                df_mostrar[col] = df_mostrar[col].apply(
+                    lambda x: int(round(x)) if pd.notna(x) else 0
+                )
+            else:
+                # Redondear otras columnas flotantes
+                df_mostrar[col] = df_mostrar[col].apply(
+                    lambda x: int(round(x)) if pd.notna(x) else 0
+                )
+
+    # 🔥 MANTENER las columnas de fecha como datetime para AgGrid
+    # NO hacer: df_mostrar[col] = df_mostrar[col].dt.strftime("%d/%m/%Y")
 
     # Configurar todas las columnas
     gb.configure_default_column(
@@ -2597,39 +2620,48 @@ elif eleccion == "Vista de Expedientes":
         min_column_width=100
     )
 
-    # 🔥 CONFIGURACIÓN ESPECÍFICA PARA FECHAS CON MEJOR FORMATEO
     for col in columnas_fechas:
         if col in df_mostrar.columns:
-            gb.configure_column(
-                col,
-                type=["dateColumn", "filterDateColumn"],
-                filter="agDateColumnFilter",
-                filterParams={
-                    "buttons": ['apply', 'reset'],
-                    "closeOnApply": True,
-                    "browserDatePicker": True,
-                },
-                # 🔥 MEJOR FORMATEADOR PARA FECHAS
-                valueFormatter="""
-                function(params) {
-                    if (!params.value) return '';
-                    const date = new Date(params.value);
-                    const day = date.getDate().toString().padStart(2, '0');
-                    const month = (date.getMonth() + 1).toString().padStart(2, '0');
-                    const year = date.getFullYear();
-                    return `${day}/${month}/${year}`;
-                }
-                """
-            )
-
-    # 🔥 CONFIGURACIÓN SIMPLIFICADA DEL PANEL LATERAL (CORREGIDA)
-    gb.configure_side_bar()  # ← Solo esto, sin parámetros
+            # Verificar si la columna es de tipo datetime
+            if pd.api.types.is_datetime64_any_dtype(df_mostrar[col]):
+                gb.configure_column(
+                    col,
+                    type=["dateColumn", "filterDateColumn"],
+                    filter="agDateColumnFilter",
+                    filterParams={
+                        "buttons": ['apply', 'reset'],
+                        "closeOnApply": True,
+                        "defaultOption": "inRange"
+                    },
+                    # Formatear para visualización pero mantener como fecha para filtros
+                    valueFormatter="data ? data.toLocaleDateString('es-ES') : ''"
+                )
+            else:
+                # Si no es datetime, intentar convertir
+                try:
+                    df_mostrar[col] = pd.to_datetime(df_mostrar[col], errors='coerce')
+                    gb.configure_column(
+                        col,
+                        type=["dateColumn", "filterDateColumn"],
+                        filter="agDateColumnFilter",
+                        filterParams={
+                            "buttons": ['apply', 'reset'],
+                            "closeOnApply": True
+                        },
+                        valueFormatter="data ? data.toLocaleDateString('es-ES') : ''"
+                    )
+                except:
+                    # Si no se puede convertir, dejar como texto
+                    pass
 
     # Configurar paginación
     gb.configure_pagination(
         paginationAutoPageSize=False,
         paginationPageSize=50
     )
+
+    # Configurar barra lateral de filtros
+    gb.configure_side_bar(filters_panel=True)
 
     # Configurar selección
     gb.configure_selection(
@@ -2640,39 +2672,6 @@ elif eleccion == "Vista de Expedientes":
     )
 
     grid_options = gb.build()
-
-    # 🔥 AGREGAR CONFIGURACIÓN DEL PANEL LATERAL DIRECTAMENTE EN grid_options
-    grid_options.update({
-        "sideBar": {
-            "toolPanels": [
-                {
-                    "id": "filters",
-                    "labelDefault": "Filtros",
-                    "labelKey": "filters",
-                    "iconKey": "filter",
-                    "toolPanel": "agFiltersToolPanel",
-                    "toolPanelParams": {
-                        "expandFilters": True
-                    }
-                },
-                {
-                    "id": "columns",
-                    "labelDefault": "Columnas",
-                    "labelKey": "columns", 
-                    "iconKey": "columns",
-                    "toolPanel": "agColumnsToolPanel",
-                    "toolPanelParams": {
-                        "suppressRowGroups": True,
-                        "suppressValues": True,
-                        "suppressPivots": True,
-                        "suppressPivotMode": True
-                    }
-                }
-            ],
-            "position": "right",
-            "defaultToolPanel": "filters"
-        }
-    })
 
     # Mostrar tabla con AgGrid
     try:
@@ -2686,10 +2685,11 @@ elif eleccion == "Vista de Expedientes":
             fit_columns_on_grid_load=False,
             allow_unsafe_jscode=True,
             enable_enterprise_modules=True,
-            theme='streamlit'
+            theme='streamlit',
+            enable_quicksearch=True
         )
         
-        # OBTENER FILAS SELECCIONADAS
+        # OBTENER FILAS SELECCIONADAS (versión simplificada)
         selected_rows = grid_response.get('selected_rows', [])
         
         if selected_rows:
