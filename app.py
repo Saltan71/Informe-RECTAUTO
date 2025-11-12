@@ -2684,8 +2684,8 @@ elif eleccion == "Vista de Expedientes":
         animateRows=True,
         rowSelection='multiple',
         # ↓↓ CONFIGURACIÓN GLOBAL PARA FILTROS ↓↓
-        'suppressMultiRangeSelection': True,
-        'suppressDragLeaveHidesColumns': True
+        suppressMultiRangeSelection: True,
+        suppressDragLeaveHidesColumns: True
     )
 
     grid_options = gb.build()
