@@ -2579,7 +2579,31 @@ elif eleccion == "Vista de Expedientes":
     registros_totales = f"{len(df):,}".replace(",", ".")
     st.write(f"Mostrando {registros_mostrados} de {registros_totales} registros")
 
-    # CONFIGURACIÓN COMPLETA SIN configure_grid_options
+    # PRIMERO: CREAR LA COPIA PROCESADA CON FECHAS CONVERTIDAS
+    df_mostrar_aggrid = df_mostrar.copy()
+
+    # Definir las columnas de fecha
+    columnas_fechas = ['FECHA INICIO TRAMITACIÓN', 'FECHA APERTURA', 'FECHA RESOLUCIÓN', 
+                    'FECHA PENÚLTIMO TRAM.', 'FECHA ÚLTIMO TRAM.', 'FECHA NOTIFICACIÓN', 'FECHA ASIG']
+
+    # Convertir columnas de fecha SOLO para la visualización AgGrid
+    for col in columnas_fechas:
+        if col in df_mostrar_aggrid.columns:
+            try:
+                # Intentar convertir de DD/MM/AAAA a datetime
+                df_mostrar_aggrid[col] = pd.to_datetime(
+                    df_mostrar_aggrid[col], 
+                    format='%d/%m/%Y', 
+                    errors='coerce'
+                )
+                # Información de depuración
+                st.sidebar.write(f"✅ {col}: {df_mostrar_aggrid[col].notna().sum()}/{len(df_mostrar_aggrid)} fechas convertidas")
+            except Exception as e:
+                st.sidebar.error(f"❌ Error en {col}: {e}")
+                # Si falla, mantener como está
+                pass
+
+    # LUEGO: CONFIGURACIÓN DE AgGrid CON LA COPIA PROCESADA
     gb = GridOptionsBuilder.from_dataframe(df_mostrar_aggrid)
 
     # Configuración por defecto MEJORADA
