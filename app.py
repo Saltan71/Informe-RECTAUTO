@@ -2579,116 +2579,116 @@ elif eleccion == "Vista de Expedientes":
     registros_totales = f"{len(df):,}".replace(",", ".")
     st.write(f"Mostrando {registros_mostrados} de {registros_totales} registros")
 
-    # CONFIGURACIÓN COMPLETA CORREGIDA PARA FILTROS
-    gb = GridOptionsBuilder.from_dataframe(df_mostrar_aggrid)
+# CONFIGURACIÓN COMPLETA CORREGIDA PARA FILTROS
+gb = GridOptionsBuilder.from_dataframe(df_mostrar_aggrid)
 
-    # Configuración por defecto MEJORADA
-    gb.configure_default_column(
-        filter=True,
-        floatingFilter=True,
-        sortable=True,
-        resizable=True,
-        editable=False,
-        min_column_width=90,
-        wrapText=True,
-        autoHeight=False,
-        cellStyle={'whiteSpace': 'normal', 'lineHeight': '1.2', 'maxHeight': '60px'},
-        headerClass='header-limited-lines',
-        filterParams={
-            'buttons': ['apply', 'reset'],
-            'closeOnApply': True,
-            'debounceMs': 400,
-            'defaultOption': 'contains',
-            'filterOptions': [
-                'contains', 'notContains', 'startsWith', 'endsWith', 'equals', 'notEqual'
-            ],
-            'caseSensitive': False,
-            # ↓↓ EVITAR FILTROS MÚLTIPLES AUTOMÁTICOS ↓↓
-            'suppressAndOrCondition': True,
-            'alwaysShowBothConditions': False
-        }
-    )
+# Configuración por defecto MEJORADA
+gb.configure_default_column(
+    filter=True,
+    floatingFilter=True,
+    sortable=True,
+    resizable=True,
+    editable=False,
+    min_column_width=90,
+    wrapText=True,
+    autoHeight=False,
+    cellStyle={'whiteSpace': 'normal', 'lineHeight': '1.2', 'maxHeight': '60px'},
+    headerClass='header-limited-lines',
+    filterParams={
+        'buttons': ['apply', 'reset'],
+        'closeOnApply': True,
+        'debounceMs': 400,
+        'defaultOption': 'contains',
+        'filterOptions': [
+            'contains', 'notContains', 'startsWith', 'endsWith', 'equals', 'notEqual'
+        ],
+        'caseSensitive': False,
+        # ↓↓ EVITAR FILTROS MÚLTIPLES AUTOMÁTICOS ↓↓
+        'suppressAndOrCondition': True,
+        'alwaysShowBothConditions': False
+    }
+)
 
-    # COLUMNAS FIJAS (igual que antes)
-    if 'RUE' in df_mostrar_aggrid.columns:
-        gb.configure_column('RUE', pinned='left', width=130, suppressSizeToFit=True)
-    if 'USUARIO' in df_mostrar_aggrid.columns:
-        gb.configure_column('USUARIO', pinned='right', width=140, suppressSizeToFit=True)
+# COLUMNAS FIJAS (igual que antes)
+if 'RUE' in df_mostrar_aggrid.columns:
+    gb.configure_column('RUE', pinned='left', width=130, suppressSizeToFit=True)
+if 'USUARIO' in df_mostrar_aggrid.columns:
+    gb.configure_column('USUARIO', pinned='right', width=140, suppressSizeToFit=True)
 
-    # FILTROS DE FECHA CORREGIDOS - SIN AND/OR
-    for col in columnas_fechas:
-        if col in df_mostrar_aggrid.columns:
-            gb.configure_column(
-                col,
-                width=110,
-                minWidth=100,
-                maxWidth=140,
-                wrapText=True,
-                filter='agDateColumnFilter',
-                filterParams={
-                    'buttons': ['apply', 'reset'],
-                    'closeOnApply': True,
-                    'defaultOption': 'inRange',
-                    'filterOptions': [
-                        'inRange', 'greaterThan', 'lessThan', 'equals', 
-                        'notEqual', 'blank', 'notBlank'  # Incluir opciones para vacíos
-                    ],
-                    'browserDatePicker': True,
-                    'minValidYear': 2000,
-                    'maxValidYear': 2030,
-                    'inRangeInclusive': True,
-                    # ↓↓ CLAVE: ELIMINAR COMPORTAMIENTO AND/OR ↓↓
-                    'suppressAndOrCondition': True,
-                    'alwaysShowBothConditions': False,
-                    'defaultJoinOperator': 'OR'  # Por si acaso, forzar OR si aparece
-                },
-                floatingFilter=True,
-                valueFormatter="function(params) { return params.value ? new Date(params.value).toLocaleDateString('es-ES') : 'N/A'; }"
-            )
+# FILTROS DE FECHA CORREGIDOS - SIN AND/OR
+for col in columnas_fechas:
+    if col in df_mostrar_aggrid.columns:
+        gb.configure_column(
+            col,
+            width=110,
+            minWidth=100,
+            maxWidth=140,
+            wrapText=True,
+            filter='agDateColumnFilter',
+            filterParams={
+                'buttons': ['apply', 'reset'],
+                'closeOnApply': True,
+                'defaultOption': 'inRange',
+                'filterOptions': [
+                    'inRange', 'greaterThan', 'lessThan', 'equals', 
+                    'notEqual', 'blank', 'notBlank'  # Incluir opciones para vacíos
+                ],
+                'browserDatePicker': True,
+                'minValidYear': 2000,
+                'maxValidYear': 2030,
+                'inRangeInclusive': True,
+                # ↓↓ CLAVE: ELIMINAR COMPORTAMIENTO AND/OR ↓↓
+                'suppressAndOrCondition': True,
+                'alwaysShowBothConditions': False,
+                'defaultJoinOperator': 'OR'  # Por si acaso, forzar OR si aparece
+            },
+            floatingFilter=True,
+            valueFormatter="function(params) { return params.value ? new Date(params.value).toLocaleDateString('es-ES') : 'N/A'; }"
+        )
 
-    # FILTROS DE TEXTO TAMBIÉN CORREGIDOS
-    columnas_texto = ['OBSERVACIONES', 'CALIFICACIÓN', 'ESTADO', 'EQUIPO', 'IMPUESTO', 
-                    'IMPUESTO ORIGEN', 'NATURALEZA', 'ETIQ. PENÚLTIMO TRAM.', 
-                    'ETIQ. ÚLTIMO TRAM.', 'USUARIO-CSV']
+# FILTROS DE TEXTO TAMBIÉN CORREGIDOS
+columnas_texto = ['OBSERVACIONES', 'CALIFICACIÓN', 'ESTADO', 'EQUIPO', 'IMPUESTO', 
+                  'IMPUESTO ORIGEN', 'NATURALEZA', 'ETIQ. PENÚLTIMO TRAM.', 
+                  'ETIQ. ÚLTIMO TRAM.', 'USUARIO-CSV']
 
-    for col in columnas_texto:
-        if col in df_mostrar_aggrid.columns:
-            gb.configure_column(
-                col,
-                filter='agTextColumnFilter',
-                filterParams={
-                    'buttons': ['apply', 'reset'],
-                    'closeOnApply': True,
-                    'debounceMs': 400,
-                    'defaultOption': 'contains',
-                    'filterOptions': [
-                        'contains', 'notContains', 'startsWith', 'endsWith', 
-                        'equals', 'notEqual', 'blank', 'notBlank'
-                    ],
-                    'caseSensitive': False,
-                    # ↓↓ EVITAR AND/OR EN TEXTO TAMBIÉN ↓↓
-                    'suppressAndOrCondition': True,
-                    'alwaysShowBothConditions': False
-                },
-                floatingFilter=True
-            )
+for col in columnas_texto:
+    if col in df_mostrar_aggrid.columns:
+        gb.configure_column(
+            col,
+            filter='agTextColumnFilter',
+            filterParams={
+                'buttons': ['apply', 'reset'],
+                'closeOnApply': True,
+                'debounceMs': 400,
+                'defaultOption': 'contains',
+                'filterOptions': [
+                    'contains', 'notContains', 'startsWith', 'endsWith', 
+                    'equals', 'notEqual', 'blank', 'notBlank'
+                ],
+                'caseSensitive': False,
+                # ↓↓ EVITAR AND/OR EN TEXTO TAMBIÉN ↓↓
+                'suppressAndOrCondition': True,
+                'alwaysShowBothConditions': False
+            },
+            floatingFilter=True
+        )
 
-    # CONFIGURACIÓN DEL GRID PARA EVITAR COMPORTAMIENTOS NO DESEADOS
-    gb.configure_grid_options(
-        enableFilter=True,
-        enableSorting=True,
-        enableRangeSelection=True,
-        tooltipShowDelay=0,
-        tooltipHideDelay=5000,
-        enableBrowserTooltips=True,
-        animateRows=True,
-        rowSelection='multiple',
-        # ↓↓ CONFIGURACIÓN GLOBAL PARA FILTROS ↓↓
-        suppressMultiRangeSelection: True,
-        suppressDragLeaveHidesColumns: True
-    )
+# CONFIGURACIÓN DEL GRID PARA EVITAR COMPORTAMIENTOS NO DESEADOS
+gb.configure_grid_options(
+    enableFilter=True,
+    enableSorting=True,
+    enableRangeSelection=True,
+    tooltipShowDelay=0,
+    tooltipHideDelay=5000,
+    enableBrowserTooltips=True,
+    animateRows=True,
+    rowSelection='multiple',
+    # ↓↓ CONFIGURACIÓN GLOBAL PARA FILTROS ↓↓
+    'suppressMultiRangeSelection': True,
+    'suppressDragLeaveHidesColumns': True
+)
 
-    grid_options = gb.build()
+grid_options = gb.build()
 
     # CSS para mejorar la experiencia visual
     st.markdown("""
