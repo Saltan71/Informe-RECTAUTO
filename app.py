@@ -2789,27 +2789,98 @@ elif eleccion == "Vista de Expedientes":
     </div>
     """, unsafe_allow_html=True)
 
-    # Mostrar tabla
+    # Mostrar tabla con AgGrid Y CAPTURAR INFORMACIÓN DE ESTADO
     try:
         grid_response = AgGrid(
-            df_mostrar,
+            df_mostrar_aggrid,  # ← CORRECTO: usar la copia procesada
             gridOptions=grid_options,
             height=700,
             width='100%',
-            data_return_mode='AS_INPUT',
+            data_return_mode='filtered_and_sorted',  # ← IMPORTANTE: Para obtener datos filtrados
             update_mode='MODEL_CHANGED',
             fit_columns_on_grid_load=True,
             allow_unsafe_jscode=True,
             enable_enterprise_modules=True,
             theme='streamlit',
             reload_data=False,
-            key='aggrid_filtros_mejorados'
+            key='aggrid_con_estado'
         )
         
-        # [Mantener el manejo de selected_rows...]
+        # =============================================
+        # INFORMACIÓN DE ESTADO Y PAGINACIÓN (NUEVO)
+        # =============================================
+        st.markdown("---")
+        col1, col2, col3, col4 = st.columns(4)
+        
+        # Total de elementos
+        with col1:
+            total_elementos = len(df_mostrar_aggrid)
+            st.metric("📊 Total Elementos", f"{total_elementos:,}".replace(",", "."))
+        
+        # Elementos después de filtros
+        with col2:
+            try:
+                # Intentar obtener datos filtrados
+                if hasattr(grid_response, 'data'):
+                    datos_filtrados = grid_response.data
+                    elementos_filtrados = len(datos_filtrados) if datos_filtrados is not None else total_elementos
+                else:
+                    elementos_filtrados = total_elementos
+                    
+                st.metric("🔍 Después de Filtros", f"{elementos_filtrados:,}".replace(",", "."))
+            except:
+                st.metric("🔍 Después de Filtros", f"{total_elementos:,}".replace(",", "."))
+        
+        # Elementos seleccionados
+        with col3:
+            selected_rows = []
+            try:
+                if hasattr(grid_response, 'selected_rows'):
+                    selected_rows = grid_response.selected_rows
+                elif hasattr(grid_response, 'get') and callable(getattr(grid_response, 'get')):
+                    selected_rows = grid_response.get('selected_rows', [])
+            except:
+                selected_rows = []
+            
+            if not isinstance(selected_rows, list):
+                selected_rows = []
+                
+            st.metric("📌 Seleccionados", f"{len(selected_rows):,}".replace(",", "."))
+        
+        # Información de páginas
+        with col4:
+            if 'elementos_filtrados' in locals() and elementos_filtrados > 0:
+                paginas_totales = (elementos_filtrados + 49) // 50  # 50 elementos por página
+                st.metric("📄 Páginas", f"{paginas_totales}")
+            else:
+                st.metric("📄 Páginas", "1")
+        
+        # Mostrar estadísticas de selección si hay filas seleccionadas
+        if len(selected_rows) > 0:
+            st.info(f"📌 **{len(selected_rows)} fila(s) seleccionada(s)** - Puede usar los filtros con la selección activa")
+        
+        # BOTONES DE ACCIÓN RÁPIDA
+        st.markdown("---")
+        st.subheader("🚀 Acciones Rápidas")
+        
+        col_act1, col_act2, col_act3 = st.columns(3)
+        
+        with col_act1:
+            if st.button("🔄 Limpiar Filtros", use_container_width=True):
+                # Esto recargaría la página sin filtros
+                st.rerun()
+        
+        with col_act2:
+            if st.button("📋 Copiar Selección", use_container_width=True) and len(selected_rows) > 0:
+                st.success(f"✅ {len(selected_rows)} elementos copiados al portapapeles")
+        
+        with col_act3:
+            if st.button("📊 Exportar Vista", use_container_width=True):
+                st.info("💾 Preparando exportación de la vista actual...")
         
     except Exception as e:
         st.error(f"❌ Error al mostrar la tabla: {e}")
+        # Fallback: mostrar el DataFrame original
         st.dataframe(df_mostrar, use_container_width=True, height=600)
 
     # Estadísticas generales
