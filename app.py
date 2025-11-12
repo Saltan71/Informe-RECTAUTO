@@ -2578,29 +2578,58 @@ elif eleccion == "Vista de Expedientes":
     registros_mostrados = f"{len(df_mostrar):,}".replace(",", ".")
     registros_totales = f"{len(df):,}".replace(",", ".")
     st.write(f"Mostrando {registros_mostrados} de {registros_totales} registros")
-
-    # CONFIGURACIÓN DE AGGRID
+    
+    # CONFIGURACIÓN DE AGGRID - VERSIÓN EXPLÍCITA
     gb = GridOptionsBuilder.from_dataframe(df_mostrar)
-    
-    # Configurar todas las columnas
-    gb.configure_default_column(
-        filterable=True,
-        sortable=True,
-        resizable=True,
-        editable=False,
-        groupable=False,
-        min_column_width=100
-    )
-    
+
+    # Configurar CADA columna individualmente con filtros
+    for col in df_mostrar.columns:
+        if any(fecha in col.upper() for fecha in ['FECHA', 'DATE']):
+            # Columnas de fecha
+            gb.configure_column(
+                col,
+                filter="agDateColumnFilter",
+                type=["dateColumn", "filterDateColumn"],
+                filterable=True,
+                sortable=True,
+                resizable=True
+            )
+        else:
+            # Columnas normales
+            gb.configure_column(
+                col,
+                filter="agTextColumnFilter",  # Filtro de texto para columnas no-fecha
+                filterable=True,
+                sortable=True,
+                resizable=True
+            )
+
+    # CONFIGURACIÓN ESPECÍFICA PARA COLUMNAS DE FECHA
+    columnas_fechas = ['FECHA INICIO TRAMITACIÓN', 'FECHA APERTURA', 'FECHA RESOLUCIÓN', 
+                    'FECHA FIN TRAMITACIÓN', 'FECHA CIERRE', 'FECHA PENÚLTIMO TRAM.', 
+                    'FECHA ÚLTIMO TRAM.', 'FECHA NOTIFICACIÓN', 'FECHA ASIG']
+
+    for col in columnas_fechas:
+        if col in df_mostrar.columns:
+            gb.configure_column(
+                col,
+                type=["dateColumn", "filterDateColumn"],  # ← Filtros específicos para fechas
+                filter="agDateColumnFilter",
+                filterParams={
+                    "buttons": ['apply', 'reset'],
+                    "closeOnApply": True,
+                }
+            )
+
     # Configurar paginación
     gb.configure_pagination(
         paginationAutoPageSize=False,
         paginationPageSize=50
     )
-    
-    # Configurar barra lateral de filtros
-    gb.configure_side_bar()
-    
+
+    # Configurar barra lateral de filtros (IMPORTANTE para ver todos los filtros)
+    gb.configure_side_bar(filters_panel=True, columns_panel=False)
+
     # Configurar selección
     gb.configure_selection(
         selection_mode="multiple",
@@ -2608,9 +2637,9 @@ elif eleccion == "Vista de Expedientes":
         groupSelectsChildren=True,
         groupSelectsFiltered=True
     )
-    
+
     grid_options = gb.build()
-    
+
     # Mostrar tabla con AgGrid
     try:
         grid_response = AgGrid(
@@ -2623,42 +2652,21 @@ elif eleccion == "Vista de Expedientes":
             fit_columns_on_grid_load=False,
             allow_unsafe_jscode=True,
             enable_enterprise_modules=True,
-            theme='streamlit'
+            theme='streamlit',
+            enable_quicksearch=True,  # ← Búsqueda rápida
+            reload_data=False
         )
         
-        # DEPURACIÓN: Mostrar qué contiene grid_response
-        st.sidebar.write("🔍 Debug AgGrid response:")
-        st.sidebar.write(f"Tipo: {type(grid_response)}")
-        if hasattr(grid_response, '__dict__'):
-            st.sidebar.write(f"Atributos: {grid_response.__dict__.keys()}")
+        # OBTENER FILAS SELECCIONADAS (versión simplificada)
+        selected_rows = grid_response.get('selected_rows', [])
         
-        # MÚLTIPLES FORMAS DE OBTENER LAS FILAS SELECCIONADAS
-        selected_rows = []
-        
-        # Método 1: Intentar con get()
-        if isinstance(grid_response, dict):
-            selected_rows = grid_response.get('selected_rows', [])
-        # Método 2: Intentar con atributo
-        elif hasattr(grid_response, 'selected_rows'):
-            selected_rows = grid_response.selected_rows
-        # Método 3: Intentar con getattr
-        else:
-            selected_rows = getattr(grid_response, 'selected_rows', [])
-        
-        # Asegurarnos que selected_rows es una lista
-        if not isinstance(selected_rows, list):
-            selected_rows = []
-        
-        # Mostrar estadísticas de selección si hay filas seleccionadas
-        if len(selected_rows) > 0:
+        if selected_rows:
             st.info(f"📌 {len(selected_rows)} fila(s) seleccionada(s)")
-        else:
-            # Opcional: mostrar que no hay selección
-            st.sidebar.info("ℹ️ No hay filas seleccionadas")
             
     except Exception as e:
         st.error(f"❌ Error en AgGrid: {e}")
         selected_rows = []
+
 
     # Estadísticas generales
     st.markdown("---")
