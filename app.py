@@ -2579,6 +2579,11 @@ elif eleccion == "Vista de Expedientes":
     registros_totales = f"{len(df):,}".replace(",", ".")
     st.write(f"Mostrando {registros_mostrados} de {registros_totales} registros")
     
+    # 🔥 CONFIGURACIÓN ESPECÍFICA PARA COLUMNAS DE FECHA
+    columnas_fechas = ['FECHA INICIO TRAMITACIÓN', 'FECHA APERTURA', 'FECHA RESOLUCIÓN', 
+                    'FECHA FIN TRAMITACIÓN', 'FECHA CIERRE', 'FECHA PENÚLTIMO TRAM.', 
+                    'FECHA ÚLTIMO TRAM.', 'FECHA NOTIFICACIÓN', 'FECHA ASIG']
+
     # CONFIGURACIÓN AGGRID CON FILTROS MEJORADOS
     gb = GridOptionsBuilder.from_dataframe(df_mostrar)
 
