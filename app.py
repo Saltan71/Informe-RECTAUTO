@@ -2590,7 +2590,7 @@ elif eleccion == "Vista de Expedientes":
         editable=False,
         groupable=False,
         min_column_width=80,
-        autoHeight=True 
+        flex=1
     )
     
     # Configurar paginación
@@ -2621,7 +2621,7 @@ elif eleccion == "Vista de Expedientes":
             width='100%',
             data_return_mode='AS_INPUT',
             update_mode='MODEL_CHANGED',
-            fit_columns_on_grid_load=True,
+            fit_columns_on_grid_load=False,
             allow_unsafe_jscode=True,
             enable_enterprise_modules=True,
             theme='streamlit'
