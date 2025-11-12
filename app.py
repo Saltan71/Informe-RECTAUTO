@@ -2555,6 +2555,9 @@ elif eleccion == "Vista de Expedientes":
     # Crear copia y formatear datos para AgGrid
     df_mostrar = df_filtrado.copy()
 
+    # PRIMERO: CREAR LA COPIA PROCESADA CON FECHAS CONVERTIDAS - VERSIÓN MEJORADA
+    df_mostrar_aggrid = df_mostrar.copy()
+
     # Formatear TODAS las columnas de fecha
     for col in df_mostrar.select_dtypes(include='datetime').columns:
         df_mostrar[col] = df_mostrar[col].dt.strftime("%d/%m/%Y")
@@ -2578,6 +2581,8 @@ elif eleccion == "Vista de Expedientes":
     registros_mostrados = f"{len(df_mostrar):,}".replace(",", ".")
     registros_totales = f"{len(df):,}".replace(",", ".")
     st.write(f"Mostrando {registros_mostrados} de {registros_totales} registros")
+
+
 
     # CONFIGURACIÓN COMPLETA CON FILTROS MEJORADOS Y MANEJO DE FECHAS
     gb = GridOptionsBuilder.from_dataframe(df_mostrar)
