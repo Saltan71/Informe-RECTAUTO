@@ -2579,238 +2579,238 @@ elif eleccion == "Vista de Expedientes":
     registros_totales = f"{len(df):,}".replace(",", ".")
     st.write(f"Mostrando {registros_mostrados} de {registros_totales} registros")
 
-# CONFIGURACIÓN COMPLETA CON FILTROS MEJORADOS Y MANEJO DE FECHAS
-gb = GridOptionsBuilder.from_dataframe(df_mostrar)
+    # CONFIGURACIÓN COMPLETA CON FILTROS MEJORADOS Y MANEJO DE FECHAS
+    gb = GridOptionsBuilder.from_dataframe(df_mostrar)
 
-# Configuración por defecto para columnas de TEXTO
-gb.configure_default_column(
-    filter=True,
-    floatingFilter=True,
-    sortable=True,
-    resizable=True,
-    editable=False,
-    min_column_width=90,
-    wrapText=True,
-    autoHeight=False,
-    cellStyle={'whiteSpace': 'normal', 'lineHeight': '1.2', 'maxHeight': '60px'},
-    headerClass='header-limited-lines',
-    filterParams={
-        'buttons': ['apply', 'reset'],
-        'closeOnApply': True,
-        'debounceMs': 400,
-        'defaultOption': 'contains',  # ← COMPORTAMIENTO COMO *TEXTO*
-        'filterOptions': [
-            'contains',      # texto (como *texto*)
-            'notContains',   # !texto (como !*texto*)
-            'startsWith',    # ^texto (como texto*)
-            'endsWith',      # texto$ (como *texto)
-            'equals',        # =texto
-            'notEqual'       # !=texto
-        ],
-        'caseSensitive': False
-    }
-)
-
-# COLUMNAS FIJAS
-if 'RUE' in df_mostrar.columns:
-    gb.configure_column(
-        'RUE',
-        pinned='left',
-        width=130,
-        minWidth=130,
-        maxWidth=160,
-        suppressSizeToFit=True,
-        suppressMovable=True,
-        lockPinned=True,
-        cellStyle={'backgroundColor': '#f8f9fa'},
+    # Configuración por defecto para columnas de TEXTO
+    gb.configure_default_column(
         filter=True,
-        floatingFilter=True
-    )
-
-if 'USUARIO' in df_mostrar.columns:
-    gb.configure_column(
-        'USUARIO',
-        pinned='right',
-        width=140,
-        minWidth=140,
-        maxWidth=180,
-        suppressSizeToFit=True,
-        suppressMovable=True,
-        lockPinned=True,
-        cellStyle={'backgroundColor': '#f8f9fa'},
-        filter=True,
-        floatingFilter=True
-    )
-
-# CONFIGURACIÓN ESPECÍFICA PARA COLUMNAS DE FECHA
-columnas_fechas = ['FECHA INICIO TRAMITACIÓN', 'FECHA APERTURA', 'FECHA RESOLUCIÓN', 
-                   'FECHA PENÚLTIMO TRAM.', 'FECHA ÚLTIMO TRAM.', 'FECHA NOTIFICACIÓN', 'FECHA ASIG']
-
-for col in columnas_fechas:
-    if col in df_mostrar.columns:
-        gb.configure_column(
-            col,
-            width=110,
-            minWidth=100,
-            maxWidth=140,
-            wrapText=True,
-            filter='agDateColumnFilter',  # ← FILTRO ESPECIAL PARA FECHAS
-            filterParams={
-                'buttons': ['apply', 'reset'],
-                'closeOnApply': True,
-                'defaultOption': 'inRange',  # Rango por defecto para fechas
-                'filterOptions': [
-                    'inRange',      # Entre dos fechas
-                    'greaterThan',  # Mayor que
-                    'lessThan',     # Menor que
-                    'equals'        # Igual a fecha específica
-                ],
-                'browserDatePicker': True,  # Selector visual de fechas
-                'minValidYear': 2000,       # Año mínimo
-                'maxValidYear': 2030        # Año máximo
-            },
-            floatingFilter=True  # También mostrar filtro flotante para fechas
-        )
-
-# CONFIGURACIÓN PARA COLUMNAS NUMÉRICAS (como ANTIGÜEDAD)
-if 'ANTIGÜEDAD EXP. (DÍAS)' in df_mostrar.columns:
-    gb.configure_column(
-        'ANTIGÜEDAD EXP. (DÍAS)',
-        width=110,
-        minWidth=100,
-        maxWidth=140,
-        filter='agNumberColumnFilter',  # ← FILTRO PARA NÚMEROS
+        floatingFilter=True,
+        sortable=True,
+        resizable=True,
+        editable=False,
+        min_column_width=90,
+        wrapText=True,
+        autoHeight=False,
+        cellStyle={'whiteSpace': 'normal', 'lineHeight': '1.2', 'maxHeight': '60px'},
+        headerClass='header-limited-lines',
         filterParams={
             'buttons': ['apply', 'reset'],
             'closeOnApply': True,
-            'defaultOption': 'equals',
+            'debounceMs': 400,
+            'defaultOption': 'contains',  # ← COMPORTAMIENTO COMO *TEXTO*
             'filterOptions': [
-                'equals',
-                'notEqual',
-                'lessThan',
-                'lessThanOrEqual',
-                'greaterThan',
-                'greaterThanOrEqual',
-                'inRange'
-            ]
-        },
-        floatingFilter=True
+                'contains',      # texto (como *texto*)
+                'notContains',   # !texto (como !*texto*)
+                'startsWith',    # ^texto (como texto*)
+                'endsWith',      # texto$ (como *texto)
+                'equals',        # =texto
+                'notEqual'       # !=texto
+            ],
+            'caseSensitive': False
+        }
     )
 
-# COLUMNAS DE TEXTO LARGO (mantienen filtro de texto)
-columnas_texto_largo = ['OBSERVACIONES', 'CALIFICACIÓN']
-for col in columnas_texto_largo:
-    if col in df_mostrar.columns:
+    # COLUMNAS FIJAS
+    if 'RUE' in df_mostrar.columns:
         gb.configure_column(
-            col,
-            width=200,
-            minWidth=150,
-            maxWidth=300,
-            wrapText=True,
-            # Mantiene la configuración por defecto (filtro de texto)
-            filter=True,
-            floatingFilter=True
-        )
-
-# COLUMNAS DE CATEGORÍAS (mantienen filtro de texto)
-columnas_categorias = ['ESTADO', 'EQUIPO', 'IMPUESTO', 'IMPUESTO ORIGEN', 'NATURALEZA', 
-                       'ETIQ. PENÚLTIMO TRAM.', 'ETIQ. ÚLTIMO TRAM.', 'USUARIO-CSV']
-for col in columnas_categorias:
-    if col in df_mostrar.columns:
-        gb.configure_column(
-            col,
+            'RUE',
+            pinned='left',
             width=130,
             minWidth=130,
             maxWidth=160,
-            wrapText=True,
-            # Mantiene la configuración por defecto (filtro de texto)
+            suppressSizeToFit=True,
+            suppressMovable=True,
+            lockPinned=True,
+            cellStyle={'backgroundColor': '#f8f9fa'},
             filter=True,
             floatingFilter=True
         )
 
-# CONFIGURACIÓN DEL GRID
-gb.configure_side_bar(
-    filters_panel=True, 
-    columns_panel=True,
-    defaultToolPanel='filters'
-)
+    if 'USUARIO' in df_mostrar.columns:
+        gb.configure_column(
+            'USUARIO',
+            pinned='right',
+            width=140,
+            minWidth=140,
+            maxWidth=180,
+            suppressSizeToFit=True,
+            suppressMovable=True,
+            lockPinned=True,
+            cellStyle={'backgroundColor': '#f8f9fa'},
+            filter=True,
+            floatingFilter=True
+        )
 
-gb.configure_selection(
-    selection_mode="multiple",
-    use_checkbox=True,
-    groupSelectsChildren=True,
-    groupSelectsFiltered=True
-)
+    # CONFIGURACIÓN ESPECÍFICA PARA COLUMNAS DE FECHA
+    columnas_fechas = ['FECHA INICIO TRAMITACIÓN', 'FECHA APERTURA', 'FECHA RESOLUCIÓN', 
+                    'FECHA PENÚLTIMO TRAM.', 'FECHA ÚLTIMO TRAM.', 'FECHA NOTIFICACIÓN', 'FECHA ASIG']
 
-grid_options = gb.build()
+    for col in columnas_fechas:
+        if col in df_mostrar.columns:
+            gb.configure_column(
+                col,
+                width=110,
+                minWidth=100,
+                maxWidth=140,
+                wrapText=True,
+                filter='agDateColumnFilter',  # ← FILTRO ESPECIAL PARA FECHAS
+                filterParams={
+                    'buttons': ['apply', 'reset'],
+                    'closeOnApply': True,
+                    'defaultOption': 'inRange',  # Rango por defecto para fechas
+                    'filterOptions': [
+                        'inRange',      # Entre dos fechas
+                        'greaterThan',  # Mayor que
+                        'lessThan',     # Menor que
+                        'equals'        # Igual a fecha específica
+                    ],
+                    'browserDatePicker': True,  # Selector visual de fechas
+                    'minValidYear': 2000,       # Año mínimo
+                    'maxValidYear': 2030        # Año máximo
+                },
+                floatingFilter=True  # También mostrar filtro flotante para fechas
+            )
 
-# CSS para mejorar la experiencia visual
-st.markdown("""
-<style>
-    .header-limited-lines .ag-header-cell-text {
-        display: -webkit-box;
-        -webkit-line-clamp: 2;
-        -webkit-box-orient: vertical;
-        overflow: hidden;
-        text-overflow: ellipsis;
-        line-height: 1.2;
-        max-height: 2.4em;
-        white-space: normal;
-        word-break: break-word;
-    }
-    
-    .ag-cell {
-        display: -webkit-box;
-        -webkit-line-clamp: 3;
-        -webkit-box-orient: vertical;
-        overflow: hidden;
-        text-overflow: ellipsis;
-        line-height: 1.2;
-        max-height: 3.6em;
-        white-space: normal;
-        word-break: break-word;
-    }
-    
-    /* Mejorar selectores de fecha */
-    .ag-floating-filter-date input {
-        font-size: 11px;
-    }
-    
-    .ag-date-input {
-        font-size: 11px !important;
-    }
-</style>
+    # CONFIGURACIÓN PARA COLUMNAS NUMÉRICAS (como ANTIGÜEDAD)
+    if 'ANTIGÜEDAD EXP. (DÍAS)' in df_mostrar.columns:
+        gb.configure_column(
+            'ANTIGÜEDAD EXP. (DÍAS)',
+            width=110,
+            minWidth=100,
+            maxWidth=140,
+            filter='agNumberColumnFilter',  # ← FILTRO PARA NÚMEROS
+            filterParams={
+                'buttons': ['apply', 'reset'],
+                'closeOnApply': True,
+                'defaultOption': 'equals',
+                'filterOptions': [
+                    'equals',
+                    'notEqual',
+                    'lessThan',
+                    'lessThanOrEqual',
+                    'greaterThan',
+                    'greaterThanOrEqual',
+                    'inRange'
+                ]
+            },
+            floatingFilter=True
+        )
 
-<div style="background-color: #e3f2fd; padding: 8px; border-radius: 4px; margin: 10px 0; font-size: 12px;">
-💡 <strong>Tipos de filtro:</strong><br>
-• <strong>Texto:</strong> Escribe directamente para "contiene"<br>
-• <strong>Fechas:</strong> Selector visual con calendario<br>
-• <strong>Números:</strong> Filtros por rango y comparación
-</div>
-""", unsafe_allow_html=True)
+    # COLUMNAS DE TEXTO LARGO (mantienen filtro de texto)
+    columnas_texto_largo = ['OBSERVACIONES', 'CALIFICACIÓN']
+    for col in columnas_texto_largo:
+        if col in df_mostrar.columns:
+            gb.configure_column(
+                col,
+                width=200,
+                minWidth=150,
+                maxWidth=300,
+                wrapText=True,
+                # Mantiene la configuración por defecto (filtro de texto)
+                filter=True,
+                floatingFilter=True
+            )
 
-# Mostrar tabla
-try:
-    grid_response = AgGrid(
-        df_mostrar,
-        gridOptions=grid_options,
-        height=700,
-        width='100%',
-        data_return_mode='AS_INPUT',
-        update_mode='MODEL_CHANGED',
-        fit_columns_on_grid_load=True,
-        allow_unsafe_jscode=True,
-        enable_enterprise_modules=True,
-        theme='streamlit',
-        reload_data=False,
-        key='aggrid_filtros_mejorados'
+    # COLUMNAS DE CATEGORÍAS (mantienen filtro de texto)
+    columnas_categorias = ['ESTADO', 'EQUIPO', 'IMPUESTO', 'IMPUESTO ORIGEN', 'NATURALEZA', 
+                        'ETIQ. PENÚLTIMO TRAM.', 'ETIQ. ÚLTIMO TRAM.', 'USUARIO-CSV']
+    for col in columnas_categorias:
+        if col in df_mostrar.columns:
+            gb.configure_column(
+                col,
+                width=130,
+                minWidth=130,
+                maxWidth=160,
+                wrapText=True,
+                # Mantiene la configuración por defecto (filtro de texto)
+                filter=True,
+                floatingFilter=True
+            )
+
+    # CONFIGURACIÓN DEL GRID
+    gb.configure_side_bar(
+        filters_panel=True, 
+        columns_panel=True,
+        defaultToolPanel='filters'
     )
-    
-    # [Mantener el manejo de selected_rows...]
-    
-except Exception as e:
-    st.error(f"❌ Error al mostrar la tabla: {e}")
-    st.dataframe(df_mostrar, use_container_width=True, height=600)
+
+    gb.configure_selection(
+        selection_mode="multiple",
+        use_checkbox=True,
+        groupSelectsChildren=True,
+        groupSelectsFiltered=True
+    )
+
+    grid_options = gb.build()
+
+    # CSS para mejorar la experiencia visual
+    st.markdown("""
+    <style>
+        .header-limited-lines .ag-header-cell-text {
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            line-height: 1.2;
+            max-height: 2.4em;
+            white-space: normal;
+            word-break: break-word;
+        }
+        
+        .ag-cell {
+            display: -webkit-box;
+            -webkit-line-clamp: 3;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            line-height: 1.2;
+            max-height: 3.6em;
+            white-space: normal;
+            word-break: break-word;
+        }
+        
+        /* Mejorar selectores de fecha */
+        .ag-floating-filter-date input {
+            font-size: 11px;
+        }
+        
+        .ag-date-input {
+            font-size: 11px !important;
+        }
+    </style>
+
+    <div style="background-color: #e3f2fd; padding: 8px; border-radius: 4px; margin: 10px 0; font-size: 12px;">
+    💡 <strong>Tipos de filtro:</strong><br>
+    • <strong>Texto:</strong> Escribe directamente para "contiene"<br>
+    • <strong>Fechas:</strong> Selector visual con calendario<br>
+    • <strong>Números:</strong> Filtros por rango y comparación
+    </div>
+    """, unsafe_allow_html=True)
+
+    # Mostrar tabla
+    try:
+        grid_response = AgGrid(
+            df_mostrar,
+            gridOptions=grid_options,
+            height=700,
+            width='100%',
+            data_return_mode='AS_INPUT',
+            update_mode='MODEL_CHANGED',
+            fit_columns_on_grid_load=True,
+            allow_unsafe_jscode=True,
+            enable_enterprise_modules=True,
+            theme='streamlit',
+            reload_data=False,
+            key='aggrid_filtros_mejorados'
+        )
+        
+        # [Mantener el manejo de selected_rows...]
+        
+    except Exception as e:
+        st.error(f"❌ Error al mostrar la tabla: {e}")
+        st.dataframe(df_mostrar, use_container_width=True, height=600)
 
     # Estadísticas generales
     st.markdown("---")
