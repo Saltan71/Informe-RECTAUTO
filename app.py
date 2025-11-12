@@ -2579,8 +2579,33 @@ elif eleccion == "Vista de Expedientes":
     registros_totales = f"{len(df):,}".replace(",", ".")
     st.write(f"Mostrando {registros_mostrados} de {registros_totales} registros")
 
+    
     # CONFIGURACIÓN DE AGGRID
     gb = GridOptionsBuilder.from_dataframe(df_mostrar)
+
+    # Definir las columnas de fecha
+    columnas_fechas = ['FECHA INICIO TRAMITACIÓN', 'FECHA APERTURA', 'FECHA RESOLUCIÓN', 'FECHA FIN TRAMITACIÓN', 'FECHA CIERRE'
+                   'FECHA PENÚLTIMO TRAM.', 'FECHA ÚLTIMO TRAM.', 'FECHA NOTIFICACIÓN', 'FECHA ASIG']
+
+    # Convertir columnas de fecha - MANERA MÁS ROBUSTA
+    for col in columnas_fechas:
+        if col in df_mostrar_aggrid.columns:
+            try:
+                # Primero verificar el formato actual
+                st.sidebar.write(f"🔍 {col}: Muestra -> {df_mostrar_aggrid[col].iloc[0] if len(df_mostrar_aggrid) > 0 else 'Vacía'}")
+                
+                # Intentar múltiples formatos
+                df_mostrar_aggrid[col] = pd.to_datetime(
+                    df_mostrar_aggrid[col], 
+                    dayfirst=True,  # ← IMPORTANTE para formato DD/MM/AAAA
+                    errors='coerce'
+                )
+                
+                contador_validos = df_mostrar_aggrid[col].notna().sum()
+                st.sidebar.write(f"✅ {col}: {contador_validos}/{len(df_mostrar_aggrid)} fechas convertidas")
+                
+            except Exception as e:
+                st.sidebar.error(f"❌ Error en {col}: {e}")
     
     # Configurar todas las columnas
     gb.configure_default_column(
@@ -2590,6 +2615,7 @@ elif eleccion == "Vista de Expedientes":
         editable=False,
         groupable=False,
         min_column_width=100
+        autoHeight=True 
     )
     
     # Configurar paginación
@@ -2620,7 +2646,7 @@ elif eleccion == "Vista de Expedientes":
             width='100%',
             data_return_mode='AS_INPUT',
             update_mode='MODEL_CHANGED',
-            fit_columns_on_grid_load=False,
+            fit_columns_on_grid_load=True,
             allow_unsafe_jscode=True,
             enable_enterprise_modules=True,
             theme='streamlit'
