@@ -1800,6 +1800,44 @@ def crear_grafico_dinamico(_conteo, columna, titulo):
     fig.update_traces(texttemplate='%{text:,}', textposition="auto")
     return fig
 
+def guardar_documentos_actualizados(archivo_original, df_documentos_actualizado):
+    """Guarda los datos actualizados en el archivo DOCUMENTOS.xlsx REEMPLAZANDO completamente el contenido anterior"""
+    try:
+        # Usar directorio temporal único por usuario
+        tmp_file = tempfile.NamedTemporaryFile(delete=False, suffix=".xlsx", dir=user_env.working_dir)
+        tmp_path = tmp_file.name
+        tmp_file.close()
+
+        # Escribir las dos hojas en el archivo temporal
+        with pd.ExcelWriter(tmp_path, engine="openpyxl") as writer:
+            # 🔥 CORRECCIÓN CRÍTICA: SOLO guardar los registros actuales que tienen DOCUM.INCORP.
+            # Filtrar solo registros con documentación no vacía
+            df_para_guardar = df_documentos_actualizado[
+                df_documentos_actualizado['DOCUM.INCORP.'].notna() & 
+                (df_documentos_actualizado['DOCUM.INCORP.'] != '')
+            ].copy()
+            
+            # 🔥 LIMPIAR COMPLETAMENTE la hoja DOCUMENTOS y escribir solo los datos actuales
+            df_para_guardar.to_excel(writer, sheet_name="DOCUMENTOS", index=False)
+
+            # Hoja DOCU - MANTENER las opciones del desplegable del original
+            archivo_original.seek(0)
+            df_docu_original = pd.read_excel(archivo_original, sheet_name="DOCU")
+            df_docu_original.to_excel(writer, sheet_name="DOCU", index=False)
+
+        # Leer contenido ya guardado
+        with open(tmp_path, "rb") as f:
+            contenido = f.read()
+
+        # Eliminar el archivo temporal
+        os.remove(tmp_path)
+
+        return contenido
+
+    except Exception as e:
+        st.error(f"Error guardando DOCUMENTOS: {e}")
+        return None
+
 # =============================================
 # PÁGINA 1: CARGA DE ARCHIVOS
 # =============================================
@@ -2728,11 +2766,18 @@ elif eleccion == "Vista de Expedientes":
                 # En la sección de guardar documentos, busca esta parte y actualízala:
                 if st.button("💾 Guardar Todos los Cambios en DOCUMENTOS.xlsx", type="primary", key="guardar_documentos"):
                     with st.spinner("Guardando cambios..."):
-                        # Crear DataFrame SOLO con los registros que tienen DOCUM.INCORP. actualmente
+                        # 🔥 CORRECCIÓN: Crear DataFrame SOLO con los registros actualizados del df_combinado
                         df_combinado = st.session_state["df_combinado"]
+                        
+                        # Filtrar solo los registros que tienen DOCUM.INCORP. en el dataset combinado actual
                         df_documentos_actualizado = df_combinado[['RUE', 'DOCUM.INCORP.']].copy()
-                        df_documentos_actualizado = df_documentos_actualizado.dropna(subset=['DOCUM.INCORP.'])
-                        df_documentos_actualizado = df_documentos_actualizado[df_documentos_actualizado['DOCUM.INCORP.'] != '']
+                        df_documentos_actualizado = df_documentos_actualizado[
+                            df_documentos_actualizado['DOCUM.INCORP.'].notna() & 
+                            (df_documentos_actualizado['DOCUM.INCORP.'] != '')
+                        ]
+                        
+                        # 🔥 LIMPIAR CACHE para forzar recarga
+                        st.cache_data.clear()
                         
                         # Guardar en el archivo DOCUMENTOS.xlsx (esto reemplazará completamente el contenido anterior)
                         contenido_actualizado = guardar_documentos_actualizados(
@@ -2748,12 +2793,8 @@ elif eleccion == "Vista de Expedientes":
                             # Limpiar cambios
                             st.session_state.cambios_documentacion = {}
                             
-                            # Actualizar cache
-                            st.cache_data.clear()
-                            
                         else:
                             st.error("❌ Error al guardar el archivo DOCUMENTOS.xlsx")
-            
             # Mostrar botón de descarga si hay archivo actualizado
             if st.session_state.get('mostrar_descarga', False) and st.session_state.get('documentos_actualizados'):
                 st.markdown("---")
