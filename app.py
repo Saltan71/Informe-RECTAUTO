@@ -2568,26 +2568,6 @@ elif eleccion == "Vista de Expedientes":
         filas_90_incdocu = (df_filtrado['ETIQ. PENÚLTIMO TRAM.'] == "90 INCDOCU").sum()
         st.sidebar.write(f"Con 90 INCDOCU: {filas_90_incdocu}")
 
-    # Gráficos Generales - CORREGIDOS: datos siempre frescos según filtros
-    st.subheader("📈 Gráficos Generales")
-    columnas_graficos = st.columns(3)
-    graficos = [("EQUIPO", "Expedientes por equipo"), 
-                ("USUARIO", "Expedientes por usuario"), 
-                ("ESTADO", "Distribución por estado")]
-
-    for i, (col, titulo) in enumerate(graficos):
-        if col in df_filtrado.columns:
-            # Calcular el conteo actual (siempre fresco según los filtros)
-            conteo_actual = df_filtrado[col].value_counts().reset_index()
-            conteo_actual.columns = [col, "Cantidad"]
-            
-            # Crear gráfico con datos actualizados (SIN CACHE)
-            fig = crear_grafico_dinamico(conteo_actual, col, titulo)
-            if fig:
-                columnas_graficos[i].plotly_chart(fig, use_container_width=True)
-
-
-
     # =============================================
     # VISUALIZACIÓN - MANTENER CÓDIGO ORIGINAL
     # =============================================
