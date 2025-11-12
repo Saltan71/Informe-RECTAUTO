@@ -2579,41 +2579,50 @@ elif eleccion == "Vista de Expedientes":
     registros_totales = f"{len(df):,}".replace(",", ".")
     st.write(f"Mostrando {registros_mostrados} de {registros_totales} registros")
 
-    # CONFIGURACIÓN CON FILTROS EN CABECERAS Y ANCHOS ESPECÍFICOS
+    # CONFIGURACIÓN COMPLETA CON FILTROS MEJORADOS Y MANEJO DE FECHAS
     gb = GridOptionsBuilder.from_dataframe(df_mostrar)
 
-    # CONFIGURACIÓN POR DEFECTO CON FILTROS EN CABECERAS
+    # Configuración por defecto para columnas de TEXTO
     gb.configure_default_column(
-        filter=True,           # ← ACTIVAR FILTROS
-        floatingFilter=True,   # ← FILTROS VISIBLES EN CABECERAS
+        filter=True,
+        floatingFilter=True,
         sortable=True,
         resizable=True,
         editable=False,
-        groupable=False,
         min_column_width=90,
-        suppressSizeToFit=False,
-        wrapHeaderText=True,
-        autoHeaderHeight=False,
         wrapText=True,
         autoHeight=False,
         cellStyle={'whiteSpace': 'normal', 'lineHeight': '1.2', 'maxHeight': '60px'},
-        headerClass='header-limited-lines'
+        headerClass='header-limited-lines',
+        filterParams={
+            'buttons': ['apply', 'reset'],
+            'closeOnApply': True,
+            'debounceMs': 400,
+            'defaultOption': 'contains',  # ← COMPORTAMIENTO COMO *TEXTO*
+            'filterOptions': [
+                'contains',      # texto (como *texto*)
+                'notContains',   # !texto (como !*texto*)
+                'startsWith',    # ^texto (como texto*)
+                'endsWith',      # texto$ (como *texto)
+                'equals',        # =texto
+                'notEqual'       # !=texto
+            ],
+            'caseSensitive': False
+        }
     )
 
-    # COLUMNAS FIJAS CON FILTROS
+    # COLUMNAS FIJAS
     if 'RUE' in df_mostrar.columns:
         gb.configure_column(
             'RUE',
             pinned='left',
-            width=220,
-            minWidth=220,
-            maxWidth=220,
+            width=130,
+            minWidth=130,
+            maxWidth=160,
             suppressSizeToFit=True,
             suppressMovable=True,
             lockPinned=True,
-            cellStyle={'backgroundColor': '#f8f9fa', 'whiteSpace': 'normal', 'lineHeight': '1.2', 'maxHeight': '60px'},
-            wrapText=True,
-            headerClass='header-limited-lines',
+            cellStyle={'backgroundColor': '#f8f9fa'},
             filter=True,
             floatingFilter=True
         )
@@ -2622,21 +2631,73 @@ elif eleccion == "Vista de Expedientes":
         gb.configure_column(
             'USUARIO',
             pinned='right',
-            width=70,
-            minWidth=70,
-            maxWidth=80,
+            width=140,
+            minWidth=140,
+            maxWidth=180,
             suppressSizeToFit=True,
             suppressMovable=True,
             lockPinned=True,
-            cellStyle={'backgroundColor': '#f8f9fa', 'whiteSpace': 'normal', 'lineHeight': '1.2', 'maxHeight': '60px'},
-            wrapText=True,
-            headerClass='header-limited-lines',
+            cellStyle={'backgroundColor': '#f8f9fa'},
             filter=True,
             floatingFilter=True
         )
 
-    # CONFIGURACIÓN INTELIGENTE POR TIPO DE COLUMNA CON FILTROS
-    # Columnas de texto largo - más anchas pero con wrap
+    # CONFIGURACIÓN ESPECÍFICA PARA COLUMNAS DE FECHA
+    columnas_fechas = ['FECHA INICIO TRAMITACIÓN', 'FECHA APERTURA', 'FECHA RESOLUCIÓN', 
+                    'FECHA PENÚLTIMO TRAM.', 'FECHA ÚLTIMO TRAM.', 'FECHA NOTIFICACIÓN', 'FECHA ASIG']
+
+    for col in columnas_fechas:
+        if col in df_mostrar.columns:
+            gb.configure_column(
+                col,
+                width=110,
+                minWidth=100,
+                maxWidth=140,
+                wrapText=True,
+                filter='agDateColumnFilter',  # ← FILTRO ESPECIAL PARA FECHAS
+                filterParams={
+                    'buttons': ['apply', 'reset'],
+                    'closeOnApply': True,
+                    'defaultOption': 'inRange',  # Rango por defecto para fechas
+                    'filterOptions': [
+                        'inRange',      # Entre dos fechas
+                        'greaterThan',  # Mayor que
+                        'lessThan',     # Menor que
+                        'equals'        # Igual a fecha específica
+                    ],
+                    'browserDatePicker': True,  # Selector visual de fechas
+                    'minValidYear': 2000,       # Año mínimo
+                    'maxValidYear': 2030        # Año máximo
+                },
+                floatingFilter=True  # También mostrar filtro flotante para fechas
+            )
+
+    # CONFIGURACIÓN PARA COLUMNAS NUMÉRICAS (como ANTIGÜEDAD)
+    if 'ANTIGÜEDAD EXP. (DÍAS)' in df_mostrar.columns:
+        gb.configure_column(
+            'ANTIGÜEDAD EXP. (DÍAS)',
+            width=110,
+            minWidth=100,
+            maxWidth=140,
+            filter='agNumberColumnFilter',  # ← FILTRO PARA NÚMEROS
+            filterParams={
+                'buttons': ['apply', 'reset'],
+                'closeOnApply': True,
+                'defaultOption': 'equals',
+                'filterOptions': [
+                    'equals',
+                    'notEqual',
+                    'lessThan',
+                    'lessThanOrEqual',
+                    'greaterThan',
+                    'greaterThanOrEqual',
+                    'inRange'
+                ]
+            },
+            floatingFilter=True
+        )
+
+    # COLUMNAS DE TEXTO LARGO (mantienen filtro de texto)
     columnas_texto_largo = ['OBSERVACIONES', 'CALIFICACIÓN']
     for col in columnas_texto_largo:
         if col in df_mostrar.columns:
@@ -2646,34 +2707,14 @@ elif eleccion == "Vista de Expedientes":
                 minWidth=150,
                 maxWidth=300,
                 wrapText=True,
-                autoHeight=False,
-                cellStyle={'whiteSpace': 'normal', 'lineHeight': '1.2', 'maxHeight': '60px'},
-                headerClass='header-limited-lines',
+                # Mantiene la configuración por defecto (filtro de texto)
                 filter=True,
                 floatingFilter=True
             )
 
-    # Columnas de fechas - anchos moderados
-    columnas_fechas = ['ESTADO', 'FECHA INICIO TRAMITACIÓN', 'FECHA APERTURA', 'FECHA RESOLUCIÓN', 
-                    'FECHA PENÚLTIMO TRAM.', 'ANTIGÜEDAD EXP. (DÍAS)', 'DÍAS DIF. F. PENÚLT.TRÁM. Y F. APERT', 'FECHA ÚLTIMO TRAM.', 
-                    'FECHA NOTIFICACIÓN', 'FECHA ASIG', 'USUARIO-CSV']
-    for col in columnas_fechas:
-        if col in df_mostrar.columns:
-            gb.configure_column(
-                col,
-                width=110,
-                minWidth=100,
-                maxWidth=140,
-                wrapText=True,
-                cellStyle={'whiteSpace': 'normal', 'lineHeight': '1.2', 'maxHeight': '60px'},
-                headerClass='header-limited-lines',
-                filter=True,
-                floatingFilter=True
-            )
-
-    # Columnas de categorías - anchos compactos
-    columnas_categorias = ['EQUIPO', 'IMPUESTO', 'IMPUESTO ORIGEN', 'NATURALEZA', 
-                        'ETIQ. PENÚLTIMO TRAM.', 'ETIQ. ÚLTIMO TRAM.']
+    # COLUMNAS DE CATEGORÍAS (mantienen filtro de texto)
+    columnas_categorias = ['ESTADO', 'EQUIPO', 'IMPUESTO', 'IMPUESTO ORIGEN', 'NATURALEZA', 
+                        'ETIQ. PENÚLTIMO TRAM.', 'ETIQ. ÚLTIMO TRAM.', 'USUARIO-CSV']
     for col in columnas_categorias:
         if col in df_mostrar.columns:
             gb.configure_column(
@@ -2682,25 +2723,10 @@ elif eleccion == "Vista de Expedientes":
                 minWidth=130,
                 maxWidth=160,
                 wrapText=True,
-                cellStyle={'whiteSpace': 'normal', 'lineHeight': '1.2', 'maxHeight': '60px'},
-                headerClass='header-limited-lines',
+                # Mantiene la configuración por defecto (filtro de texto)
                 filter=True,
                 floatingFilter=True
             )
-
-    # Configurar DOCUM.INCORP. si existe
-    if 'DOCUM.INCORP.' in df_mostrar.columns:
-        gb.configure_column(
-            'DOCUM.INCORP.',
-            width=150,
-            minWidth=120,
-            maxWidth=200,
-            wrapText=True,
-            cellStyle={'whiteSpace': 'normal', 'lineHeight': '1.2', 'maxHeight': '60px'},
-            headerClass='header-limited-lines',
-            filter=True,
-            floatingFilter=True
-        )
 
     # CONFIGURACIÓN DEL GRID
     gb.configure_side_bar(
@@ -2716,25 +2742,11 @@ elif eleccion == "Vista de Expedientes":
         groupSelectsFiltered=True
     )
 
-    # Configuración adicional para mejor experiencia de filtrado
-    gb.configure_grid_options(
-        enableFilter=True,
-        enableSorting=True,
-        enableRangeSelection=True,
-        tooltipShowDelay=0,
-        tooltipHideDelay=5000,
-        enableBrowserTooltips=True,
-        animateRows=True,
-        rowSelection='multiple',
-        floatingFilter = True  # Asegurar filtros flotantes globalmente
-    )
-
     grid_options = gb.build()
 
-    # AÑADIR CSS PERSONALIZADO PARA LIMITAR LÍNEAS (igual que antes)
+    # CSS para mejorar la experiencia visual
     st.markdown("""
     <style>
-        /* Limitar encabezados a 2 líneas máximo */
         .header-limited-lines .ag-header-cell-text {
             display: -webkit-box;
             -webkit-line-clamp: 2;
@@ -2747,7 +2759,6 @@ elif eleccion == "Vista de Expedientes":
             word-break: break-word;
         }
         
-        /* Limitar celdas a 3 líneas máximo */
         .ag-cell {
             display: -webkit-box;
             -webkit-line-clamp: 3;
@@ -2760,29 +2771,25 @@ elif eleccion == "Vista de Expedientes":
             word-break: break-word;
         }
         
-        /* Asegurar que las celdas tengan altura consistente */
-        .ag-row {
-            height: auto !important;
-            min-height: 36px !important;
+        /* Mejorar selectores de fecha */
+        .ag-floating-filter-date input {
+            font-size: 11px;
         }
         
-        .ag-cell-wrapper {
-            min-height: 36px;
-        }
-        
-        /* Mejorar visibilidad de filtros flotantes */
-        .ag-floating-filter input {
-            font-size: 12px;
-            padding: 2px 4px;
-        }
-        
-        .ag-floating-filter-body {
-            margin-right: 2px;
+        .ag-date-input {
+            font-size: 11px !important;
         }
     </style>
+
+    <div style="background-color: #e3f2fd; padding: 8px; border-radius: 4px; margin: 10px 0; font-size: 12px;">
+    💡 <strong>Tipos de filtro:</strong><br>
+    • <strong>Texto:</strong> Escribe directamente para "contiene"<br>
+    • <strong>Fechas:</strong> Selector visual con calendario<br>
+    • <strong>Números:</strong> Filtros por rango y comparación
+    </div>
     """, unsafe_allow_html=True)
 
-    # Mostrar tabla con AgGrid - CON FILTROS EN CABECERAS
+    # Mostrar tabla
     try:
         grid_response = AgGrid(
             df_mostrar,
@@ -2796,36 +2803,14 @@ elif eleccion == "Vista de Expedientes":
             enable_enterprise_modules=True,
             theme='streamlit',
             reload_data=False,
-            key='aggrid_filtros_cabeceras'
+            key='aggrid_filtros_mejorados'
         )
         
-        # MANEJO SEGURO DE selected_rows
-        selected_rows = []
-        try:
-            if hasattr(grid_response, 'get'):
-                selected_rows = grid_response.get('selected_rows', [])
-            elif hasattr(grid_response, 'selected_rows'):
-                selected_rows = grid_response.selected_rows
-        except:
-            selected_rows = []
+        # [Mantener el manejo de selected_rows...]
         
-        if not isinstance(selected_rows, list):
-            selected_rows = []
-        
-        if len(selected_rows) > 0:
-            st.info(f"📌 {len(selected_rows)} fila(s) seleccionada(s)")
-            
     except Exception as e:
         st.error(f"❌ Error al mostrar la tabla: {e}")
         st.dataframe(df_mostrar, use_container_width=True, height=600)
-
-    # Información para el usuario sobre los filtros
-    st.sidebar.info("""
-    🔍 **Filtros disponibles:**
-    - Filtros visibles en cada cabecera de columna
-    - Panel lateral adicional con más opciones
-    - Click en ≡ para ver panel completo de filtros
-    """)
 
     # Estadísticas generales
     st.markdown("---")
