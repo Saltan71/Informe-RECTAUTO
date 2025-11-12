@@ -2605,13 +2605,6 @@ elif eleccion == "Vista de Expedientes":
     # 🔥 MANTENER las columnas de fecha como datetime para AgGrid
     # NO hacer: df_mostrar[col] = df_mostrar[col].dt.strftime("%d/%m/%Y")
 
-    registros_mostrados = f"{len(df_mostrar):,}".replace(",", ".")
-    registros_totales = f"{len(df):,}".replace(",", ".")
-    st.write(f"Mostrando {registros_mostrados} de {registros_totales} registros")
-
-    # CONFIGURACIÓN DE AGGRID CON FILTROS DE FECHA
-    gb = GridOptionsBuilder.from_dataframe(df_mostrar)
-
     # Configurar todas las columnas
     gb.configure_default_column(
         filterable=True,
