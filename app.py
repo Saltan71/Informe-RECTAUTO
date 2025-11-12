@@ -2643,7 +2643,7 @@ elif eleccion == "Vista de Expedientes":
         )
 
     # CONFIGURACIÓN ESPECÍFICA PARA COLUMNAS DE FECHA
-    columnas_fechas = ['FECHA INICIO TRAMITACIÓN', 'FECHA APERTURA', 'FECHA RESOLUCIÓN', 
+    columnas_fechas = ['FECHA INICIO TRAMITACIÓN', 'FECHA APERTURA', 'FECHA RESOLUCIÓN', 'FECHA FIN TRAMITACIÓN', 'FECHA CIERRE'
                     'FECHA PENÚLTIMO TRAM.', 'FECHA ÚLTIMO TRAM.', 'FECHA NOTIFICACIÓN', 'FECHA ASIG']
 
     for col in columnas_fechas:
