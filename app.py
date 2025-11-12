@@ -2771,13 +2771,19 @@ elif eleccion == "Vista de Expedientes":
             word-break: break-word;
         }
         
-        /* Mejorar selectores de fecha */
+        /* Mejorar el aspecto de los filtros de fecha */
         .ag-floating-filter-date input {
-            font-size: 11px;
+            width: 100% !important;
         }
         
-        .ag-date-input {
-            font-size: 11px !important;
+        .ag-date-filter .ag-filter-filter {
+            min-width: 180px !important;
+        }
+        
+        /* Ocultar opciones AND/OR si aparecen */
+        .ag-filter-condition-operand,
+        .ag-filter-condition-operator {
+            display: none !important;
         }
     </style>
 
