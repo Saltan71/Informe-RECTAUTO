@@ -2579,7 +2579,7 @@ elif eleccion == "Vista de Expedientes":
     registros_totales = f"{len(df):,}".replace(",", ".")
     st.write(f"Mostrando {registros_mostrados} de {registros_totales} registros")
 
-    # CONFIGURACIÓN COMPLETA CORREGIDA PARA FILTROS
+    # CONFIGURACIÓN COMPLETA SIN configure_grid_options
     gb = GridOptionsBuilder.from_dataframe(df_mostrar_aggrid)
 
     # Configuración por defecto MEJORADA
@@ -2609,11 +2609,36 @@ elif eleccion == "Vista de Expedientes":
         }
     )
 
-    # COLUMNAS FIJAS (igual que antes)
+    # COLUMNAS FIJAS
     if 'RUE' in df_mostrar_aggrid.columns:
-        gb.configure_column('RUE', pinned='left', width=130, suppressSizeToFit=True)
+        gb.configure_column(
+            'RUE',
+            pinned='left',
+            width=130,
+            minWidth=130,
+            maxWidth=160,
+            suppressSizeToFit=True,
+            suppressMovable=True,
+            lockPinned=True,
+            cellStyle={'backgroundColor': '#f8f9fa'},
+            filter=True,
+            floatingFilter=True
+        )
+
     if 'USUARIO' in df_mostrar_aggrid.columns:
-        gb.configure_column('USUARIO', pinned='right', width=140, suppressSizeToFit=True)
+        gb.configure_column(
+            'USUARIO',
+            pinned='right',
+            width=140,
+            minWidth=140,
+            maxWidth=180,
+            suppressSizeToFit=True,
+            suppressMovable=True,
+            lockPinned=True,
+            cellStyle={'backgroundColor': '#f8f9fa'},
+            filter=True,
+            floatingFilter=True
+        )
 
     # FILTROS DE FECHA CORREGIDOS - SIN AND/OR
     for col in columnas_fechas:
@@ -2631,7 +2656,7 @@ elif eleccion == "Vista de Expedientes":
                     'defaultOption': 'inRange',
                     'filterOptions': [
                         'inRange', 'greaterThan', 'lessThan', 'equals', 
-                        'notEqual', 'blank', 'notBlank'  # Incluir opciones para vacíos
+                        'notEqual', 'blank', 'notBlank'
                     ],
                     'browserDatePicker': True,
                     'minValidYear': 2000,
@@ -2640,7 +2665,7 @@ elif eleccion == "Vista de Expedientes":
                     # ↓↓ CLAVE: ELIMINAR COMPORTAMIENTO AND/OR ↓↓
                     'suppressAndOrCondition': True,
                     'alwaysShowBothConditions': False,
-                    'defaultJoinOperator': 'OR'  # Por si acaso, forzar OR si aparece
+                    'defaultJoinOperator': 'OR'
                 },
                 floatingFilter=True,
                 valueFormatter="function(params) { return params.value ? new Date(params.value).toLocaleDateString('es-ES') : 'N/A'; }"
@@ -2673,6 +2698,42 @@ elif eleccion == "Vista de Expedientes":
                 floatingFilter=True
             )
 
+    # COLUMNA NUMÉRICA
+    if 'ANTIGÜEDAD EXP. (DÍAS)' in df_mostrar_aggrid.columns:
+        gb.configure_column(
+            'ANTIGÜEDAD EXP. (DÍAS)',
+            width=110,
+            minWidth=100,
+            maxWidth=140,
+            filter='agNumberColumnFilter',
+            filterParams={
+                'buttons': ['apply', 'reset'],
+                'closeOnApply': True,
+                'defaultOption': 'equals',
+                'filterOptions': [
+                    'equals', 'notEqual', 'lessThan', 'lessThanOrEqual', 
+                    'greaterThan', 'greaterThanOrEqual', 'inRange'
+                ],
+                'suppressAndOrCondition': True
+            },
+            floatingFilter=True
+        )
+
+    # PANEL LATERAL Y SELECCIÓN
+    gb.configure_side_bar(
+        filters_panel=True, 
+        columns_panel=True,
+        defaultToolPanel='filters'
+    )
+
+    gb.configure_selection(
+        selection_mode="multiple",
+        use_checkbox=True,
+        groupSelectsChildren=True,
+        groupSelectsFiltered=True
+    )
+
+    # ↓↓ SOLAMENTE ESTA LÍNEA - SIN configure_grid_options ↓↓
     grid_options = gb.build()
 
     # CSS para mejorar la experiencia visual
