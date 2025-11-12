@@ -2773,22 +2773,27 @@ elif eleccion == "Vista de Expedientes":
             
             with col2:
                 # En la sección de guardar documentos, busca esta parte y actualízala:
+                # En el botón de guardar, reemplaza esta sección:
                 if st.button("💾 Guardar Todos los Cambios en DOCUMENTOS.xlsx", type="primary", key="guardar_documentos"):
                     with st.spinner("Guardando cambios..."):
-                        # 🔥 CORRECCIÓN: Crear DataFrame SOLO con los registros actualizados del df_combinado
+                        # 🔥 CORRECCIÓN: Usar SOLO los datos actuales del df_combinado
                         df_combinado = st.session_state["df_combinado"]
                         
-                        # Filtrar solo los registros que tienen DOCUM.INCORP. en el dataset combinado actual
+                        # Crear DataFrame SOLO con RUE y DOCUM.INCORP. actuales
                         df_documentos_actualizado = df_combinado[['RUE', 'DOCUM.INCORP.']].copy()
+                        
+                        # 🔥 FILTRAR: Solo registros con documentación no vacía
                         df_documentos_actualizado = df_documentos_actualizado[
                             df_documentos_actualizado['DOCUM.INCORP.'].notna() & 
                             (df_documentos_actualizado['DOCUM.INCORP.'] != '')
                         ]
                         
+                        st.info(f"📊 Guardando {len(df_documentos_actualizado)} registros con documentación")
+                        
                         # 🔥 LIMPIAR CACHE para forzar recarga
                         st.cache_data.clear()
                         
-                        # Guardar en el archivo DOCUMENTOS.xlsx (esto reemplazará completamente el contenido anterior)
+                        # Guardar en el archivo DOCUMENTOS.xlsx
                         contenido_actualizado = guardar_documentos_actualizados(
                             datos_documentos['archivo'], 
                             df_documentos_actualizado
@@ -2797,14 +2802,13 @@ elif eleccion == "Vista de Expedientes":
                         if contenido_actualizado:
                             st.session_state.documentos_actualizados = contenido_actualizado
                             st.session_state.mostrar_descarga = True
-                            st.success("✅ Archivo DOCUMENTOS.xlsx actualizado correctamente")
+                            st.success(f"✅ Archivo DOCUMENTOS.xlsx actualizado correctamente con {len(df_documentos_actualizado)} registros")
                             
                             # Limpiar cambios
                             st.session_state.cambios_documentacion = {}
                             
                         else:
                             st.error("❌ Error al guardar el archivo DOCUMENTOS.xlsx")
-            # Mostrar botón de descarga si hay archivo actualizado
             if st.session_state.get('mostrar_descarga', False) and st.session_state.get('documentos_actualizados'):
                 st.markdown("---")
                 st.subheader("📥 Descargar Archivo Actualizado")
