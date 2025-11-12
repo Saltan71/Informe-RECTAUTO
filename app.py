@@ -2582,44 +2582,84 @@ elif eleccion == "Vista de Expedientes":
     # CONFIGURACIÓN DE AGGRID - VERSIÓN EXPLÍCITA
     gb = GridOptionsBuilder.from_dataframe(df_mostrar)
 
-    # Configurar CADA columna individualmente con filtros
-    for col in df_mostrar.columns:
-        if any(fecha in col.upper() for fecha in ['FECHA', 'DATE']):
-            # Columnas de fecha
-            gb.configure_column(
-                col,
-                filter="agDateColumnFilter",
-                type=["dateColumn", "filterDateColumn"],
-                filterable=True,
-                sortable=True,
-                resizable=True
-            )
-        else:
-            # Columnas normales
-            gb.configure_column(
-                col,
-                filter="agTextColumnFilter",  # Filtro de texto para columnas no-fecha
-                filterable=True,
-                sortable=True,
-                resizable=True
-            )
+    # Crear copia para mostrar PERO mantener las fechas como datetime para AgGrid
+    df_mostrar = df_filtrado.copy()
 
-    # CONFIGURACIÓN ESPECÍFICA PARA COLUMNAS DE FECHA
+    # 🔥 CORRECCIÓN: NO formatear las fechas como texto para AgGrid
+    # Solo redondear columnas numéricas
+    columnas_antiguedad = [col for col in df_mostrar.columns if 'ANTIGÜEDAD' in col.upper() or 'DÍAS' in col.upper()]
+
+    for col in df_mostrar.columns:
+        if df_mostrar[col].dtype in ['float64', 'float32']:
+            if col in columnas_antiguedad:
+                # Redondear antigüedad y convertir a entero
+                df_mostrar[col] = df_mostrar[col].apply(
+                    lambda x: int(round(x)) if pd.notna(x) else 0
+                )
+            else:
+                # Redondear otras columnas flotantes
+                df_mostrar[col] = df_mostrar[col].apply(
+                    lambda x: int(round(x)) if pd.notna(x) else 0
+                )
+
+    # 🔥 MANTENER las columnas de fecha como datetime para AgGrid
+    # NO hacer: df_mostrar[col] = df_mostrar[col].dt.strftime("%d/%m/%Y")
+
+    registros_mostrados = f"{len(df_mostrar):,}".replace(",", ".")
+    registros_totales = f"{len(df):,}".replace(",", ".")
+    st.write(f"Mostrando {registros_mostrados} de {registros_totales} registros")
+
+    # CONFIGURACIÓN DE AGGRID CON FILTROS DE FECHA
+    gb = GridOptionsBuilder.from_dataframe(df_mostrar)
+
+    # Configurar todas las columnas
+    gb.configure_default_column(
+        filterable=True,
+        sortable=True,
+        resizable=True,
+        editable=False,
+        groupable=False,
+        min_column_width=100
+    )
+
+    # 🔥 CONFIGURACIÓN ESPECÍFICA PARA COLUMNAS DE FECHA
     columnas_fechas = ['FECHA INICIO TRAMITACIÓN', 'FECHA APERTURA', 'FECHA RESOLUCIÓN', 
                     'FECHA FIN TRAMITACIÓN', 'FECHA CIERRE', 'FECHA PENÚLTIMO TRAM.', 
                     'FECHA ÚLTIMO TRAM.', 'FECHA NOTIFICACIÓN', 'FECHA ASIG']
 
     for col in columnas_fechas:
         if col in df_mostrar.columns:
-            gb.configure_column(
-                col,
-                type=["dateColumn", "filterDateColumn"],  # ← Filtros específicos para fechas
-                filter="agDateColumnFilter",
-                filterParams={
-                    "buttons": ['apply', 'reset'],
-                    "closeOnApply": True,
-                }
-            )
+            # Verificar si la columna es de tipo datetime
+            if pd.api.types.is_datetime64_any_dtype(df_mostrar[col]):
+                gb.configure_column(
+                    col,
+                    type=["dateColumn", "filterDateColumn"],
+                    filter="agDateColumnFilter",
+                    filterParams={
+                        "buttons": ['apply', 'reset'],
+                        "closeOnApply": True,
+                        "defaultOption": "inRange"
+                    },
+                    # Formatear para visualización pero mantener como fecha para filtros
+                    valueFormatter="data ? data.toLocaleDateString('es-ES') : ''"
+                )
+            else:
+                # Si no es datetime, intentar convertir
+                try:
+                    df_mostrar[col] = pd.to_datetime(df_mostrar[col], errors='coerce')
+                    gb.configure_column(
+                        col,
+                        type=["dateColumn", "filterDateColumn"],
+                        filter="agDateColumnFilter",
+                        filterParams={
+                            "buttons": ['apply', 'reset'],
+                            "closeOnApply": True
+                        },
+                        valueFormatter="data ? data.toLocaleDateString('es-ES') : ''"
+                    )
+                except:
+                    # Si no se puede convertir, dejar como texto
+                    pass
 
     # Configurar paginación
     gb.configure_pagination(
@@ -2627,8 +2667,8 @@ elif eleccion == "Vista de Expedientes":
         paginationPageSize=50
     )
 
-    # Configurar barra lateral de filtros (IMPORTANTE para ver todos los filtros)
-    gb.configure_side_bar(filters_panel=True, columns_panel=False)
+    # Configurar barra lateral de filtros
+    gb.configure_side_bar(filters_panel=True)
 
     # Configurar selección
     gb.configure_selection(
@@ -2653,8 +2693,7 @@ elif eleccion == "Vista de Expedientes":
             allow_unsafe_jscode=True,
             enable_enterprise_modules=True,
             theme='streamlit',
-            enable_quicksearch=True,  # ← Búsqueda rápida
-            reload_data=False
+            enable_quicksearch=True
         )
         
         # OBTENER FILAS SELECCIONADAS (versión simplificada)
@@ -2666,7 +2705,6 @@ elif eleccion == "Vista de Expedientes":
     except Exception as e:
         st.error(f"❌ Error en AgGrid: {e}")
         selected_rows = []
-
 
     # Estadísticas generales
     st.markdown("---")
