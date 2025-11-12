@@ -2584,18 +2584,18 @@ elif eleccion == "Vista de Expedientes":
     # Calcular altura ideal - mostrar todas las filas que quepan
     altura_ideal = min(altura_cabecera + (num_filas * altura_fila), altura_maxima)
     
-    # Mostrar tabla principal con altura dinámica
-    st.dataframe(df_mostrar, use_container_width=True, height=altura_ideal)
-    
     registros_mostrados = f"{len(df_mostrar):,}".replace(",", ".")
     registros_totales = f"{len(df):,}".replace(",", ".")
     st.write(f"Mostrando {registros_mostrados} de {registros_totales} registros")
+
+    # Mostrar tabla principal con altura dinámica
+    st.dataframe(df_mostrar, use_container_width=True, height=altura_ideal)
 
     # Estadísticas generales
     st.markdown("---")
     st.subheader("📊 Estadísticas Generales")
 
-    col1, col2, col3, col4, col5, col6 = st.columns(6)
+    col1, col2, col3, col4 = st.columns(4)
 
     with col1:
         registros_mostrados = f"{len(df_mostrar):,}".replace(",", ".")
@@ -2658,22 +2658,6 @@ elif eleccion == "Vista de Expedientes":
             st.metric("Con 90 INCDOCU", f"{mask_90_incdocu:,}".replace(",", "."))
         else:
             st.metric("Con 90 INCDOCU", "N/A")
-
-    with col5:
-        # Contar ETIQ. PENÚLTIMO TRAM. únicos
-        if 'ETIQ. PENÚLTIMO TRAM.' in df_filtrado.columns:
-            etiq_penultimo_unicos = df_filtrado['ETIQ. PENÚLTIMO TRAM.'].nunique()
-            st.metric("ETIQ. PENÚLTIMO únicos", f"{etiq_penultimo_unicos:,}".replace(",", "."))
-        else:
-            st.metric("ETIQ. PENÚLTIMO", "N/A")
-
-    with col6:
-        # Contar ETIQ. ÚLTIMO TRAM. únicos
-        if 'ETIQ. ÚLTIMO TRAM.' in df_filtrado.columns:
-            etiq_ultimo_unicos = df_filtrado['ETIQ. ÚLTIMO TRAM.'].nunique()
-            st.metric("ETIQ. ÚLTIMO únicos", f"{etiq_ultimo_unicos:,}".replace(",", "."))
-        else:
-            st.metric("ETIQ. ÚLTIMO", "N/A")
 
     # NUEVA SECCIÓN: GESTIÓN DE DOCUMENTACIÓN INCORPORADA
     st.markdown("---")
