@@ -2619,7 +2619,7 @@ elif eleccion == "Vista de Expedientes":
         width='100%',
         data_return_mode='AS_INPUT',
         update_mode='MODEL_CHANGED',
-        fit_columns_on_grid_load=False,
+        fit_columns_on_grid_load=True,
         allow_unsafe_jscode=True,
         enable_enterprise_modules=True,
         theme='streamlit'
