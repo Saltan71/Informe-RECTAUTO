@@ -2664,6 +2664,14 @@ elif eleccion == "Vista de Expedientes":
 
     gb.configure_side_bar()
 
+    # Resto de configuración...
+    gb.configure_pagination(paginationAutoPageSize=False, paginationPageSize=50)
+    gb.configure_selection(
+        selection_mode="multiple",
+        use_checkbox=True,
+        groupSelectsChildren=True,
+        groupSelectsFiltered=True
+
     grid_options = gb.build()
 
     # Mostrar tabla
