@@ -2579,6 +2579,9 @@ elif eleccion == "Vista de Expedientes":
     registros_totales = f"{len(df):,}".replace(",", ".")
     st.write(f"Mostrando {registros_mostrados} de {registros_totales} registros")
 
+    # PRIMERO: CREAR LA COPIA PROCESADA CON FECHAS CONVERTIDAS - VERSIÓN MEJORADA
+    df_mostrar_aggrid = df_mostrar.copy()
+    
     # CONFIGURACIÓN DE AGGRID
     gb = GridOptionsBuilder.from_dataframe(df_mostrar)
 
