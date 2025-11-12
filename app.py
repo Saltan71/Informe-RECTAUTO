@@ -2673,21 +2673,6 @@ elif eleccion == "Vista de Expedientes":
                 floatingFilter=True
             )
 
-    # CONFIGURACIÓN DEL GRID PARA EVITAR COMPORTAMIENTOS NO DESEADOS
-    gb.configure_grid_options(
-        enableFilter=True,
-        enableSorting=True,
-        enableRangeSelection=True,
-        tooltipShowDelay=0,
-        tooltipHideDelay=5000,
-        enableBrowserTooltips=True,
-        animateRows=True,
-        rowSelection='multiple',
-        # ↓↓ CONFIGURACIÓN GLOBAL PARA FILTROS ↓↓
-        suppressMultiRangeSelection: True,
-        suppressDragLeaveHidesColumns: True
-    )
-
     grid_options = gb.build()
 
     # CSS para mejorar la experiencia visual
