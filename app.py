@@ -2579,27 +2579,6 @@ elif eleccion == "Vista de Expedientes":
     registros_totales = f"{len(df):,}".replace(",", ".")
     st.write(f"Mostrando {registros_mostrados} de {registros_totales} registros")
     
-    # Crear copia para mostrar
-    df_mostrar = df_filtrado.copy()
-
-    # 🔥 CONVERTIR COLUMNAS DE FECHA A DATETIME Y FORMATEAR PARA MOSTRAR
-    columnas_fechas = ['FECHA INICIO TRAMITACIÓN', 'FECHA APERTURA', 'FECHA RESOLUCIÓN', 
-                    'FECHA FIN TRAMITACIÓN', 'FECHA CIERRE', 'FECHA PENÚLTIMO TRAM.', 
-                    'FECHA ÚLTIMO TRAM.', 'FECHA NOTIFICACIÓN', 'FECHA ASIG']
-
-    for col in columnas_fechas:
-        if col in df_mostrar.columns:
-            df_mostrar[col] = pd.to_datetime(df_mostrar[col], errors='coerce')
-
-    # Redondear columnas numéricas
-    columnas_antiguedad = [col for col in df_mostrar.columns if 'ANTIGÜEDAD' in col.upper() or 'DÍAS' in col.upper()]
-    for col in df_mostrar.columns:
-        if df_mostrar[col].dtype in ['float64', 'float32']:
-            if col in columnas_antiguedad:
-                df_mostrar[col] = df_mostrar[col].apply(lambda x: int(round(x)) if pd.notna(x) else 0)
-            else:
-                df_mostrar[col] = df_mostrar[col].apply(lambda x: int(round(x)) if pd.notna(x) else 0)
-
     # CONFIGURACIÓN AGGRID CON FILTROS MEJORADOS
     gb = GridOptionsBuilder.from_dataframe(df_mostrar)
 
@@ -2624,12 +2603,6 @@ elif eleccion == "Vista de Expedientes":
                     "buttons": ['apply', 'reset'],
                     "closeOnApply": True,
                     "browserDatePicker": True,
-                    "minValidYear": 2020,
-                    "maxValidYear": 2030,
-                    # 🔥 INCLUIR EN EL PANEL LATERAL
-                    "includeBlanksInEquals": False,
-                    "includeBlanksInLessThan": False,
-                    "includeBlanksInGreaterThan": False
                 },
                 # 🔥 MEJOR FORMATEADOR PARA FECHAS
                 valueFormatter="""
@@ -2641,59 +2614,11 @@ elif eleccion == "Vista de Expedientes":
                     const year = date.getFullYear();
                     return `${day}/${month}/${year}`;
                 }
-                """,
-                # 🔥 COMPARADOR PARA ORDENAMIENTO
-                comparator="""
-                function(dateA, dateB) {
-                    if (dateA === null && dateB === null) return 0;
-                    if (dateA === null) return -1;
-                    if (dateB === null) return 1;
-                    const a = new Date(dateA).getTime();
-                    const b = new Date(dateB).getTime();
-                    return a - b;
-                }
                 """
             )
 
-    # 🔥 CONFIGURAR COLUMNAS DE TEXTO PARA QUE APAREZCAN EN EL PANEL LATERAL
-    columnas_texto = ['ESTADO', 'EQUIPO', 'USUARIO', 'ETIQ. PENÚLTIMO TRAM.', 'ETIQ. ÚLTIMO TRAM.', 'NOTIFICADO']
-    for col in columnas_texto:
-        if col in df_mostrar.columns:
-            gb.configure_column(
-                col,
-                filter="agTextColumnFilter",
-                filterParams={
-                    "buttons": ['apply', 'reset'],
-                    "closeOnApply": True,
-                    "debounceMs": 500,
-                    "caseSensitive": False,
-                    "defaultOption": "contains"
-                }
-            )
-
-    # 🔥 CONFIGURAR COLUMNAS NUMÉRICAS PARA EL PANEL LATERAL
-    columnas_numericas = [col for col in df_mostrar.columns 
-                        if any(word in col.upper() for word in ['ANTIGÜEDAD', 'DÍAS', 'NÚMERO', 'CANTIDAD'])]
-    for col in columnas_numericas:
-        if col in df_mostrar.columns:
-            gb.configure_column(
-                col,
-                filter="agNumberColumnFilter",
-                filterParams={
-                    "buttons": ['apply', 'reset'],
-                    "closeOnApply": True,
-                    "defaultOption": "equals"
-                }
-            )
-
-    # 🔥 CONFIGURACIÓN MEJORADA DEL PANEL LATERAL
-    gb.configure_side_bar(
-        filters_panel=True,
-        columns_panel=True,
-        defaultToolPanel="filters",
-        position="right",  # Puede ser "left" o "right"
-        hiddenByDefault=False  # Asegurar que sea visible
-    )
+    # 🔥 CONFIGURACIÓN SIMPLIFICADA DEL PANEL LATERAL (CORREGIDA)
+    gb.configure_side_bar()  # ← Solo esto, sin parámetros
 
     # Configurar paginación
     gb.configure_pagination(
@@ -2711,7 +2636,7 @@ elif eleccion == "Vista de Expedientes":
 
     grid_options = gb.build()
 
-    # 🔥 AGREGAR CONFIGURACIÓN ADICIONAL PARA EL PANEL LATERAL
+    # 🔥 AGREGAR CONFIGURACIÓN DEL PANEL LATERAL DIRECTAMENTE EN grid_options
     grid_options.update({
         "sideBar": {
             "toolPanels": [
@@ -2722,13 +2647,13 @@ elif eleccion == "Vista de Expedientes":
                     "iconKey": "filter",
                     "toolPanel": "agFiltersToolPanel",
                     "toolPanelParams": {
-                        "expandFilters": True  # Expandir todos los filtros por defecto
+                        "expandFilters": True
                     }
                 },
                 {
                     "id": "columns",
                     "labelDefault": "Columnas",
-                    "labelKey": "columns",
+                    "labelKey": "columns", 
                     "iconKey": "columns",
                     "toolPanel": "agColumnsToolPanel",
                     "toolPanelParams": {
@@ -2756,9 +2681,7 @@ elif eleccion == "Vista de Expedientes":
             fit_columns_on_grid_load=False,
             allow_unsafe_jscode=True,
             enable_enterprise_modules=True,
-            theme='streamlit',
-            # 🔥 HABILITAR MÓDULOS ADICIONALES PARA MEJORES FILTROS
-            enterprise_modules=['FiltersToolPanel', 'ColumnsToolPanel', 'Menu', 'SetFilter']
+            theme='streamlit'
         )
         
         # OBTENER FILAS SELECCIONADAS
