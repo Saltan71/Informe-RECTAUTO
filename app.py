@@ -2589,7 +2589,7 @@ elif eleccion == "Vista de Expedientes":
         resizable=True,
         editable=False,
         groupable=False,
-        min_column_width=100,
+        min_column_width=80,
         autoHeight=True 
     )
     
