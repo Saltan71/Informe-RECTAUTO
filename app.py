@@ -2626,7 +2626,8 @@ elif eleccion == "Vista de Expedientes":
     )
 
     # Mostrar estadísticas de selección si hay filas seleccionadas
-    selected_rows = grid_response['selected_rows']
+    # USAR get() CON VALOR POR DEFECTO
+    selected_rows = grid_response.get('selected_rows', [])
     if len(selected_rows) > 0:
         st.info(f"📌 {len(selected_rows)} fila(s) seleccionada(s)")
 
