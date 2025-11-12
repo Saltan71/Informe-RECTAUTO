@@ -2578,126 +2578,83 @@ elif eleccion == "Vista de Expedientes":
     registros_mostrados = f"{len(df_mostrar):,}".replace(",", ".")
     registros_totales = f"{len(df):,}".replace(",", ".")
     st.write(f"Mostrando {registros_mostrados} de {registros_totales} registros")
-    
-    # 🔥 CONFIGURACIÓN ESPECÍFICA PARA COLUMNAS DE FECHA
+
+    # Crear copia para mostrar
+    df_mostrar = df_filtrado.copy()
+
+    # 🔥 MANTENER FECHAS ORIGINALES PARA FILTRADO PERO CREAR COLUMNAS AMIGABLES
     columnas_fechas = ['FECHA INICIO TRAMITACIÓN', 'FECHA APERTURA', 'FECHA RESOLUCIÓN', 
                     'FECHA FIN TRAMITACIÓN', 'FECHA CIERRE', 'FECHA PENÚLTIMO TRAM.', 
                     'FECHA ÚLTIMO TRAM.', 'FECHA NOTIFICACIÓN', 'FECHA ASIG']
 
-    # CONFIGURACIÓN DE AGGRID - VERSIÓN EXPLÍCITA
-    gb = GridOptionsBuilder.from_dataframe(df_mostrar)
-
-    # Crear copia para mostrar PERO mantener las fechas como datetime para AgGrid
-    df_mostrar = df_filtrado.copy()
-
-    # 🔥 CORRECCIÓN: NO formatear las fechas como texto para AgGrid
-    # Solo redondear columnas numéricas
-    columnas_antiguedad = [col for col in df_mostrar.columns if 'ANTIGÜEDAD' in col.upper() or 'DÍAS' in col.upper()]
-
-    for col in df_mostrar.columns:
-        if df_mostrar[col].dtype in ['float64', 'float32']:
-            if col in columnas_antiguedad:
-                # Redondear antigüedad y convertir a entero
-                df_mostrar[col] = df_mostrar[col].apply(
-                    lambda x: int(round(x)) if pd.notna(x) else 0
-                )
-            else:
-                # Redondear otras columnas flotantes
-                df_mostrar[col] = df_mostrar[col].apply(
-                    lambda x: int(round(x)) if pd.notna(x) else 0
-                )
-
-    # 🔥 MANTENER las columnas de fecha como datetime para AgGrid
-    # NO hacer: df_mostrar[col] = df_mostrar[col].dt.strftime("%d/%m/%Y")
-
-    # Configurar todas las columnas
-    gb.configure_default_column(
-        filterable=True,
-        sortable=True,
-        resizable=True,
-        editable=False,
-        groupable=False,
-        min_column_width=100
-    )
-
+    # Crear columnas amigables para mostrar
     for col in columnas_fechas:
         if col in df_mostrar.columns:
-            # Verificar si la columna es de tipo datetime
-            if pd.api.types.is_datetime64_any_dtype(df_mostrar[col]):
-                gb.configure_column(
-                    col,
-                    type=["dateColumn", "filterDateColumn"],
-                    filter="agDateColumnFilter",
-                    filterParams={
-                        "buttons": ['apply', 'reset'],
-                        "closeOnApply": True,
-                        "defaultOption": "inRange"
-                    },
-                    # Formatear para visualización pero mantener como fecha para filtros
-                    valueFormatter="data ? data.toLocaleDateString('es-ES') : ''"
-                )
+            df_mostrar[f'{col}_DISPLAY'] = df_mostrar[col].apply(
+                lambda x: x.strftime('%d/%m/%Y') if pd.notna(x) else ''
+            )
+            # Mantener original para posibles filtros numéricos
+            df_mostrar[col] = pd.to_datetime(df_mostrar[col], errors='coerce')
+
+    # Redondear columnas numéricas
+    columnas_antiguedad = [col for col in df_mostrar.columns if 'ANTIGÜEDAD' in col.upper() or 'DÍAS' in col.upper() and '_DISPLAY' not in col]
+    for col in df_mostrar.columns:
+        if df_mostrar[col].dtype in ['float64', 'float32'] and '_DISPLAY' not in col:
+            if col in columnas_antiguedad:
+                df_mostrar[col] = df_mostrar[col].apply(lambda x: int(round(x)) if pd.notna(x) else 0)
             else:
-                # Si no es datetime, intentar convertir
-                try:
-                    df_mostrar[col] = pd.to_datetime(df_mostrar[col], errors='coerce')
-                    gb.configure_column(
-                        col,
-                        type=["dateColumn", "filterDateColumn"],
-                        filter="agDateColumnFilter",
-                        filterParams={
-                            "buttons": ['apply', 'reset'],
-                            "closeOnApply": True
-                        },
-                        valueFormatter="data ? data.toLocaleDateString('es-ES') : ''"
-                    )
-                except:
-                    # Si no se puede convertir, dejar como texto
-                    pass
+                df_mostrar[col] = df_mostrar[col].apply(lambda x: int(round(x)) if pd.notna(x) else 0)
 
-    # Configurar paginación
-    gb.configure_pagination(
-        paginationAutoPageSize=False,
-        paginationPageSize=50
-    )
+    # CONFIGURACIÓN AGGRID - MOSTRAR COLUMNAS AMIGABLES, FILTRAR POR OTRAS
+    gb = GridOptionsBuilder.from_dataframe(df_mostrar)
 
-    # Configurar barra lateral de filtros
-    gb.configure_side_bar(filters_panel=True)
+    # Ocultar columnas datetime originales y mostrar las formateadas
+    column_defs = []
 
-    # Configurar selección
-    gb.configure_selection(
-        selection_mode="multiple",
-        use_checkbox=True,
-        groupSelectsChildren=True,
-        groupSelectsFiltered=True
-    )
+    for col in df_mostrar.columns:
+        if '_DISPLAY' in col:
+            # Mostrar columnas formateadas
+            col_name = col.replace('_DISPLAY', '')
+            column_defs.append({
+                'field': col,
+                'headerName': col_name,
+                'filter': False,
+                'sortable': True
+            })
+        elif col in columnas_fechas:
+            # Ocultar columnas datetime originales
+            column_defs.append({
+                'field': col,
+                'headerName': f'{col} (Filtro)',
+                'hide': True,
+                'filter': 'agDateColumnFilter'
+            })
+        else:
+            # Otras columnas normales
+            column_defs.append({
+                'field': col,
+                'headerName': col,
+                'filter': True
+            })
+
+    gb.configure_columns(column_defs)
+    gb.configure_side_bar()
 
     grid_options = gb.build()
 
-    # Mostrar tabla con AgGrid
-    try:
-        grid_response = AgGrid(
-            df_mostrar,
-            gridOptions=grid_options,
-            height=600,
-            width='100%',
-            data_return_mode='AS_INPUT',
-            update_mode='MODEL_CHANGED',
-            fit_columns_on_grid_load=False,
-            allow_unsafe_jscode=True,
-            enable_enterprise_modules=True,
-            theme='streamlit',
-            enable_quicksearch=True
-        )
-        
-        # OBTENER FILAS SELECCIONADAS (versión simplificada)
-        selected_rows = grid_response.get('selected_rows', [])
-        
-        if selected_rows:
-            st.info(f"📌 {len(selected_rows)} fila(s) seleccionada(s)")
-            
-    except Exception as e:
-        st.error(f"❌ Error en AgGrid: {e}")
-        selected_rows = []
+    # Mostrar tabla
+    grid_response = AgGrid(
+        df_mostrar,
+        gridOptions=grid_options,
+        height=600,
+        width='100%',
+        data_return_mode='AS_INPUT',
+        update_mode='MODEL_CHANGED',
+        fit_columns_on_grid_load=False,
+        allow_unsafe_jscode=True,
+        enable_enterprise_modules=True,
+        theme='streamlit'
+    )
 
     # Estadísticas generales
     st.markdown("---")
