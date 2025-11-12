@@ -14,7 +14,7 @@ import shutil
 import uuid
 import getpass
 from PIL import Image
-from concurrent.futures import ThreadPoolExecutor, as_completed
+#from concurrent.futures import ThreadPoolExecutor, as_completed
 from streamlit_dynamic_filters import DynamicFilters
 
 
@@ -2061,6 +2061,50 @@ def agregar_tabla_datos_completa_alternativa(pdf, datos_grafico):
         pdf.cell(widths[7], 5, f"{row['percentil_90_despachados']:.0f}", 1)
         pdf.ln()
 
+def obtener_trimestres_disponibles(df, columna_fecha='FECHA RESOLUCIÓN'):
+    """Obtiene los trimestres disponibles en los datos"""
+    if columna_fecha not in df.columns:
+        return []
+    
+    # Convertir a datetime y extraer trimestres
+    df_temp = df.copy()
+    df_temp[columna_fecha] = pd.to_datetime(df_temp[columna_fecha], errors='coerce')
+    
+    # Filtrar fechas válidas
+    fechas_validas = df_temp[columna_fecha].dropna()
+    
+    if fechas_validas.empty:
+        return []
+    
+    # Crear lista de trimestres en formato "2024-T1"
+    trimestres = fechas_validas.dt.to_period('Q').unique()
+    trimestres = sorted(trimestres, reverse=True)  # Más recientes primero
+    
+    # Convertir a formato string más legible
+    trimestres_str = [f"{t.year}-T{t.quarter}" for t in trimestres]
+    
+    return trimestres_str
+
+def obtener_rango_trimestre(trimestre_str):
+    """Convierte un trimestre en formato '2024-T1' a rango de fechas"""
+    try:
+        year, quarter = trimestre_str.split('-T')
+        year = int(year)
+        quarter = int(quarter)
+        
+        # Definir rangos de fechas por trimestre
+        trimestre_rangos = {
+            1: (f"{year}-01-01", f"{year}-03-31"),
+            2: (f"{year}-04-01", f"{year}-06-30"), 
+            3: (f"{year}-07-01", f"{year}-09-30"),
+            4: (f"{year}-10-01", f"{year}-12-31")
+        }
+        
+        inicio, fin = trimestre_rangos[quarter]
+        return pd.Timestamp(inicio), pd.Timestamp(fin)
+    except:
+        return None, None
+
 # =============================================
 # PÁGINA 1: CARGA DE ARCHIVOS
 # =============================================
@@ -2351,248 +2395,84 @@ elif eleccion == "Vista de Expedientes":
     datos_documentos = st.session_state.get("datos_documentos", None)
     
     # =============================================
-    # FILTROS BIDIRECCIONALES - TODOS INTERCONECTADOS
+    # FILTROS DINÁMICOS INTERCONECTADOS - CON LIMPIEZA FUNCIONAL
     # =============================================
     
-    st.sidebar.header("Filtros Interconectados")
+    st.sidebar.header("🔍 Filtros Dinámicos")
+    st.sidebar.markdown("💡 *Los filtros se actualizan automáticamente*")
 
-    # Inicializar variables de sesión si no existen
-    if 'filtro_estado' not in st.session_state:
-        st.session_state.filtro_estado = ['Abierto']
+    # SOLUCIÓN: Usar una clave única para forzar la recreación
+    if 'filters_reset_counter' not in st.session_state:
+        st.session_state.filters_reset_counter = 0
 
-    if 'filtro_equipo' not in st.session_state:
-        st.session_state.filtro_equipo = []
-
-    if 'filtro_usuario' not in st.session_state:
-        st.session_state.filtro_usuario = []
-
-    if 'filtro_etiq_penultimo' not in st.session_state:
-        st.session_state.filtro_etiq_penultimo = []
-
-    if 'filtro_etiq_ultimo' not in st.session_state:
-        st.session_state.filtro_etiq_ultimo = []
-
-    # Botón para resetear filtros
+    # Botón para limpiar filtros - SOLUCIÓN DEFINITIVA
     if st.sidebar.button("🔄 Limpiar todos los filtros", use_container_width=True):
-        st.session_state.filtro_estado = ['Abierto']
-        st.session_state.filtro_equipo = []
-        st.session_state.filtro_usuario = []
-        st.session_state.filtro_etiq_penultimo = []
-        st.session_state.filtro_etiq_ultimo = []
+        # Incrementar el contador para forzar nueva instancia
+        st.session_state.filters_reset_counter += 1
         st.rerun()
 
-    # FUNCIÓN PARA CALCULAR OPCIONES DISPONIBLES BASADAS EN TODOS LOS FILTROS ACTIVOS
-    def calcular_opciones_disponibles(df_base, filtros_activos):
-        """Calcula las opciones disponibles para cada filtro basándose en TODAS las selecciones activas"""
-        df_temp = df_base.copy()
-        
-        # Aplicar TODOS los filtros excepto el que estamos calculando
-        if filtros_activos['estado']:
-            df_temp = df_temp[df_temp['ESTADO'].isin(filtros_activos['estado'])]
-        
-        if filtros_activos['equipo']:
-            df_temp = df_temp[df_temp['EQUIPO'].isin(filtros_activos['equipo'])]
-        
-        if filtros_activos['usuario']:
-            df_temp = df_temp[df_temp['USUARIO'].isin(filtros_activos['usuario'])]
-        
-        if 'ETIQ. PENÚLTIMO TRAM.' in df_temp.columns and filtros_activos['etiq_penultimo']:
-            df_temp = df_temp[df_temp['ETIQ. PENÚLTIMO TRAM.'].isin(filtros_activos['etiq_penultimo'])]
-        
-        if 'ETIQ. ÚLTIMO TRAM.' in df_temp.columns and filtros_activos['etiq_ultimo']:
-            df_temp = df_temp[df_temp['ETIQ. ÚLTIMO TRAM.'].isin(filtros_activos['etiq_ultimo'])]
-        
-        # Calcular opciones disponibles para cada campo
-        opciones = {
-            'estado': sorted(df_temp['ESTADO'].dropna().unique()),
-            'equipo': sorted(df_temp['EQUIPO'].dropna().unique()),
-            'usuario': sorted(df_temp['USUARIO'].dropna().unique())
-        }
-        
-        if 'ETIQ. PENÚLTIMO TRAM.' in df_temp.columns:
-            opciones['etiq_penultimo'] = sorted(df_temp['ETIQ. PENÚLTIMO TRAM.'].dropna().unique())
-        else:
-            opciones['etiq_penultimo'] = []
-            
-        if 'ETIQ. ÚLTIMO TRAM.' in df_temp.columns:
-            opciones['etiq_ultimo'] = sorted(df_temp['ETIQ. ÚLTIMO TRAM.'].dropna().unique())
-        else:
-            opciones['etiq_ultimo'] = []
-            
-        return opciones
-
-    # 1. CALCULAR OPCIONES DISPONIBLES BASADAS EN TODOS LOS FILTROS ACTIVOS
-    filtros_activos = {
-        'estado': st.session_state.filtro_estado,
-        'equipo': st.session_state.filtro_equipo,
-        'usuario': st.session_state.filtro_usuario,
-        'etiq_penultimo': st.session_state.filtro_etiq_penultimo,
-        'etiq_ultimo': st.session_state.filtro_etiq_ultimo
-    }
+    # Inicializar DynamicFilters con clave única
+    filters_key = f"dynamic_filters_{st.session_state.filters_reset_counter}"
     
-    opciones_disponibles = calcular_opciones_disponibles(df, filtros_activos)
-
-    # 2. CREAR WIDGETS DE FILTRO CON OPCIONES DISPONIBLES
-    st.sidebar.markdown("---")
-    st.sidebar.subheader("Filtros Activos")
-
-    # FILTRO DE ESTADO (opciones disponibles basadas en otros filtros)
-    estado_sel = st.sidebar.multiselect(
-        "🔘 Selecciona Estado:",
-        options=opciones_disponibles['estado'],
-        default=[estado for estado in st.session_state.filtro_estado if estado in opciones_disponibles['estado']],
-        key='filtro_estado_selector'
-    )
-
-    # FILTRO DE EQUIPO (opciones disponibles basadas en otros filtros)
-    equipo_sel = st.sidebar.multiselect(
-        "👥 Selecciona Equipo:",
-        options=opciones_disponibles['equipo'],
-        default=[equipo for equipo in st.session_state.filtro_equipo if equipo in opciones_disponibles['equipo']],
-        key='filtro_equipo_selector'
-    )
-
-    # FILTRO DE USUARIO (opciones disponibles basadas en otros filtros)
-    usuario_sel = st.sidebar.multiselect(
-        "👤 Selecciona Usuario:",
-        options=opciones_disponibles['usuario'],
-        default=[usuario for usuario in st.session_state.filtro_usuario if usuario in opciones_disponibles['usuario']],
-        key='filtro_usuario_selector'
-    )
-
-    # FILTRO DE ETIQ. PENÚLTIMO TRAM. (opciones disponibles basadas en otros filtros)
-    if 'ETIQ. PENÚLTIMO TRAM.' in df.columns:
-        etiq_penultimo_sel = st.sidebar.multiselect(
-            "🏷️ ETIQ. PENÚLTIMO TRAM.:",
-            options=opciones_disponibles['etiq_penultimo'],
-            default=[etiq for etiq in st.session_state.filtro_etiq_penultimo if etiq in opciones_disponibles['etiq_penultimo']],
-            key='filtro_etiq_penultimo_selector'
+    if filters_key not in st.session_state:
+        # Definir columnas para filtrar
+        filter_columns = ['ESTADO', 'EQUIPO', 'USUARIO']
+        
+        # Añadir columnas opcionales
+        optional_columns = [
+            'ETIQ. PENÚLTIMO TRAM.',
+            'ETIQ. ÚLTIMO TRAM.',
+            'NOTIFICADO'
+        ]
+        
+        for col in optional_columns:
+            if col in df.columns and col not in filter_columns:
+                filter_columns.append(col)
+        
+        st.session_state[filters_key] = DynamicFilters(
+            df=df,
+            filters=filter_columns
         )
-    else:
-        etiq_penultimo_sel = []
-        st.sidebar.info("ℹ️ Columna 'ETIQ. PENÚLTIMO TRAM.' no disponible")
 
-    # FILTRO DE ETIQ. ÚLTIMO TRAM. (opciones disponibles basadas en otros filtros)
-    if 'ETIQ. ÚLTIMO TRAM.' in df.columns:
-        etiq_ultimo_sel = st.sidebar.multiselect(
-            "🏷️ ETIQ. ÚLTIMO TRAM.:",
-            options=opciones_disponibles['etiq_ultimo'],
-            default=[etiq for etiq in st.session_state.filtro_etiq_ultimo if etiq in opciones_disponibles['etiq_ultimo']],
-            key='filtro_etiq_ultimo_selector'
-        )
-    else:
-        etiq_ultimo_sel = []
-        st.sidebar.info("ℹ️ Columna 'ETIQ. ÚLTIMO TRAM.' no disponible")
+    # Obtener la instancia actual de filtros
+    dynamic_filters = st.session_state[filters_key]
 
-    # 3. ACTUALIZAR session_state - SIN LIMPIAR FILTROS, SOLO ACTUALIZAR SELECCIONES VÁLIDAS
-    # Cada filtro se actualiza independientemente, manteniendo solo las selecciones válidas
-    
-    estado_cambiado = estado_sel != st.session_state.filtro_estado
-    equipo_cambiado = equipo_sel != st.session_state.filtro_equipo
-    usuario_cambiado = usuario_sel != st.session_state.filtro_usuario
-    etiq_penultimo_cambiado = 'ETIQ. PENÚLTIMO TRAM.' in df.columns and etiq_penultimo_sel != st.session_state.filtro_etiq_penultimo
-    etiq_ultimo_cambiado = 'ETIQ. ÚLTIMO TRAM.' in df.columns and etiq_ultimo_sel != st.session_state.filtro_etiq_ultimo
+    # Mostrar filtros en sidebar
+    with st.sidebar:
+        dynamic_filters.display_filters()
 
-    # Actualizar session_state solo si hubo cambios
-    if estado_cambiado:
-        st.session_state.filtro_estado = estado_sel
-        
-    if equipo_cambiado:
-        st.session_state.filtro_equipo = equipo_sel
-        
-    if usuario_cambiado:
-        st.session_state.filtro_usuario = usuario_sel
-        
-    if etiq_penultimo_cambiado:
-        st.session_state.filtro_etiq_penultimo = etiq_penultimo_sel
-        
-    if etiq_ultimo_cambiado:
-        st.session_state.filtro_etiq_ultimo = etiq_ultimo_sel
+    # Obtener dataframe filtrado
+    df_filtrado = dynamic_filters.filter_df()
 
-    # Si hubo algún cambio, recargar para actualizar las opciones disponibles
-    if any([estado_cambiado, equipo_cambiado, usuario_cambiado, etiq_penultimo_cambiado, etiq_ultimo_cambiado]):
-        st.rerun()
-
-    # 4. APLICAR TODOS LOS FILTROS CONJUNTAMENTE AL DATAFRAME FINAL
-    df_filtrado = df.copy()
-
-    # Aplicar filtro de ESTADO si hay selección
-    if st.session_state.filtro_estado:
-        df_filtrado = df_filtrado[df_filtrado['ESTADO'].isin(st.session_state.filtro_estado)]
-
-    # Aplicar filtro de EQUIPO si hay selección
-    if st.session_state.filtro_equipo:
-        df_filtrado = df_filtrado[df_filtrado['EQUIPO'].isin(st.session_state.filtro_equipo)]
-
-    # Aplicar filtro de USUARIO si hay selección
-    if st.session_state.filtro_usuario:
-        df_filtrado = df_filtrado[df_filtrado['USUARIO'].isin(st.session_state.filtro_usuario)]
-
-    # Aplicar filtro de ETIQ. PENÚLTIMO TRAM. si hay selección
-    if 'ETIQ. PENÚLTIMO TRAM.' in df.columns and st.session_state.filtro_etiq_penultimo:
-        df_filtrado = df_filtrado[df_filtrado['ETIQ. PENÚLTIMO TRAM.'].isin(st.session_state.filtro_etiq_penultimo)]
-
-    # Aplicar filtro de ETIQ. ÚLTIMO TRAM. si hay selección
-    if 'ETIQ. ÚLTIMO TRAM.' in df.columns and st.session_state.filtro_etiq_ultimo:
-        df_filtrado = df_filtrado[df_filtrado['ETIQ. ÚLTIMO TRAM.'].isin(st.session_state.filtro_etiq_ultimo)]
-
-    # Mostrar resumen de filtros activos
+    # Mostrar estadísticas
     st.sidebar.markdown("---")
-    st.sidebar.subheader("📊 Resumen Filtros")
+    st.sidebar.subheader("📊 Resultados")
     
-    filtros_activos = 0
+    # Obtener filtros activos de forma segura
+    try:
+        active_filters = dynamic_filters.get_active_filters()
+        total_filtros = sum(1 for f in active_filters.values() if f)
+    except:
+        total_filtros = 0
     
-    if st.session_state.filtro_estado:
-        st.sidebar.write(f"**Estados:** {len(st.session_state.filtro_estado)} seleccionados")
-        filtros_activos += 1
-    
-    if st.session_state.filtro_equipo:
-        st.sidebar.write(f"**Equipos:** {len(st.session_state.filtro_equipo)} seleccionados")
-        filtros_activos += 1
-    
-    if st.session_state.filtro_usuario:
-        st.sidebar.write(f"**Usuarios:** {len(st.session_state.filtro_usuario)} seleccionados")
-        filtros_activos += 1
-    
-    if 'ETIQ. PENÚLTIMO TRAM.' in df.columns and st.session_state.filtro_etiq_penultimo:
-        st.sidebar.write(f"**ETIQ. PENÚLTIMO:** {len(st.session_state.filtro_etiq_penultimo)} seleccionados")
-        filtros_activos += 1
-    
-    if 'ETIQ. ÚLTIMO TRAM.' in df.columns and st.session_state.filtro_etiq_ultimo:
-        st.sidebar.write(f"**ETIQ. ÚLTIMO:** {len(st.session_state.filtro_etiq_ultimo)} seleccionados")
-        filtros_activos += 1
-    
-    if filtros_activos == 0:
-        st.sidebar.info("ℹ️ No hay filtros activos")
-    
-    st.sidebar.write(f"**Registros:** {len(df_filtrado):,}".replace(",", "."))
+    st.sidebar.metric("Filtros activos", total_filtros)
+    st.sidebar.metric("Expedientes", f"{len(df_filtrado):,}".replace(",", "."))
 
-    # Mostrar detalles de filtros activos en un expander
-    with st.sidebar.expander("📋 Ver detalles de filtros"):
-        if st.session_state.filtro_estado:
-            st.write("**Estados seleccionados:**")
-            for estado in st.session_state.filtro_estado:
-                st.write(f"- {estado}")
-        
-        if st.session_state.filtro_equipo:
-            st.write("**Equipos seleccionados:**")
-            for equipo in st.session_state.filtro_equipo:
-                st.write(f"- {equipo}")
-        
-        if st.session_state.filtro_usuario:
-            st.write("**Usuarios seleccionados:**")
-            for usuario in st.session_state.filtro_usuario:
-                st.write(f"- {usuario}")
-        
-        if 'ETIQ. PENÚLTIMO TRAM.' in df.columns and st.session_state.filtro_etiq_penultimo:
-            st.write("**ETIQ. PENÚLTIMO TRAM. seleccionados:**")
-            for etiq in st.session_state.filtro_etiq_penultimo:
-                st.write(f"- {etiq}")
-        
-        if 'ETIQ. ÚLTIMO TRAM.' in df.columns and st.session_state.filtro_etiq_ultimo:
-            st.write("**ETIQ. ÚLTIMO TRAM. seleccionados:**")
-            for etiq in st.session_state.filtro_etiq_ultimo:
-                st.write(f"- {etiq}")
+    # Mostrar filtros activos
+    with st.sidebar.expander("📋 Ver filtros activos"):
+        try:
+            active_filters = dynamic_filters.get_active_filters()
+            for filter_name, filter_value in active_filters.items():
+                if filter_value:
+                    st.write(f"**{filter_name}:**")
+                    if isinstance(filter_value, list):
+                        for value in filter_value:
+                            st.write(f"• {value}")
+                    else:
+                        st.write(f"• {filter_value}")
+        except:
+            st.write("No hay filtros activos")
+
 
     # NUEVO: Opciones de ordenamiento y auto-filtros
     st.sidebar.markdown("---")
@@ -2706,22 +2586,46 @@ elif eleccion == "Vista de Expedientes":
             if fig:
                 columnas_graficos[i].plotly_chart(fig, use_container_width=True)
 
+
+
+    # =============================================
+    # VISUALIZACIÓN - MANTENER CÓDIGO ORIGINAL
+    # =============================================
+    
+    # Gráficos Generales - CORREGIDOS: datos siempre frescos según filtros
+    st.subheader("📈 Gráficos Generales")
+    columnas_graficos = st.columns(3)
+    graficos = [("EQUIPO", "Expedientes por equipo"), 
+                ("USUARIO", "Expedientes por usuario"), 
+                ("ESTADO", "Distribución por estado")]
+
+    for i, (col, titulo) in enumerate(graficos):
+        if col in df_filtrado.columns and not df_filtrado.empty:
+            # Calcular el conteo actual (siempre fresco según los filtros)
+            conteo_actual = df_filtrado[col].value_counts().reset_index()
+            conteo_actual.columns = [col, "Cantidad"]
+            
+            # Crear gráfico con datos actualizados (SIN CACHE)
+            fig = crear_grafico_dinamico(conteo_actual, col, titulo)
+            if fig:
+                columnas_graficos[i].plotly_chart(fig, use_container_width=True)
+
     # NUEVOS GRÁFICOS PARA LAS ETIQUETAS
-    if 'ETIQ. PENÚLTIMO TRAM.' in df_filtrado.columns:
+    if 'ETIQ. PENÚLTIMO TRAM.' in df_filtrado.columns and not df_filtrado.empty:
         conteo_penultimo = df_filtrado['ETIQ. PENÚLTIMO TRAM.'].value_counts().reset_index()
         conteo_penultimo.columns = ['ETIQ. PENÚLTIMO TRAM.', 'Cantidad']
         fig_penultimo = crear_grafico_dinamico(conteo_penultimo, 'ETIQ. PENÚLTIMO TRAM.', 'Distribución por ETIQ. PENÚLTIMO TRAM.')
         if fig_penultimo:
             st.plotly_chart(fig_penultimo, use_container_width=True)
 
-    if 'ETIQ. ÚLTIMO TRAM.' in df_filtrado.columns:
+    if 'ETIQ. ÚLTIMO TRAM.' in df_filtrado.columns and not df_filtrado.empty:
         conteo_ultimo = df_filtrado['ETIQ. ÚLTIMO TRAM.'].value_counts().reset_index()
         conteo_ultimo.columns = ['ETIQ. ÚLTIMO TRAM.', 'Cantidad']
         fig_ultimo = crear_grafico_dinamico(conteo_ultimo, 'ETIQ. ÚLTIMO TRAM.', 'Distribución por ETIQ. ÚLTIMO TRAM.')
         if fig_ultimo:
             st.plotly_chart(fig_ultimo, use_container_width=True)
 
-    if "NOTIFICADO" in df_filtrado.columns:
+    if "NOTIFICADO" in df_filtrado.columns and not df_filtrado.empty:
         conteo_notificado = df_filtrado["NOTIFICADO"].value_counts().reset_index()
         conteo_notificado.columns = ["NOTIFICADO", "Cantidad"]
         fig = crear_grafico_dinamico(conteo_notificado, "NOTIFICADO", "Expedientes notificados")
@@ -2731,112 +2635,115 @@ elif eleccion == "Vista de Expedientes":
     # VISTA GENERAL - SOLO VERSIÓN EXPANDIDA
     st.subheader("📋 Vista general de expedientes")
 
-    # Crear copia y formatear fechas
-    df_mostrar = df_filtrado.copy()
+    if not df_filtrado.empty:
+        # Crear copia y formatear fechas
+        df_mostrar = df_filtrado.copy()
 
-    # Formatear TODAS las columnas de fecha
-    for col in df_mostrar.select_dtypes(include='datetime').columns:
-        df_mostrar[col] = df_mostrar[col].dt.strftime("%d/%m/%Y")
+        # Formatear TODAS las columnas de fecha
+        for col in df_mostrar.select_dtypes(include='datetime').columns:
+            df_mostrar[col] = df_mostrar[col].dt.strftime("%d/%m/%Y")
 
-    # 🔥 CORRECCIÓN: Redondear columnas numéricas con decimales
-    columnas_antiguedad = [col for col in df_mostrar.columns if 'ANTIGÜEDAD' in col.upper() or 'DÍAS' in col.upper()]
+        # 🔥 CORRECCIÓN: Redondear columnas numéricas con decimales
+        columnas_antiguedad = [col for col in df_mostrar.columns if 'ANTIGÜEDAD' in col.upper() or 'DÍAS' in col.upper()]
 
-    for col in df_mostrar.columns:
-        if df_mostrar[col].dtype in ['float64', 'float32']:
-            if col in columnas_antiguedad:
-                # Redondear antigüedad y convertir a entero
-                df_mostrar[col] = df_mostrar[col].apply(
-                    lambda x: int(round(x)) if pd.notna(x) else 0
-                )
-            else:
-                # Redondear otras columnas flotantes
-                df_mostrar[col] = df_mostrar[col].apply(
-                    lambda x: int(round(x)) if pd.notna(x) else 0
-                )
+        for col in df_mostrar.columns:
+            if df_mostrar[col].dtype in ['float64', 'float32']:
+                if col in columnas_antiguedad:
+                    # Redondear antigüedad y convertir a entero
+                    df_mostrar[col] = df_mostrar[col].apply(
+                        lambda x: int(round(x)) if pd.notna(x) else 0
+                    )
+                else:
+                    # Redondear otras columnas flotantes
+                    df_mostrar[col] = df_mostrar[col].apply(
+                        lambda x: int(round(x)) if pd.notna(x) else 0
+                    )
 
-    # Calcular altura dinámica basada en el número de filas
-    num_filas = len(df_mostrar)
-    altura_fila = 35  # altura aproximada por fila en píxeles
-    altura_cabecera = 100  # altura de la cabecera
-    altura_maxima = 800  # altura máxima para no hacerlo demasiado grande
-    
-    # Calcular altura ideal - mostrar todas las filas que quepan
-    altura_ideal = min(altura_cabecera + (num_filas * altura_fila), altura_maxima)
-    
-    registros_mostrados = f"{len(df_mostrar):,}".replace(",", ".")
-    registros_totales = f"{len(df):,}".replace(",", ".")
-    st.write(f"Mostrando {registros_mostrados} de {registros_totales} registros")
-  
-    # Mostrar tabla principal con altura dinámica
-    st.dataframe(df_mostrar, use_container_width=True, height=altura_ideal)
- 
-    # Estadísticas generales
-    st.markdown("---")
-    st.subheader("📊 Estadísticas Generales")
-
-    col1, col2, col3, col4, = st.columns(4)
-
-    with col1:
+        # Calcular altura dinámica basada en el número de filas
+        num_filas = len(df_mostrar)
+        altura_fila = 35  # altura aproximada por fila en píxeles
+        altura_cabecera = 100  # altura de la cabecera
+        altura_maxima = 700  # altura máxima para no hacerlo demasiado grande
+        
+        # Calcular altura ideal - mostrar todas las filas que quepan
+        altura_ideal = min(altura_cabecera + (num_filas * altura_fila), altura_maxima)
+        
         registros_mostrados = f"{len(df_mostrar):,}".replace(",", ".")
         registros_totales = f"{len(df):,}".replace(",", ".")
-        st.metric("Registros mostrados", f"{registros_mostrados}/{registros_totales}")
+        st.write(f"Mostrando {registros_mostrados} de {registros_totales} registros")
+    
+        # Mostrar tabla principal con altura dinámica
+        st.dataframe(df_mostrar, use_container_width=True, height=altura_ideal)
+    
+        # Estadísticas generales
+        st.markdown("---")
+        st.subheader("📊 Estadísticas Generales")
 
-    with col2:
-        # Contar RUE amarillos - CON NUEVAS CONDICIONES
-        mask_amarillo = pd.Series(False, index=df_filtrado.index)
-        for idx, row in df_filtrado.iterrows():
-            try:
-                etiq_penultimo = row.get('ETIQ. PENÚLTIMO TRAM.', '')
-                fecha_notif = row.get('FECHA NOTIFICACIÓN', None)
-                docum_incorp = row.get('DOCUM.INCORP.', '')
-                
-                # CONDICIÓN 1: "80 PROPRES" con fecha límite superada
-                if (str(etiq_penultimo).strip() == "80 PROPRES" and 
-                    pd.notna(fecha_notif) and 
-                    isinstance(fecha_notif, (pd.Timestamp, datetime))):
+        col1, col2, col3, col4, = st.columns(4)
+
+        with col1:
+            registros_mostrados = f"{len(df_mostrar):,}".replace(",", ".")
+            registros_totales = f"{len(df):,}".replace(",", ".")
+            st.metric("Registros mostrados", f"{registros_mostrados}/{registros_totales}")
+
+        with col2:
+            # Contar RUE amarillos - CON NUEVAS CONDICIONES
+            mask_amarillo = pd.Series(False, index=df_filtrado.index)
+            for idx, row in df_filtrado.iterrows():
+                try:
+                    etiq_penultimo = row.get('ETIQ. PENÚLTIMO TRAM.', '')
+                    fecha_notif = row.get('FECHA NOTIFICACIÓN', None)
+                    docum_incorp = row.get('DOCUM.INCORP.', '')
                     
-                    fecha_limite = fecha_notif + timedelta(days=23)
-                    if datetime.now() > fecha_limite:
+                    # CONDICIÓN 1: "80 PROPRES" con fecha límite superada
+                    if (str(etiq_penultimo).strip() == "80 PROPRES" and 
+                        pd.notna(fecha_notif) and 
+                        isinstance(fecha_notif, (pd.Timestamp, datetime))):
+                        
+                        fecha_limite = fecha_notif + timedelta(days=23)
+                        if datetime.now() > fecha_limite:
+                            mask_amarillo[idx] = True
+                    
+                    # NUEVA CONDICIÓN 2: "50 REQUERIR" con fecha límite superada
+                    elif (str(etiq_penultimo).strip() == "50 REQUERIR" and 
+                        pd.notna(fecha_notif) and 
+                        isinstance(fecha_notif, (pd.Timestamp, datetime))):
+                        
+                        fecha_limite = fecha_notif + timedelta(days=23)
+                        if datetime.now() > fecha_limite:
+                            mask_amarillo[idx] = True
+                    
+                    # NUEVA CONDICIÓN 3: "70 ALEGACI" o "60 CONTESTA"
+                    elif str(etiq_penultimo).strip() in ["70 ALEGACI", "60 CONTESTA"]:
                         mask_amarillo[idx] = True
-                
-                # NUEVA CONDICIÓN 2: "50 REQUERIR" con fecha límite superada
-                elif (str(etiq_penultimo).strip() == "50 REQUERIR" and 
-                    pd.notna(fecha_notif) and 
-                    isinstance(fecha_notif, (pd.Timestamp, datetime))):
                     
-                    fecha_limite = fecha_notif + timedelta(days=23)
-                    if datetime.now() > fecha_limite:
+                    # NUEVA CONDICIÓN 4: DOCUM.INCORP. no vacío Y distinto de "SOLICITUD" o "REITERA SOLICITUD"
+                    elif (pd.notna(docum_incorp) and 
+                        str(docum_incorp).strip() != '' and
+                        str(docum_incorp).strip().upper() not in ["SOLICITUD", "REITERA SOLICITUD"]):
                         mask_amarillo[idx] = True
-                
-                # NUEVA CONDICIÓN 3: "70 ALEGACI" o "60 CONTESTA"
-                elif str(etiq_penultimo).strip() in ["70 ALEGACI", "60 CONTESTA"]:
-                    mask_amarillo[idx] = True
-                
-                # NUEVA CONDICIÓN 4: DOCUM.INCORP. no vacío Y distinto de "SOLICITUD" o "REITERA SOLICITUD"
-                elif (pd.notna(docum_incorp) and 
-                    str(docum_incorp).strip() != '' and
-                    str(docum_incorp).strip().upper() not in ["SOLICITUD", "REITERA SOLICITUD"]):
-                    mask_amarillo[idx] = True
-                    
-            except:
-                pass
-        st.metric("RUE prioritarios", f"{mask_amarillo.sum():,}".replace(",", "."))
+                        
+                except:
+                    pass
+            st.metric("RUE prioritarios", f"{mask_amarillo.sum():,}".replace(",", "."))
 
-    with col3:
-        # Contar USUARIO-CSV rojos
-        if 'USUARIO' in df_filtrado.columns and 'USUARIO-CSV' in df_filtrado.columns:
-            mask_rojo = (df_filtrado['USUARIO'] != df_filtrado['USUARIO-CSV']).sum()
-            st.metric("Discrepancias", f"{mask_rojo:,}".replace(",", "."))
-        else:
-            st.metric("Discrepancias", "N/A")
+        with col3:
+            # Contar USUARIO-CSV rojos
+            if 'USUARIO' in df_filtrado.columns and 'USUARIO-CSV' in df_filtrado.columns:
+                mask_rojo = (df_filtrado['USUARIO'] != df_filtrado['USUARIO-CSV']).sum()
+                st.metric("Discrepancias", f"{mask_rojo:,}".replace(",", "."))
+            else:
+                st.metric("Discrepancias", "N/A")
 
-    with col4:
-        # Contar 90 INCDOCU (sustituye a DOCUM.INCORP.)
-        if 'ETIQ. PENÚLTIMO TRAM.' in df_filtrado.columns:
-            mask_90_incdocu = (df_filtrado['ETIQ. PENÚLTIMO TRAM.'] == "90 INCDOCU").sum()
-            st.metric("Con trám. 90 INCDOCU", f"{mask_90_incdocu:,}".replace(",", "."))
-        else:
-            st.metric("Con trám. 90 INCDOCU", "N/A")
+        with col4:
+            # Contar 90 INCDOCU (sustituye a DOCUM.INCORP.)
+            if 'ETIQ. PENÚLTIMO TRAM.' in df_filtrado.columns:
+                mask_90_incdocu = (df_filtrado['ETIQ. PENÚLTIMO TRAM.'] == "90 INCDOCU").sum()
+                st.metric("Con trám. 90 INCDOCU", f"{mask_90_incdocu:,}".replace(",", "."))
+            else:
+                st.metric("Con trám. 90 INCDOCU", "N/A")
+    else:
+        st.warning("No hay expedientes que cumplan con los criterios de filtrado")
 
     # NUEVA SECCIÓN: GESTIÓN DE DOCUMENTACIÓN INCORPORADA
     st.markdown("---")
