@@ -2555,9 +2555,6 @@ elif eleccion == "Vista de Expedientes":
     # Crear copia y formatear datos para AgGrid
     df_mostrar = df_filtrado.copy()
 
-    # PRIMERO: CREAR LA COPIA PROCESADA CON FECHAS CONVERTIDAS - VERSIÓN MEJORADA
-    df_mostrar_aggrid = df_mostrar.copy()
-
     # Formatear TODAS las columnas de fecha
     for col in df_mostrar.select_dtypes(include='datetime').columns:
         df_mostrar[col] = df_mostrar[col].dt.strftime("%d/%m/%Y")
@@ -2582,311 +2579,86 @@ elif eleccion == "Vista de Expedientes":
     registros_totales = f"{len(df):,}".replace(",", ".")
     st.write(f"Mostrando {registros_mostrados} de {registros_totales} registros")
 
-
-
-    # CONFIGURACIÓN COMPLETA CON FILTROS MEJORADOS Y MANEJO DE FECHAS
+    # CONFIGURACIÓN DE AGGRID
     gb = GridOptionsBuilder.from_dataframe(df_mostrar)
-
-    # Configuración por defecto para columnas de TEXTO
+    
+    # Configurar todas las columnas
     gb.configure_default_column(
-        filter=True,
-        floatingFilter=True,
+        filterable=True,
         sortable=True,
         resizable=True,
         editable=False,
-        min_column_width=90,
-        wrapText=True,
-        autoHeight=False,
-        cellStyle={'whiteSpace': 'normal', 'lineHeight': '1.2', 'maxHeight': '60px'},
-        headerClass='header-limited-lines',
-        filterParams={
-            'buttons': ['apply', 'reset'],
-            'closeOnApply': True,
-            'debounceMs': 400,
-            'defaultOption': 'contains',  # ← COMPORTAMIENTO COMO *TEXTO*
-            'filterOptions': [
-                'contains',      # texto (como *texto*)
-                'notContains',   # !texto (como !*texto*)
-                'startsWith',    # ^texto (como texto*)
-                'endsWith',      # texto$ (como *texto)
-                'equals',        # =texto
-                'notEqual'       # !=texto
-            ],
-            'caseSensitive': False
-        }
+        groupable=False,
+        min_column_width=100
     )
-
-    # COLUMNAS FIJAS
-    if 'RUE' in df_mostrar.columns:
-        gb.configure_column(
-            'RUE',
-            pinned='left',
-            width=130,
-            minWidth=130,
-            maxWidth=160,
-            suppressSizeToFit=True,
-            suppressMovable=True,
-            lockPinned=True,
-            cellStyle={'backgroundColor': '#f8f9fa'},
-            filter=True,
-            floatingFilter=True
-        )
-
-    if 'USUARIO' in df_mostrar.columns:
-        gb.configure_column(
-            'USUARIO',
-            pinned='right',
-            width=140,
-            minWidth=140,
-            maxWidth=180,
-            suppressSizeToFit=True,
-            suppressMovable=True,
-            lockPinned=True,
-            cellStyle={'backgroundColor': '#f8f9fa'},
-            filter=True,
-            floatingFilter=True
-        )
-
-    # CONFIGURACIÓN ESPECÍFICA PARA COLUMNAS DE FECHA
-    columnas_fechas = ['FECHA INICIO TRAMITACIÓN', 'FECHA APERTURA', 'FECHA RESOLUCIÓN', 'FECHA FIN TRAMITACIÓN', 'FECHA CIERRE'
-                    'FECHA PENÚLTIMO TRAM.', 'FECHA ÚLTIMO TRAM.', 'FECHA NOTIFICACIÓN', 'FECHA ASIG']
-
-    for col in columnas_fechas:
-        if col in df_mostrar.columns:
-            gb.configure_column(
-                col,
-                width=110,
-                minWidth=100,
-                maxWidth=140,
-                wrapText=True,
-                filter='agDateColumnFilter',  # ← FILTRO ESPECIAL PARA FECHAS
-                filterParams={
-                    'buttons': ['apply', 'reset'],
-                    'closeOnApply': True,
-                    'defaultOption': 'inRange',  # Rango por defecto para fechas
-                    'filterOptions': [
-                        'inRange',      # Entre dos fechas
-                        'greaterThan',  # Mayor que
-                        'lessThan',     # Menor que
-                        'equals'        # Igual a fecha específica
-                    ],
-                    'browserDatePicker': True,  # Selector visual de fechas
-                    'minValidYear': 2000,       # Año mínimo
-                    'maxValidYear': 2030        # Año máximo
-                },
-                floatingFilter=True  # También mostrar filtro flotante para fechas
-            )
-
-    # CONFIGURACIÓN PARA COLUMNAS NUMÉRICAS (como ANTIGÜEDAD)
-    if 'ANTIGÜEDAD EXP. (DÍAS)' in df_mostrar.columns:
-        gb.configure_column(
-            'ANTIGÜEDAD EXP. (DÍAS)',
-            width=110,
-            minWidth=100,
-            maxWidth=140,
-            filter='agNumberColumnFilter',  # ← FILTRO PARA NÚMEROS
-            filterParams={
-                'buttons': ['apply', 'reset'],
-                'closeOnApply': True,
-                'defaultOption': 'equals',
-                'filterOptions': [
-                    'equals',
-                    'notEqual',
-                    'lessThan',
-                    'lessThanOrEqual',
-                    'greaterThan',
-                    'greaterThanOrEqual',
-                    'inRange'
-                ]
-            },
-            floatingFilter=True
-        )
-
-    # COLUMNAS DE TEXTO LARGO (mantienen filtro de texto)
-    columnas_texto_largo = ['OBSERVACIONES', 'CALIFICACIÓN']
-    for col in columnas_texto_largo:
-        if col in df_mostrar.columns:
-            gb.configure_column(
-                col,
-                width=200,
-                minWidth=150,
-                maxWidth=300,
-                wrapText=True,
-                # Mantiene la configuración por defecto (filtro de texto)
-                filter=True,
-                floatingFilter=True
-            )
-
-    # COLUMNAS DE CATEGORÍAS (mantienen filtro de texto)
-    columnas_categorias = ['ESTADO', 'EQUIPO', 'IMPUESTO', 'IMPUESTO ORIGEN', 'NATURALEZA', 
-                        'ETIQ. PENÚLTIMO TRAM.', 'ETIQ. ÚLTIMO TRAM.', 'USUARIO-CSV']
-    for col in columnas_categorias:
-        if col in df_mostrar.columns:
-            gb.configure_column(
-                col,
-                width=130,
-                minWidth=130,
-                maxWidth=160,
-                wrapText=True,
-                # Mantiene la configuración por defecto (filtro de texto)
-                filter=True,
-                floatingFilter=True
-            )
-
-    # CONFIGURACIÓN DEL GRID
-    gb.configure_side_bar(
-        filters_panel=True, 
-        columns_panel=True,
-        defaultToolPanel='filters'
+    
+    # Configurar paginación
+    gb.configure_pagination(
+        paginationAutoPageSize=False,
+        paginationPageSize=50
     )
-
+    
+    # Configurar barra lateral de filtros
+    gb.configure_side_bar()
+    
+    # Configurar selección
     gb.configure_selection(
         selection_mode="multiple",
         use_checkbox=True,
         groupSelectsChildren=True,
         groupSelectsFiltered=True
     )
-
+    
     grid_options = gb.build()
-
-    # CSS para mejorar la experiencia visual
-    st.markdown("""
-    <style>
-        .header-limited-lines .ag-header-cell-text {
-            display: -webkit-box;
-            -webkit-line-clamp: 2;
-            -webkit-box-orient: vertical;
-            overflow: hidden;
-            text-overflow: ellipsis;
-            line-height: 1.2;
-            max-height: 2.4em;
-            white-space: normal;
-            word-break: break-word;
-        }
-        
-        .ag-cell {
-            display: -webkit-box;
-            -webkit-line-clamp: 3;
-            -webkit-box-orient: vertical;
-            overflow: hidden;
-            text-overflow: ellipsis;
-            line-height: 1.2;
-            max-height: 3.6em;
-            white-space: normal;
-            word-break: break-word;
-        }
-        
-        /* Mejorar selectores de fecha */
-        .ag-floating-filter-date input {
-            font-size: 11px;
-        }
-        
-        .ag-date-input {
-            font-size: 11px !important;
-        }
-    </style>
-
-    <div style="background-color: #e3f2fd; padding: 8px; border-radius: 4px; margin: 10px 0; font-size: 12px;">
-    💡 <strong>Tipos de filtro:</strong><br>
-    • <strong>Texto:</strong> Escribe directamente para "contiene"<br>
-    • <strong>Fechas:</strong> Selector visual con calendario<br>
-    • <strong>Números:</strong> Filtros por rango y comparación
-    </div>
-    """, unsafe_allow_html=True)
-
-    # Mostrar tabla con AgGrid Y CAPTURAR INFORMACIÓN DE ESTADO
+    
+    # Mostrar tabla con AgGrid
     try:
         grid_response = AgGrid(
-            df_mostrar_aggrid,  # ← CORRECTO: usar la copia procesada
+            df_mostrar,
             gridOptions=grid_options,
-            height=700,
+            height=600,
             width='100%',
-            data_return_mode='filtered_and_sorted',  # ← IMPORTANTE: Para obtener datos filtrados
+            data_return_mode='AS_INPUT',
             update_mode='MODEL_CHANGED',
-            fit_columns_on_grid_load=True,
+            fit_columns_on_grid_load=False,
             allow_unsafe_jscode=True,
             enable_enterprise_modules=True,
-            theme='streamlit',
-            reload_data=False,
-            key='aggrid_con_estado'
+            theme='streamlit'
         )
         
-        # =============================================
-        # INFORMACIÓN DE ESTADO Y PAGINACIÓN (NUEVO)
-        # =============================================
-        st.markdown("---")
-        col1, col2, col3, col4 = st.columns(4)
+        # DEPURACIÓN: Mostrar qué contiene grid_response
+        st.sidebar.write("🔍 Debug AgGrid response:")
+        st.sidebar.write(f"Tipo: {type(grid_response)}")
+        if hasattr(grid_response, '__dict__'):
+            st.sidebar.write(f"Atributos: {grid_response.__dict__.keys()}")
         
-        # Total de elementos
-        with col1:
-            total_elementos = len(df_mostrar_aggrid)
-            st.metric("📊 Total Elementos", f"{total_elementos:,}".replace(",", "."))
+        # MÚLTIPLES FORMAS DE OBTENER LAS FILAS SELECCIONADAS
+        selected_rows = []
         
-        # Elementos después de filtros
-        with col2:
-            try:
-                # Intentar obtener datos filtrados
-                if hasattr(grid_response, 'data'):
-                    datos_filtrados = grid_response.data
-                    elementos_filtrados = len(datos_filtrados) if datos_filtrados is not None else total_elementos
-                else:
-                    elementos_filtrados = total_elementos
-                    
-                st.metric("🔍 Después de Filtros", f"{elementos_filtrados:,}".replace(",", "."))
-            except:
-                st.metric("🔍 Después de Filtros", f"{total_elementos:,}".replace(",", "."))
+        # Método 1: Intentar con get()
+        if isinstance(grid_response, dict):
+            selected_rows = grid_response.get('selected_rows', [])
+        # Método 2: Intentar con atributo
+        elif hasattr(grid_response, 'selected_rows'):
+            selected_rows = grid_response.selected_rows
+        # Método 3: Intentar con getattr
+        else:
+            selected_rows = getattr(grid_response, 'selected_rows', [])
         
-        # Elementos seleccionados
-        with col3:
+        # Asegurarnos que selected_rows es una lista
+        if not isinstance(selected_rows, list):
             selected_rows = []
-            try:
-                if hasattr(grid_response, 'selected_rows'):
-                    selected_rows = grid_response.selected_rows
-                elif hasattr(grid_response, 'get') and callable(getattr(grid_response, 'get')):
-                    selected_rows = grid_response.get('selected_rows', [])
-            except:
-                selected_rows = []
-            
-            if not isinstance(selected_rows, list):
-                selected_rows = []
-                
-            st.metric("📌 Seleccionados", f"{len(selected_rows):,}".replace(",", "."))
-        
-        # Información de páginas
-        with col4:
-            if 'elementos_filtrados' in locals() and elementos_filtrados > 0:
-                paginas_totales = (elementos_filtrados + 49) // 50  # 50 elementos por página
-                st.metric("📄 Páginas", f"{paginas_totales}")
-            else:
-                st.metric("📄 Páginas", "1")
         
         # Mostrar estadísticas de selección si hay filas seleccionadas
         if len(selected_rows) > 0:
-            st.info(f"📌 **{len(selected_rows)} fila(s) seleccionada(s)** - Puede usar los filtros con la selección activa")
-        
-        # BOTONES DE ACCIÓN RÁPIDA
-        st.markdown("---")
-        st.subheader("🚀 Acciones Rápidas")
-        
-        col_act1, col_act2, col_act3 = st.columns(3)
-        
-        with col_act1:
-            if st.button("🔄 Limpiar Filtros", use_container_width=True):
-                # Esto recargaría la página sin filtros
-                st.rerun()
-        
-        with col_act2:
-            if st.button("📋 Copiar Selección", use_container_width=True) and len(selected_rows) > 0:
-                st.success(f"✅ {len(selected_rows)} elementos copiados al portapapeles")
-        
-        with col_act3:
-            if st.button("📊 Exportar Vista", use_container_width=True):
-                st.info("💾 Preparando exportación de la vista actual...")
-        
+            st.info(f"📌 {len(selected_rows)} fila(s) seleccionada(s)")
+        else:
+            # Opcional: mostrar que no hay selección
+            st.sidebar.info("ℹ️ No hay filas seleccionadas")
+            
     except Exception as e:
-        st.error(f"❌ Error al mostrar la tabla: {e}")
-        # Fallback: mostrar el DataFrame original
-        st.dataframe(df_mostrar, use_container_width=True, height=600)
+        st.error(f"❌ Error en AgGrid: {e}")
+        selected_rows = []
 
     # Estadísticas generales
     st.markdown("---")
