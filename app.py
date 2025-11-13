@@ -51,7 +51,7 @@ ESTADOS_PENDIENTES = ["Abierto"]
 CACHE_TTL = 7200  # 2 horas en segundos
 CACHE_TTL_STATIC = 86400  # 24 horas para datos estáticos
 CACHE_TTL_DYNAMIC = 3600  # 1 hora para datos dinámicos
-COL_WIDTHS_OPTIMIZED = [28, 11, 11, 8, 16, 11, 11, 16, 11, 20, 20, 9, 18, 11, 14, 9, 24, 20, 11]
+COL_WIDTHS_OPTIMIZED = [28, 11, 11, 8, 16, 11, 11, 16, 11, 20, 20, 10, 18, 11, 14, 10, 24, 20, 11]
 
 # Test file en directorio único por usuario
 test_file = user_env.get_temp_path("test_write_access.tmp")
@@ -3333,7 +3333,7 @@ elif eleccion == "Análisis del Rendimiento":
     st.write("Funcionalidades planificadas:")
     st.write("- Análisis comparativo entre equipos")
     st.write("- Tendencias de productividad")
-    st.write("- Análisis de bottlenecks")
+    st.write("- Análisis de cuellos de botella")
     st.write("- Recomendaciones de optimización")
 
 # =============================================
