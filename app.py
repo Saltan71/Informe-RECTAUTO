@@ -547,43 +547,34 @@ def procesar_archivos_combinado(archivos_dict, _user_key=user_env.session_id):
         return df_rectauto, None, None
 
 def guardar_documentos_actualizados(archivo_original, df_documentos_actualizado):
-    """Guarda los datos actualizados en el archivo DOCUMENTOS.xlsx REEMPLAZANDO completamente el contenido anterior"""
+    """Guarda los datos actualizados en el archivo DOCUMENTOS.xlsx"""
     try:
         # Usar directorio temporal único por usuario
         tmp_file = tempfile.NamedTemporaryFile(delete=False, suffix=".xlsx", dir=user_env.working_dir)
         tmp_path = tmp_file.name
-        tmp_file.close()
+        tmp_file.close()  # 🔹 Muy importante: libera el archivo en Windows
 
-        # 🔥 CORRECCIÓN: Crear un NUEVO ExcelWriter que SOBREESCRIBA el archivo
-        with pd.ExcelWriter(tmp_path, engine="openpyxl", mode='w') as writer:
-            # 🔥 PRIMERO: Hoja DOCU - MANTENER las opciones del desplegable del original
+        # Escribir las dos hojas en el archivo temporal
+        with pd.ExcelWriter(tmp_path, engine="openpyxl") as writer:
+            # Hoja DOCUMENTOS actualizada - SOLO los registros actuales
+            df_documentos_actualizado.to_excel(writer, sheet_name="DOCUMENTOS", index=False)
+
+            # Hoja DOCU - MANTENER las opciones del desplegable del original
             archivo_original.seek(0)
             df_docu_original = pd.read_excel(archivo_original, sheet_name="DOCU")
             df_docu_original.to_excel(writer, sheet_name="DOCU", index=False)
-            
-            # 🔥 SEGUNDO: Hoja DOCUMENTOS - ESCRIBIR SOLO los datos actuales
-            # Filtrar solo registros con documentación no vacía
-            df_para_guardar = df_documentos_actualizado[
-                df_documentos_actualizado['DOCUM.INCORP.'].notna() & 
-                (df_documentos_actualizado['DOCUM.INCORP.'] != '')
-            ].copy()
-            
-            # 🔥 LIMPIAR COMPLETAMENTE la hoja DOCUMENTOS y escribir solo los datos actuales
-            df_para_guardar.to_excel(writer, sheet_name="DOCUMENTOS", index=False)
 
         # Leer contenido ya guardado
         with open(tmp_path, "rb") as f:
             contenido = f.read()
 
-        # Eliminar el archivo temporal
+        # Eliminar el archivo temporal (libre ya de bloqueos)
         os.remove(tmp_path)
 
         return contenido
 
     except Exception as e:
         st.error(f"Error guardando DOCUMENTOS: {e}")
-        import traceback
-        st.error(f"Detalle: {traceback.format_exc()}")
         return None
 
 @st.cache_data(ttl=CACHE_TTL)
@@ -1028,6 +1019,39 @@ def identificar_filas_prioritarias(df):
         # En caso de error, devolver DataFrame con prioridad 0
         df['_prioridad'] = 0
         return df
+
+def actualizar_filtros_optimizados(df, estado_sel, equipo_sel, usuario_sel):
+    """Versión optimizada del filtrado interconectado"""
+    # Pre-calcular opciones disponibles
+    opciones_base = {
+        'estados': sorted(df['ESTADO'].dropna().unique()),
+        'equipos': sorted(df['EQUIPO'].dropna().unique()),
+        'usuarios': sorted(df['USUARIO'].dropna().unique())
+    }
+    
+    # Aplicar filtros secuencialmente de forma vectorizada
+    mask_actual = pd.Series(True, index=df.index)
+    
+    if estado_sel:
+        mask_actual &= df['ESTADO'].isin(estado_sel)
+    
+    # Calcular equipos disponibles basado en estado
+    equipos_disponibles = df.loc[mask_actual, 'EQUIPO'].dropna().unique()
+    equipos_disponibles = sorted(equipos_disponibles)
+    
+    if equipo_sel:
+        equipos_seleccionados = [eq for eq in equipo_sel if eq in equipos_disponibles]
+        mask_actual &= df['EQUIPO'].isin(equipos_seleccionados) if equipos_seleccionados else mask_actual
+    
+    # Calcular usuarios disponibles basado en estado y equipo
+    usuarios_disponibles = df.loc[mask_actual, 'USUARIO'].dropna().unique()
+    usuarios_disponibles = sorted(usuarios_disponibles)
+    
+    if usuario_sel:
+        usuarios_seleccionados = [us for us in usuario_sel if us in usuarios_disponibles]
+        mask_actual &= df['USUARIO'].isin(usuarios_seleccionados) if usuarios_seleccionados else mask_actual
+    
+    return df[mask_actual].copy(), equipos_disponibles, usuarios_disponibles
 
 @st.cache_data(ttl=3600)
 def dataframe_to_pdf_bytes(df_mostrar, title, df_original):
@@ -1798,6 +1822,69 @@ def enviar_correo_outlook(destinatario, asunto, cuerpo_mensaje, archivos_adjunto
         except:
             pass
 
+# Función para aplicar formato condicional al DataFrame mostrado
+def aplicar_formato_condicional_dataframe(df):
+    """Aplica formato condicional al DataFrame para Streamlit con NUEVAS condiciones"""
+    styles = pd.DataFrame('', index=df.index, columns=df.columns)
+    
+    try:
+        # Condición 1: USUARIO-CSV con fondo rojo cuando USUARIO es distinto de USUARIO-CSV
+        if 'USUARIO-CSV' in df.columns and 'USUARIO' in df.columns:
+            mask_usuario = df['USUARIO'] != df['USUARIO-CSV']
+            styles.loc[mask_usuario, 'USUARIO-CSV'] = 'background-color: rgb(255, 0, 0)'
+        
+        # Condición 2: RUE con MÚLTIPLES condiciones específicas
+        if 'RUE' in df.columns:
+            for idx, row in df.iterrows():
+                try:
+                    etiq_penultimo = row.get('ETIQ. PENÚLTIMO TRAM.', '')
+                    fecha_notif = row.get('FECHA NOTIFICACIÓN', None)
+                    docum_incorp = row.get('DOCUM.INCORP.', '')
+                    
+                    es_amarillo = False
+                    
+                    # CONDICIÓN 2.1: "80 PROPRES" con fecha límite superada
+                    if (str(etiq_penultimo) == "80 PROPRES" and 
+                        pd.notna(fecha_notif)):
+                        if isinstance(fecha_notif, (pd.Timestamp, datetime)):
+                            fecha_limite = fecha_notif + timedelta(days=23)
+                            if datetime.now() > fecha_limite:
+                                es_amarillo = True
+                    
+                    # NUEVA CONDICIÓN 2.2: "50 REQUERIR" con fecha límite superada
+                    elif (str(etiq_penultimo) == "50 REQUERIR" and 
+                          pd.notna(fecha_notif)):
+                        if isinstance(fecha_notif, (pd.Timestamp, datetime)):
+                            fecha_limite = fecha_notif + timedelta(days=23)
+                            if datetime.now() > fecha_limite:
+                                es_amarillo = True
+                    
+                    # NUEVA CONDICIÓN 2.3: "70 ALEGACI" o "60 CONTESTA"
+                    elif str(etiq_penultimo) in ["70 ALEGACI", "60 CONTESTA"]:
+                        es_amarillo = True
+                    
+                    # NUEVA CONDICIÓN 2.4: DOCUM.INCORP. no vacío Y distinto de "SOLICITUD" o "REITERA SOLICITUD"
+                    elif (pd.notna(docum_incorp) and 
+                          str(docum_incorp).strip() != '' and
+                          str(docum_incorp).strip().upper() not in ["SOLICITUD", "REITERA SOLICITUD"]):
+                        es_amarillo = True
+                    
+                    if es_amarillo:
+                        styles.loc[idx, 'RUE'] = 'background-color: rgb(255, 255, 0)'
+                        
+                except (TypeError, ValueError):
+                    continue  # Ignorar errores de fecha
+        
+        # Condición 3: Resaltar DOCUM.INCORP. cuando tiene valor
+        if 'DOCUM.INCORP.' in df.columns:
+            mask_docum = df['DOCUM.INCORP.'].notna() & (df['DOCUM.INCORP.'] != '')
+            styles.loc[mask_docum, 'DOCUM.INCORP.'] = 'background-color: rgb(173, 216, 230)'  # Azul claro
+            
+    except Exception as e:
+        st.error(f"Error en formato condicional: {e}")
+    
+    return styles
+
 # Función para gráficos dinámicos (SIN CACHE)
 def crear_grafico_dinamico(_conteo, columna, titulo):
     """Crea gráficos dinámicos que responden a los filtros"""
@@ -1808,44 +1895,6 @@ def crear_grafico_dinamico(_conteo, columna, titulo):
                  color=columna, height=400)
     fig.update_traces(texttemplate='%{text:,}', textposition="auto")
     return fig
-
-def guardar_documentos_actualizados(archivo_original, df_documentos_actualizado):
-    """Guarda los datos actualizados en el archivo DOCUMENTOS.xlsx REEMPLAZANDO completamente el contenido anterior"""
-    try:
-        # Usar directorio temporal único por usuario
-        tmp_file = tempfile.NamedTemporaryFile(delete=False, suffix=".xlsx", dir=user_env.working_dir)
-        tmp_path = tmp_file.name
-        tmp_file.close()
-
-        # Escribir las dos hojas en el archivo temporal
-        with pd.ExcelWriter(tmp_path, engine="openpyxl") as writer:
-            # 🔥 CORRECCIÓN CRÍTICA: SOLO guardar los registros actuales que tienen DOCUM.INCORP.
-            # Filtrar solo registros con documentación no vacía
-            df_para_guardar = df_documentos_actualizado[
-                df_documentos_actualizado['DOCUM.INCORP.'].notna() & 
-                (df_documentos_actualizado['DOCUM.INCORP.'] != '')
-            ].copy()
-            
-            # 🔥 LIMPIAR COMPLETAMENTE la hoja DOCUMENTOS y escribir solo los datos actuales
-            df_para_guardar.to_excel(writer, sheet_name="DOCUMENTOS", index=False)
-
-            # Hoja DOCU - MANTENER las opciones del desplegable del original
-            archivo_original.seek(0)
-            df_docu_original = pd.read_excel(archivo_original, sheet_name="DOCU")
-            df_docu_original.to_excel(writer, sheet_name="DOCU", index=False)
-
-        # Leer contenido ya guardado
-        with open(tmp_path, "rb") as f:
-            contenido = f.read()
-
-        # Eliminar el archivo temporal
-        os.remove(tmp_path)
-
-        return contenido
-
-    except Exception as e:
-        st.error(f"Error guardando DOCUMENTOS: {e}")
-        return None
 
 # =============================================
 # PÁGINA 1: CARGA DE ARCHIVOS
@@ -2503,146 +2552,113 @@ elif eleccion == "Vista de Expedientes":
     # VISTA GENERAL - CON AGGRID
     st.subheader("📋 Vista general de expedientes")
 
-    # Crear copia para mostrar
+    # Crear copia y formatear datos para AgGrid
     df_mostrar = df_filtrado.copy()
+
+    # Formatear TODAS las columnas de fecha
+    for col in df_mostrar.select_dtypes(include='datetime').columns:
+        df_mostrar[col] = df_mostrar[col].dt.strftime("%d/%m/%Y")
+
+    # 🔥 CORRECCIÓN: Redondear columnas numéricas con decimales
+    columnas_antiguedad = [col for col in df_mostrar.columns if 'ANTIGÜEDAD' in col.upper() or 'DÍAS' in col.upper()]
+
+    for col in df_mostrar.columns:
+        if df_mostrar[col].dtype in ['float64', 'float32']:
+            if col in columnas_antiguedad:
+                # Redondear antigüedad y convertir a entero
+                df_mostrar[col] = df_mostrar[col].apply(
+                    lambda x: int(round(x)) if pd.notna(x) else 0
+                )
+            else:
+                # Redondear otras columnas flotantes
+                df_mostrar[col] = df_mostrar[col].apply(
+                    lambda x: int(round(x)) if pd.notna(x) else 0
+                )
 
     registros_mostrados = f"{len(df_mostrar):,}".replace(",", ".")
     registros_totales = f"{len(df):,}".replace(",", ".")
     st.write(f"Mostrando {registros_mostrados} de {registros_totales} registros")
 
-    # 🔥 CORREGIDO: CONVERTIR FECHAS A TEXTO EN FORMATO ESPAÑOL SOLO FECHA
-    columnas_fechas = ['FECHA INICIO TRAMITACIÓN', 'FECHA APERTURA', 'FECHA RESOLUCIÓN', 
-                    'FECHA FIN TRAMITACIÓN', 'FECHA CIERRE', 'FECHA PENÚLTIMO TRAM.', 
-                    'FECHA ÚLTIMO TRAM.', 'FECHA NOTIFICACIÓN', 'FECHA ASIG']
-
-    for col in columnas_fechas:
-        if col in df_mostrar.columns:
-            # Convertir a texto en formato español SOLO FECHA
-            df_mostrar[col] = df_mostrar[col].apply(
-                lambda x: x.strftime('%d/%m/%Y') if pd.notna(x) else ''
-            )
-
-    # Redondear columnas numéricas
-    columnas_antiguedad = [col for col in df_mostrar.columns if 'ANTIGÜEDAD' in col.upper() or 'DÍAS' in col.upper()]
-    for col in df_mostrar.columns:
-        if df_mostrar[col].dtype in ['float64', 'float32']:
-            if col in columnas_antiguedad:
-                df_mostrar[col] = df_mostrar[col].apply(lambda x: int(round(x)) if pd.notna(x) else 0)
-            else:
-                df_mostrar[col] = df_mostrar[col].apply(lambda x: int(round(x)) if pd.notna(x) else 0)
-
-    # CONFIGURACIÓN AGGRID CON FILTROS DE TEXTO
+    # CONFIGURACIÓN DE AGGRID
     gb = GridOptionsBuilder.from_dataframe(df_mostrar)
-
-    # Configurar todas las columnas con filtros de texto
+    
+    # Configurar todas las columnas
     gb.configure_default_column(
         filterable=True,
         sortable=True,
         resizable=True,
         editable=False,
+        groupable=False,
         min_column_width=100
     )
-
-    # 🔥 CONFIGURAR FECHAS COMO TEXTO CON COMPARADOR INTELIGENTE MEJORADO
-    for col in columnas_fechas:
-        if col in df_mostrar.columns:
-            gb.configure_column(
-                col,
-                filter="agTextColumnFilter",
-                filterParams={
-                    "buttons": ['apply', 'reset'],
-                    "defaultOption": "contains",
-                    "caseSensitive": False,
-                    "debounceMs": 300
-                },
-                # 🔥 COMPARADOR INTELIGENTE MEJORADO PARA FECHAS EN TEXTO
-                comparator="""
-                function(valueA, valueB) {
-                    // Manejar valores vacíos
-                    if (!valueA && !valueB) return 0;
-                    if (!valueA) return -1;
-                    if (!valueB) return 1;
-                    
-                    // Función para convertir formato DD/MM/AAAA a timestamp
-                    function toTimestamp(dateStr) {
-                        if (!dateStr) return 0;
-                        const parts = dateStr.split('/');
-                        if (parts.length !== 3) return 0;
-                        
-                        const day = parseInt(parts[0], 10);
-                        const month = parseInt(parts[1], 10) - 1; // Meses van de 0-11
-                        const year = parseInt(parts[2], 10);
-                        
-                        // Validar que los números sean válidos
-                        if (isNaN(day) || isNaN(month) || isNaN(year)) return 0;
-                        if (day < 1 || day > 31) return 0;
-                        if (month < 0 || month > 11) return 0;
-                        if (year < 1900 || year > 2100) return 0;
-                        
-                        return new Date(year, month, day).getTime();
-                    }
-                    
-                    const timestampA = toTimestamp(valueA);
-                    const timestampB = toTimestamp(valueB);
-                    
-                    return timestampA - timestampB;
-                }
-                """
-            )
-
-    # Configurar otras columnas con sus filtros apropiados
-    columnas_texto = ['ESTADO', 'EQUIPO', 'USUARIO', 'ETIQ. PENÚLTIMO TRAM.', 'ETIQ. ÚLTIMO TRAM.', 'NOTIFICADO']
-    for col in columnas_texto:
-        if col in df_mostrar.columns:
-            gb.configure_column(
-                col,
-                filter="agTextColumnFilter",
-                filterParams={
-                    "defaultOption": "contains",
-                    "caseSensitive": False
-                }
-            )
-
-    columnas_numericas = [col for col in df_mostrar.columns 
-                        if any(word in col.upper() for word in ['ANTIGÜEDAD', 'DÍAS', 'NÚMERO', 'CANTIDAD'])
-                        and col not in columnas_fechas and col not in columnas_texto]
-    for col in columnas_numericas:
-        if col in df_mostrar.columns:
-            gb.configure_column(
-                col,
-                filter="agNumberColumnFilter",
-                filterParams={
-                    "buttons": ['apply', 'reset'],
-                    "defaultOption": "equals"
-                }
-            )
-
+    
+    # Configurar paginación
+    gb.configure_pagination(
+        paginationAutoPageSize=False,
+        paginationPageSize=50
+    )
+    
+    # Configurar barra lateral de filtros
     gb.configure_side_bar()
-
-    # Resto de configuración...
-    gb.configure_pagination(paginationAutoPageSize=False, paginationPageSize=50)
+    
+    # Configurar selección
     gb.configure_selection(
         selection_mode="multiple",
         use_checkbox=True,
         groupSelectsChildren=True,
         groupSelectsFiltered=True
     )
-
+    
     grid_options = gb.build()
-
-    # Mostrar tabla
-    grid_response = AgGrid(
-        df_mostrar,
-        gridOptions=grid_options,
-        height=600,
-        width='100%',
-        data_return_mode='AS_INPUT',
-        update_mode='MODEL_CHANGED',
-        fit_columns_on_grid_load=True,
-        allow_unsafe_jscode=True,
-        enable_enterprise_modules=True,
-        theme='streamlit'
-    )
+    
+    # Mostrar tabla con AgGrid
+    try:
+        grid_response = AgGrid(
+            df_mostrar,
+            gridOptions=grid_options,
+            height=600,
+            width='100%',
+            data_return_mode='AS_INPUT',
+            update_mode='MODEL_CHANGED',
+            fit_columns_on_grid_load=False,
+            allow_unsafe_jscode=True,
+            enable_enterprise_modules=True,
+            theme='streamlit'
+        )
+        
+        # DEPURACIÓN: Mostrar qué contiene grid_response
+        st.sidebar.write("🔍 Debug AgGrid response:")
+        st.sidebar.write(f"Tipo: {type(grid_response)}")
+        if hasattr(grid_response, '__dict__'):
+            st.sidebar.write(f"Atributos: {grid_response.__dict__.keys()}")
+        
+        # MÚLTIPLES FORMAS DE OBTENER LAS FILAS SELECCIONADAS
+        selected_rows = []
+        
+        # Método 1: Intentar con get()
+        if isinstance(grid_response, dict):
+            selected_rows = grid_response.get('selected_rows', [])
+        # Método 2: Intentar con atributo
+        elif hasattr(grid_response, 'selected_rows'):
+            selected_rows = grid_response.selected_rows
+        # Método 3: Intentar con getattr
+        else:
+            selected_rows = getattr(grid_response, 'selected_rows', [])
+        
+        # Asegurarnos que selected_rows es una lista
+        if not isinstance(selected_rows, list):
+            selected_rows = []
+        
+        # Mostrar estadísticas de selección si hay filas seleccionadas
+        if len(selected_rows) > 0:
+            st.info(f"📌 {len(selected_rows)} fila(s) seleccionada(s)")
+        else:
+            # Opcional: mostrar que no hay selección
+            st.sidebar.info("ℹ️ No hay filas seleccionadas")
+            
+    except Exception as e:
+        st.error(f"❌ Error en AgGrid: {e}")
+        selected_rows = []
 
     # Estadísticas generales
     st.markdown("---")
@@ -2773,27 +2789,18 @@ elif eleccion == "Vista de Expedientes":
             
             with col2:
                 # En la sección de guardar documentos, busca esta parte y actualízala:
-                # En el botón de guardar, reemplaza esta sección:
                 if st.button("💾 Guardar Todos los Cambios en DOCUMENTOS.xlsx", type="primary", key="guardar_documentos"):
                     with st.spinner("Guardando cambios..."):
-                        # 🔥 CORRECCIÓN: Usar SOLO los datos actuales del df_combinado
                         df_combinado = st.session_state["df_combinado"]
+
+# Filtrar solo los registros con ETIQ. PENÚLTIMO TRAM. = "90 INCDOCU" y DOCUM.INCORP. no vacío
+                        df_documentos_actualizado = df_combinado[
+                            (df_combinado['ETIQ. PENÚLTIMO TRAM.'] == "90 INCDOCU") &
+                            (df_combinado['DOCUM.INCORP.'].notna()) &
+                            (df_combinado['DOCUM.INCORP.'] != '')
+                        ][['RUE', 'DOCUM.INCORP.']].copy()
                         
-                        # Crear DataFrame SOLO con RUE y DOCUM.INCORP. actuales
-                        df_documentos_actualizado = df_combinado[['RUE', 'DOCUM.INCORP.']].copy()
-                        
-                        # 🔥 FILTRAR: Solo registros con documentación no vacía
-                        df_documentos_actualizado = df_documentos_actualizado[
-                            df_documentos_actualizado['DOCUM.INCORP.'].notna() & 
-                            (df_documentos_actualizado['DOCUM.INCORP.'] != '')
-                        ]
-                        
-                        st.info(f"📊 Guardando {len(df_documentos_actualizado)} registros con documentación")
-                        
-                        # 🔥 LIMPIAR CACHE para forzar recarga
-                        st.cache_data.clear()
-                        
-                        # Guardar en el archivo DOCUMENTOS.xlsx
+                        # Guardar en el archivo DOCUMENTOS.xlsx (esto reemplazará completamente el contenido anterior)
                         contenido_actualizado = guardar_documentos_actualizados(
                             datos_documentos['archivo'], 
                             df_documentos_actualizado
@@ -2802,13 +2809,18 @@ elif eleccion == "Vista de Expedientes":
                         if contenido_actualizado:
                             st.session_state.documentos_actualizados = contenido_actualizado
                             st.session_state.mostrar_descarga = True
-                            st.success(f"✅ Archivo DOCUMENTOS.xlsx actualizado correctamente con {len(df_documentos_actualizado)} registros")
+                            st.success("✅ Archivo DOCUMENTOS.xlsx actualizado correctamente")
                             
                             # Limpiar cambios
                             st.session_state.cambios_documentacion = {}
                             
+                            # Actualizar cache
+                            st.cache_data.clear()
+                            
                         else:
                             st.error("❌ Error al guardar el archivo DOCUMENTOS.xlsx")
+            
+            # Mostrar botón de descarga si hay archivo actualizado
             if st.session_state.get('mostrar_descarga', False) and st.session_state.get('documentos_actualizados'):
                 st.markdown("---")
                 st.subheader("📥 Descargar Archivo Actualizado")
