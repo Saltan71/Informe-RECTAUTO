@@ -1896,6 +1896,115 @@ def crear_grafico_dinamico(_conteo, columna, titulo):
     fig.update_traces(texttemplate='%{text:,}', textposition="auto")
     return fig
 
+@st.cache_data(ttl=CACHE_TTL_STATIC)
+def obtener_semanas_disponibles_optimizado(_df, _columna_fecha_idx=13, _fecha_inicio=FECHA_REFERENCIA):
+    """Versión optimizada para obtener semanas disponibles"""
+    try:
+        if _columna_fecha_idx < len(_df.columns):
+            columna_fecha = _df.columns[_columna_fecha_idx]
+            _df_temp = _df.copy()
+            _df_temp[columna_fecha] = pd.to_datetime(_df_temp[columna_fecha], errors='coerce')
+            fecha_max = _df_temp[columna_fecha].max()
+            
+            if pd.isna(fecha_max):
+                return [], None
+                
+            # Generar semanas desde fecha_inicio hasta fecha_max
+            semanas = pd.date_range(
+                start=_fecha_inicio,
+                end=fecha_max,
+                freq='W-FRI'
+            ).tolist()
+            
+            return semanas, fecha_max
+        else:
+            return [], None
+    except Exception as e:
+        print(f"Error obteniendo semanas: {e}")
+        return [], None
+    
+@st.cache_data(ttl=CACHE_TTL_DYNAMIC, show_spinner="📊 Calculando KPIs históricos...")
+def calcular_kpis_todas_semanas_altamente_optimizado(_df, _semanas, _fecha_referencia, _fecha_max, _user_key=user_env.session_id):
+    """Versión altamente optimizada del cálculo de KPIs con precomputación"""
+    
+    # Pre-calcular máscaras base que se reutilizarán
+    if 'FECHA APERTURA' not in _df.columns or 'FECHA CIERRE' not in _df.columns:
+        return pd.DataFrame()
+    
+    # Convertir columnas de fecha una sola vez
+    _df_temp = _df.copy()
+    _df_temp['FECHA APERTURA'] = pd.to_datetime(_df_temp['FECHA APERTURA'], errors='coerce')
+    _df_temp['FECHA CIERRE'] = pd.to_datetime(_df_temp['FECHA CIERRE'], errors='coerce')
+    _df_temp['FECHA RESOLUCIÓN'] = pd.to_datetime(_df_temp['FECHA RESOLUCIÓN'], errors='coerce')
+    _df_temp['FECHA INICIO TRAMITACIÓN'] = pd.to_datetime(_df_temp['FECHA INICIO TRAMITACIÓN'], errors='coerce')
+    
+    datos_semanales = []
+    
+    for i, semana in enumerate(_semanas):
+        es_semana_actual = (i == len(_semanas) - 1)
+        
+        # Usar función optimizada existente pero con DataFrame preprocesado
+        kpis = calcular_kpis_para_semana(_df_temp, semana, es_semana_actual)
+        num_semana = ((semana - _fecha_referencia).days) // 7 + 1
+        
+        datos_semanales.append({
+            'semana_numero': num_semana,
+            'semana_fin': semana,
+            'semana_str': semana.strftime('%d/%m/%Y'),
+            'nuevos_expedientes': kpis['nuevos_expedientes'],
+            'nuevos_expedientes_totales': kpis['nuevos_expedientes_totales'],
+            'despachados_semana': kpis['despachados_semana'],
+            'despachados_totales': kpis['despachados_totales'],
+            'c_abs_despachados_sem': kpis['c_abs_despachados_sem'],
+            'c_abs_despachados_tot': kpis['c_abs_despachados_tot'],
+            'expedientes_cerrados': kpis['expedientes_cerrados'],
+            'expedientes_cerrados_totales': kpis['expedientes_cerrados_totales'],
+            'total_abiertos': kpis['total_abiertos'],
+            'c_abs_cerrados_sem': kpis['c_abs_cerrados_sem'],
+            'c_abs_cerrados_tot': kpis['c_abs_cerrados_tot'],
+            'expedientes_especiales': kpis['expedientes_especiales'],
+            'porcentaje_especiales': kpis['porcentaje_especiales'],
+            'tiempo_medio_despachados': kpis['tiempo_medio_despachados'],
+            'percentil_90_despachados': kpis['percentil_90_despachados'],
+            'percentil_180_despachados': kpis['percentil_180_despachados'],
+            'percentil_120_despachados': kpis['percentil_120_despachados'],
+            'tiempo_medio_cerrados': kpis['tiempo_medio_cerrados'],
+            'percentil_90_cerrados': kpis['percentil_90_cerrados'],
+            'percentil_180_cerrados': kpis['percentil_180_cerrados'],
+            'percentil_120_cerrados': kpis['percentil_120_cerrados'],
+            'percentil_90_abiertos': kpis['percentil_90_abiertos'],
+            'percentil_180_abiertos': kpis['percentil_180_abiertos'],
+            'percentil_120_abiertos': kpis['percentil_120_abiertos'],
+            'inicio_semana': kpis['inicio_semana'],
+            'fin_semana': kpis['fin_semana'],
+            'dias_semana': kpis['dias_semana'],
+            'es_semana_actual': kpis['es_semana_actual']
+        })
+    
+    return pd.DataFrame(datos_semanales)
+
+@st.cache_data(ttl=CACHE_TTL_DYNAMIC)
+def generar_pdf_resumen_kpi_cacheable(df_kpis_semanales, num_semana, fecha_max_str, df_combinado, semanas_disponibles, FECHA_REFERENCIA, fecha_max):
+    """Versión cacheable del generador de PDF de resumen KPI"""
+    # Tu código existente de generar_pdf_resumen_kpi aquí...
+    # (mantener el mismo contenido pero ahora con cache)
+    
+    try:
+        # Filtrar datos de la semana actual
+        kpis_semana = df_kpis_semanales[df_kpis_semanales['semana_numero'] == num_semana].iloc[0]
+        
+        pdf = PDFResumenKPI()
+        
+        # ... (resto del código igual que tu función actual)
+        
+        return io.BytesIO(pdf_bytes).getvalue()
+
+    except Exception as e:
+        st.error(f"Error generando PDF de resumen KPI: {e}")
+        import traceback
+        st.error(f"Detalle del error: {traceback.format_exc()}")
+        return None
+
 # =============================================
 # PÁGINA 1: CARGA DE ARCHIVOS
 # =============================================
@@ -2626,12 +2735,6 @@ elif eleccion == "Vista de Expedientes":
             theme='streamlit'
         )
         
-        # DEPURACIÓN: Mostrar qué contiene grid_response
-        st.sidebar.write("🔍 Debug AgGrid response:")
-        st.sidebar.write(f"Tipo: {type(grid_response)}")
-        if hasattr(grid_response, '__dict__'):
-            st.sidebar.write(f"Atributos: {grid_response.__dict__.keys()}")
-        
         # MÚLTIPLES FORMAS DE OBTENER LAS FILAS SELECCIONADAS
         selected_rows = []
         
@@ -2648,13 +2751,6 @@ elif eleccion == "Vista de Expedientes":
         # Asegurarnos que selected_rows es una lista
         if not isinstance(selected_rows, list):
             selected_rows = []
-        
-        # Mostrar estadísticas de selección si hay filas seleccionadas
-        if len(selected_rows) > 0:
-            st.info(f"📌 {len(selected_rows)} fila(s) seleccionada(s)")
-        else:
-            # Opcional: mostrar que no hay selección
-            st.sidebar.info("ℹ️ No hay filas seleccionadas")
             
     except Exception as e:
         st.error(f"❌ Error en AgGrid: {e}")
@@ -2799,7 +2895,8 @@ elif eleccion == "Vista de Expedientes":
                             (df_combinado['DOCUM.INCORP.'].notna()) &
                             (df_combinado['DOCUM.INCORP.'] != '')
                         ][['RUE', 'DOCUM.INCORP.']].copy()
-                        
+
+
                         # Guardar en el archivo DOCUMENTOS.xlsx (esto reemplazará completamente el contenido anterior)
                         contenido_actualizado = guardar_documentos_actualizados(
                             datos_documentos['archivo'], 
@@ -2858,22 +2955,9 @@ elif eleccion == "Indicadores clave (KPI)":
     # Usar df_combinado en lugar de df
     df = st.session_state["df_combinado"]
     
-    # Obtener fecha de referencia para cálculos
-    columna_fecha = df.columns[13]
-    df[columna_fecha] = pd.to_datetime(df[columna_fecha], errors='coerce')
-    fecha_max = df[columna_fecha].max()
-    
-    if pd.isna(fecha_max):
-        st.error("No se pudo encontrar la fecha máxima en los datos")
-        st.stop()
-    
-    # Crear rango de semanas disponibles
-    fecha_inicio = pd.to_datetime("2022-11-01")
-    semanas_disponibles = pd.date_range(
-        start=fecha_inicio,
-        end=fecha_max,
-        freq='W-FRI'
-    ).tolist()
+    # Obtener semanas disponibles de forma optimizada
+    with st.spinner("🔄 Calculando rango de semanas..."):
+        semanas_disponibles, fecha_max = obtener_semanas_disponibles_optimizado(df)
     
     if not semanas_disponibles:
         st.error("No hay semanas disponibles para mostrar")
@@ -2919,6 +3003,12 @@ elif eleccion == "Indicadores clave (KPI)":
     
     # Mostrar información de la semana seleccionada
     st.info(f"**Semana seleccionada:** {fecha_str} (Semana {num_semana_seleccionada})")
+    
+    # Calcular KPIs para todas las semanas (usando cache optimizado)
+    with st.spinner("📊 Calculando KPIs para todas las semanas..."):
+        df_kpis_semanales = calcular_kpis_todas_semanas_altamente_optimizado(
+            df, semanas_disponibles, FECHA_REFERENCIA, fecha_max
+        )
     
     # Sidebar con botones de navegación
     with st.sidebar:
@@ -3367,7 +3457,10 @@ elif eleccion == "Informes y Correos":
     # NUEVO: Generar también PDFs por equipo (solo prioritarios) y resumen KPI
     equipos_pendientes = df_pendientes["EQUIPO"].dropna().unique()
     
-    if st.button(f"Generar {len(usuarios_pendientes)} Informes PDF + Equipos + Resumen KPI", key="generar_pdfs_completos"):
+    # Usar un placeholder para el botón de descarga
+    download_placeholder = st.empty()
+    
+    if download_placeholder.button(f"Generar {len(usuarios_pendientes)} Informes PDF + Equipos + Resumen KPI", key="generar_pdfs_completos"):
         if usuarios_pendientes.size == 0:
             st.info("No se encontraron expedientes pendientes para generar informes.")
         else:
@@ -3422,7 +3515,7 @@ elif eleccion == "Informes y Correos":
 
             zip_buffer.seek(0)
             zip_file_name = f"Informes_Completos_Semana_{num_semana}.zip"
-            st.download_button(
+            download_placeholder.download_button(
                 label=f"⬇️ Descargar {len(usuarios_pendientes)} Informes PDF + Equipos + Resumen KPI (ZIP)",
                 data=zip_buffer.read(),
                 file_name=zip_file_name,
@@ -3699,19 +3792,20 @@ elif eleccion == "Informes y Correos":
         # Generar PDF de resumen KPI (una sola vez para todos)
         pdf_resumen = None
         with st.spinner("Generando resumen KPI..."):
-            # Calcular KPIs para la semana actual
+            # Calcular KPIs para la semana actual usando método compatible
             columna_fecha = df.columns[13]
-            df[columna_fecha] = pd.to_datetime(df[columna_fecha], errors='coerce')
-            fecha_max = df[columna_fecha].max()
+            df_temp = df.copy()
+            df_temp[columna_fecha] = pd.to_datetime(df_temp[columna_fecha], errors='coerce')
+            fecha_max_calc = df_temp[columna_fecha].max()
             
             fecha_inicio = pd.to_datetime("2022-11-01")
             semanas_disponibles = pd.date_range(
                 start=fecha_inicio,
-                end=fecha_max,
+                end=fecha_max_calc,
                 freq='W-FRI'
             ).tolist()
             
-            df_kpis_semanales = calcular_kpis_todas_semanas_optimizado(df, semanas_disponibles, FECHA_REFERENCIA, fecha_max)
+            df_kpis_semanales = calcular_kpis_todas_semanas_optimizado(df, semanas_disponibles, FECHA_REFERENCIA, fecha_max_calc)
             pdf_resumen = generar_pdf_resumen_kpi(
                 df_kpis_semanales, 
                 num_semana, 
@@ -3719,7 +3813,7 @@ elif eleccion == "Informes y Correos":
                 df, 
                 semanas_disponibles, 
                 FECHA_REFERENCIA, 
-                fecha_max
+                fecha_max_calc
             )
         
         total_a_procesar = len(usuarios_para_envio_individual) + len(usuarios_para_resumen_solo)
