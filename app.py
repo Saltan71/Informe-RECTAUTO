@@ -1020,39 +1020,6 @@ def identificar_filas_prioritarias(df):
         df['_prioridad'] = 0
         return df
 
-def actualizar_filtros_optimizados(df, estado_sel, equipo_sel, usuario_sel):
-    """Versión optimizada del filtrado interconectado"""
-    # Pre-calcular opciones disponibles
-    opciones_base = {
-        'estados': sorted(df['ESTADO'].dropna().unique()),
-        'equipos': sorted(df['EQUIPO'].dropna().unique()),
-        'usuarios': sorted(df['USUARIO'].dropna().unique())
-    }
-    
-    # Aplicar filtros secuencialmente de forma vectorizada
-    mask_actual = pd.Series(True, index=df.index)
-    
-    if estado_sel:
-        mask_actual &= df['ESTADO'].isin(estado_sel)
-    
-    # Calcular equipos disponibles basado en estado
-    equipos_disponibles = df.loc[mask_actual, 'EQUIPO'].dropna().unique()
-    equipos_disponibles = sorted(equipos_disponibles)
-    
-    if equipo_sel:
-        equipos_seleccionados = [eq for eq in equipo_sel if eq in equipos_disponibles]
-        mask_actual &= df['EQUIPO'].isin(equipos_seleccionados) if equipos_seleccionados else mask_actual
-    
-    # Calcular usuarios disponibles basado en estado y equipo
-    usuarios_disponibles = df.loc[mask_actual, 'USUARIO'].dropna().unique()
-    usuarios_disponibles = sorted(usuarios_disponibles)
-    
-    if usuario_sel:
-        usuarios_seleccionados = [us for us in usuario_sel if us in usuarios_disponibles]
-        mask_actual &= df['USUARIO'].isin(usuarios_seleccionados) if usuarios_seleccionados else mask_actual
-    
-    return df[mask_actual].copy(), equipos_disponibles, usuarios_disponibles
-
 @st.cache_data(ttl=3600)
 def dataframe_to_pdf_bytes(df_mostrar, title, df_original):
     """Versión optimizada de generación de PDFs"""
@@ -1821,69 +1788,6 @@ def enviar_correo_outlook(destinatario, asunto, cuerpo_mensaje, archivos_adjunto
             pythoncom.CoUninitialize()
         except:
             pass
-
-# Función para aplicar formato condicional al DataFrame mostrado
-def aplicar_formato_condicional_dataframe(df):
-    """Aplica formato condicional al DataFrame para Streamlit con NUEVAS condiciones"""
-    styles = pd.DataFrame('', index=df.index, columns=df.columns)
-    
-    try:
-        # Condición 1: USUARIO-CSV con fondo rojo cuando USUARIO es distinto de USUARIO-CSV
-        if 'USUARIO-CSV' in df.columns and 'USUARIO' in df.columns:
-            mask_usuario = df['USUARIO'] != df['USUARIO-CSV']
-            styles.loc[mask_usuario, 'USUARIO-CSV'] = 'background-color: rgb(255, 0, 0)'
-        
-        # Condición 2: RUE con MÚLTIPLES condiciones específicas
-        if 'RUE' in df.columns:
-            for idx, row in df.iterrows():
-                try:
-                    etiq_penultimo = row.get('ETIQ. PENÚLTIMO TRAM.', '')
-                    fecha_notif = row.get('FECHA NOTIFICACIÓN', None)
-                    docum_incorp = row.get('DOCUM.INCORP.', '')
-                    
-                    es_amarillo = False
-                    
-                    # CONDICIÓN 2.1: "80 PROPRES" con fecha límite superada
-                    if (str(etiq_penultimo) == "80 PROPRES" and 
-                        pd.notna(fecha_notif)):
-                        if isinstance(fecha_notif, (pd.Timestamp, datetime)):
-                            fecha_limite = fecha_notif + timedelta(days=23)
-                            if datetime.now() > fecha_limite:
-                                es_amarillo = True
-                    
-                    # NUEVA CONDICIÓN 2.2: "50 REQUERIR" con fecha límite superada
-                    elif (str(etiq_penultimo) == "50 REQUERIR" and 
-                          pd.notna(fecha_notif)):
-                        if isinstance(fecha_notif, (pd.Timestamp, datetime)):
-                            fecha_limite = fecha_notif + timedelta(days=23)
-                            if datetime.now() > fecha_limite:
-                                es_amarillo = True
-                    
-                    # NUEVA CONDICIÓN 2.3: "70 ALEGACI" o "60 CONTESTA"
-                    elif str(etiq_penultimo) in ["70 ALEGACI", "60 CONTESTA"]:
-                        es_amarillo = True
-                    
-                    # NUEVA CONDICIÓN 2.4: DOCUM.INCORP. no vacío Y distinto de "SOLICITUD" o "REITERA SOLICITUD"
-                    elif (pd.notna(docum_incorp) and 
-                          str(docum_incorp).strip() != '' and
-                          str(docum_incorp).strip().upper() not in ["SOLICITUD", "REITERA SOLICITUD"]):
-                        es_amarillo = True
-                    
-                    if es_amarillo:
-                        styles.loc[idx, 'RUE'] = 'background-color: rgb(255, 255, 0)'
-                        
-                except (TypeError, ValueError):
-                    continue  # Ignorar errores de fecha
-        
-        # Condición 3: Resaltar DOCUM.INCORP. cuando tiene valor
-        if 'DOCUM.INCORP.' in df.columns:
-            mask_docum = df['DOCUM.INCORP.'].notna() & (df['DOCUM.INCORP.'] != '')
-            styles.loc[mask_docum, 'DOCUM.INCORP.'] = 'background-color: rgb(173, 216, 230)'  # Azul claro
-            
-    except Exception as e:
-        st.error(f"Error en formato condicional: {e}")
-    
-    return styles
 
 # Función para gráficos dinámicos (SIN CACHE)
 def crear_grafico_dinamico(_conteo, columna, titulo):
