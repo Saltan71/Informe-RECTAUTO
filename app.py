@@ -2590,6 +2590,9 @@ elif eleccion == "Vista de Expedientes":
         # Aplicar configuración a la columna
         gb.configure_column(column, **column_config)
 
+    # Configurar la barra lateral
+    gb.configure_side_bar(filters_panel=True, columns_panel=True)
+
     # Configurar opciones del grid para forzar anchos
     grid_options = gb.build()
 
@@ -2602,7 +2605,11 @@ elif eleccion == "Vista de Expedientes":
         'domLayout': 'normal',  # Usar layout normal, no autoajustable
         'onGridReady': None,  # Evitar cualquier callback que pueda modificar anchos
         'pagination': True,
-        'paginationPageSize': 50
+        'paginationPageSize': 50,
+        'allowContextMenuWithControlKey': True,
+        'suppressContextMenu': False,
+        'enableCellTextSelection': True,
+        'ensureDomOrder': True,
     })
 
     # Función para formatear fechas en el grid
@@ -2638,8 +2645,8 @@ elif eleccion == "Vista de Expedientes":
             data_return_mode='AS_INPUT',
             update_mode='MODEL_CHANGED',
             fit_columns_on_grid_load=False,  # CRÍTICO: Desactivar autoajuste
-            allow_unsafe_jscode=False,  # Evitar JS que pueda modificar anchos
-            enable_enterprise_modules=False,  # Desactivar módulos enterprise que puedan interferir
+            allow_unsafe_jscode=True,  # Evitar JS que pueda modificar anchos
+            enable_enterprise_modules=True,  # Desactivar módulos enterprise que puedan interferir
             theme='streamlit',
             custom_css={
                 ".ag-header-cell-text": {
