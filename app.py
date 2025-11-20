@@ -908,20 +908,38 @@ def calcular_kpis_para_semana(_df, semana_fin, es_semana_actual=False):
     else:
         total_abiertos = 0
 
+    # EXPEDIENTES REHABILITADOS ÚLTIMA SEMANA
+    if 'ETIQ. PENÚLTIMO TRAM.' in _df.columns:
+        mask_rehabilitados = (
+            ~_df['FECHA CIERRE'].isna() &
+            _df['ESTADO'].isin(['Abierto'])
+        )
+        total_rehabilitados = _df.loc[mask_rehabilitados].shape[0]
+    else:
+        total_rehabilitados = 0    
+
     # COEFICIENTE DE ABSORCIÓN 2 (Cerrados/Asignados)
     c_abs_cerrados_sem = (expedientes_cerrados / nuevos_expedientes * 100) if nuevos_expedientes > 0 else 0
     c_abs_cerrados_tot = (expedientes_cerrados_totales / nuevos_expedientes_totales * 100) if nuevos_expedientes_totales > 0 else 0
 
     # EXPEDIENTES CON 029, 033, PRE o RSL
     if 'ETIQ. PENÚLTIMO TRAM.' in _df.columns:
+        #mask_especiales = (
+        #    _df['ETIQ. PENÚLTIMO TRAM.'].notna() & 
+        #    (~_df['ETIQ. PENÚLTIMO TRAM.'].isin(['1 APERTURA', '10 DATEXPTE'])) &
+        #    (_df['FECHA APERTURA'] <= fin_semana) & 
+        #    ((_df['FECHA CIERRE'] > fin_semana) | (_df['FECHA CIERRE'].isna()))
+        #)
         mask_especiales = (
-            _df['ETIQ. PENÚLTIMO TRAM.'].notna() & 
-            (~_df['ETIQ. PENÚLTIMO TRAM.'].isin(['1 APERTURA', '10 DATEXPTE'])) &
-            (_df['FECHA APERTURA'] <= fin_semana) & 
-            ((_df['FECHA CIERRE'] > fin_semana) | (_df['FECHA CIERRE'].isna()))
+            ~_df['ETIQ. PENÚLTIMO TRAM.'].isin(['1 APERTURA', '10 DATEXPTE']) &
+            _df['ESTADO'].isin(['Abierto'])
+        )
+        mask_abiertos_ultima_semana = (
+            _df['ESTADO'].isin(['Abierto'])
         )
         expedientes_especiales = _df.loc[mask_especiales].shape[0]
-        porcentaje_especiales = (expedientes_especiales / total_abiertos * 100) if total_abiertos > 0 else 0
+        total_abiertos_ultima_semana = _df.loc[mask_abiertos_ultima_semana].shape[0]
+        porcentaje_especiales = (expedientes_especiales / total_abiertos_ultima_semana * 100) if total_abiertos_ultima_semana > 0 else 0
     else:
         expedientes_especiales = 0
         porcentaje_especiales = 0
@@ -939,6 +957,7 @@ def calcular_kpis_para_semana(_df, semana_fin, es_semana_actual=False):
         'expedientes_cerrados': expedientes_cerrados,
         'expedientes_cerrados_totales': expedientes_cerrados_totales,
         'total_abiertos': total_abiertos,
+        'total_rehabilitados': total_rehabilitados,
         'c_abs_cerrados_sem': c_abs_cerrados_sem,
         'c_abs_cerrados_tot': c_abs_cerrados_tot,
         'expedientes_especiales': expedientes_especiales,
@@ -1374,10 +1393,10 @@ def generar_pdf_resumen_kpi(df_kpis_semanales, num_semana, fecha_max_str, df_com
         pdf = PDFResumenKPI()
         
         # Título principal
-        pdf.set_font('Arial', 'B', 14)
+        pdf.set_font('Arial', 'B', 12)
         pdf.cell(0, 10, f'RESUMEN DE KPIs - SEMANA {num_semana}', 0, 1, 'C')
         pdf.cell(0, 5, f'Periodo: {fecha_max_str}', 0, 1, 'C')
-        pdf.ln(3)
+        #pdf.ln(3)
         
         # SECCIÓN 1: KPIs PRINCIPALES
         pdf.add_section_title("KPIs PRINCIPALES")
@@ -1385,23 +1404,24 @@ def generar_pdf_resumen_kpi(df_kpis_semanales, num_semana, fecha_max_str, df_com
         # Semanales
         pdf.set_font('Arial', 'B', 10)
         pdf.cell(0, 8, "Semanales:", 0, 1)
-        pdf.add_metric("Nuevos Expedientes", f"{int(kpis_semana['nuevos_expedientes']):,}".replace(",", "."))
-        pdf.add_metric("Expedientes Despachados", f"{int(kpis_semana['despachados_semana']):,}".replace(",", "."))
-        pdf.add_metric("Coef. Absorcion (Desp/Nuevos)", f"{kpis_semana['c_abs_despachados_sem']:.2f}%".replace(".", ","))
-        pdf.add_metric("Expedientes Cerrados", f"{int(kpis_semana['expedientes_cerrados']):,}".replace(",", "."))
-        pdf.add_metric("Coef. Absorcion (Cer/Asig)", f"{kpis_semana['c_abs_cerrados_sem']:.2f}%".replace(".", ","))
-        pdf.add_metric("Expedientes Abiertos", f"{int(kpis_semana['total_abiertos']):,}".replace(",", "."))
+        pdf.add_metric("-Nuevos Expedientes", f"{int(kpis_semana['nuevos_expedientes']):,}".replace(",", "."))
+        pdf.add_metric("-Expedientes Despachados", f"{int(kpis_semana['despachados_semana']):,}".replace(",", "."))
+        pdf.add_metric("-Coef. Absorcion (Desp/Nuevos)", f"{kpis_semana['c_abs_despachados_sem']:.2f}%".replace(".", ","))
+        pdf.add_metric("-Expedientes Cerrados", f"{int(kpis_semana['expedientes_cerrados']):,}".replace(",", "."))
+        pdf.add_metric("-Coef. Absorcion (Cer/Asig)", f"{kpis_semana['c_abs_cerrados_sem']:.2f}%".replace(".", ","))
+        pdf.add_metric("-Expedientes Abiertos", f"{int(kpis_semana['total_abiertos']):,}".replace(",", "."))
+        pdf.add_metric("-Expedientes Rehabilitados", f"{int(kpis_semana['total_rehabilitados']):,}".replace(",", "."))
         
-        pdf.ln(3)
+        #pdf.ln(3)
         
         # Totales
         pdf.set_font('Arial', 'B', 10)
         pdf.cell(0, 8, "Totales (desde 01/11/2022):", 0, 1)
-        pdf.add_metric("Nuevos Expedientes", f"{int(kpis_semana['nuevos_expedientes_totales']):,}".replace(",", "."))
-        pdf.add_metric("Expedientes Despachados", f"{int(kpis_semana['despachados_totales']):,}".replace(",", "."))
-        pdf.add_metric("Coef. Absorcion (Desp/Nuevos)", f"{kpis_semana['c_abs_despachados_tot']:.2f}%".replace(".", ","))
-        pdf.add_metric("Expedientes Cerrados", f"{int(kpis_semana['expedientes_cerrados_totales']):,}".replace(",", "."))
-        pdf.add_metric("Coef. Absorcion (Cer/Asig)", f"{kpis_semana['c_abs_cerrados_tot']:.2f}%".replace(".", ","))
+        pdf.add_metric("-Nuevos Expedientes", f"{int(kpis_semana['nuevos_expedientes_totales']):,}".replace(",", "."))
+        pdf.add_metric("-Expedientes Despachados", f"{int(kpis_semana['despachados_totales']):,}".replace(",", "."))
+        pdf.add_metric("-Coef. Absorcion (Desp/Nuevos)", f"{kpis_semana['c_abs_despachados_tot']:.2f}%".replace(".", ","))
+        pdf.add_metric("-Expedientes Cerrados", f"{int(kpis_semana['expedientes_cerrados_totales']):,}".replace(",", "."))
+        pdf.add_metric("-Coef. Absorcion (Cer/Asig)", f"{kpis_semana['c_abs_cerrados_tot']:.2f}%".replace(".", ","))
         
         pdf.ln(3)
         
@@ -1416,31 +1436,31 @@ def generar_pdf_resumen_kpi(df_kpis_semanales, num_semana, fecha_max_str, df_com
         pdf.add_section_title("TIEMPOS DE TRAMITACION (en dias)")
         
         # Expedientes Despachados
-        pdf.set_font('Arial', 'B', 9)
+        pdf.set_font('Arial', 'B', 10)
         pdf.cell(0, 7, "Expedientes Despachados:", 0, 1)
-        pdf.add_metric("Tiempo Medio", f"{kpis_semana['tiempo_medio_despachados']:.0f} dias")
-        pdf.add_metric("Percentil 90", f"{kpis_semana['percentil_90_despachados']:.0f} dias")
-        pdf.add_metric("<=180 dias", f"{kpis_semana['percentil_180_despachados']:.2f}%".replace(".", ","))
-        pdf.add_metric("<=120 dias", f"{kpis_semana['percentil_120_despachados']:.2f}%".replace(".", ","))
+        pdf.add_metric("-Tiempo Medio", f"{kpis_semana['tiempo_medio_despachados']:.0f} dias")
+        pdf.add_metric("-Percentil 90", f"{kpis_semana['percentil_90_despachados']:.0f} dias")
+        pdf.add_metric(" <=180 dias", f"{kpis_semana['percentil_180_despachados']:.2f}%".replace(".", ","))
+        pdf.add_metric(" <=120 dias", f"{kpis_semana['percentil_120_despachados']:.2f}%".replace(".", ","))
         
-        pdf.ln(3)
+        #pdf.ln(3)
         
         # Expedientes Cerrados
-        pdf.set_font('Arial', 'B', 9)
+        pdf.set_font('Arial', 'B', 10)
         pdf.cell(0, 7, "Expedientes Cerrados:", 0, 1)
-        pdf.add_metric("Tiempo Medio", f"{kpis_semana['tiempo_medio_cerrados']:.0f} dias")
-        pdf.add_metric("Percentil 90", f"{kpis_semana['percentil_90_cerrados']:.0f} dias")
-        pdf.add_metric("<=180 dias", f"{kpis_semana['percentil_180_cerrados']:.2f}%".replace(".", ","))
-        pdf.add_metric("<=120 dias", f"{kpis_semana['percentil_120_cerrados']:.2f}%".replace(".", ","))
+        pdf.add_metric("-Tiempo Medio", f"{kpis_semana['tiempo_medio_cerrados']:.0f} dias")
+        pdf.add_metric("-Percentil 90", f"{kpis_semana['percentil_90_cerrados']:.0f} dias")
+        pdf.add_metric(" <=180 dias", f"{kpis_semana['percentil_180_cerrados']:.2f}%".replace(".", ","))
+        pdf.add_metric(" <=120 dias", f"{kpis_semana['percentil_120_cerrados']:.2f}%".replace(".", ","))
         
-        pdf.ln(3)
+        #pdf.ln(3)
         
         # Expedientes Abiertos
-        pdf.set_font('Arial', 'B', 9)
-        pdf.cell(0, 7, "Expedientes Abiertos:", 0, 1)
-        pdf.add_metric("Percentil 90", f"{kpis_semana['percentil_90_abiertos']:.0f} dias")
-        pdf.add_metric("<=180 dias", f"{kpis_semana['percentil_180_abiertos']:.2f}%".replace(".", ","))
-        pdf.add_metric("<=120 dias", f"{kpis_semana['percentil_120_abiertos']:.2f}%".replace(".", ","))
+        pdf.set_font('Arial', 'B', 10)
+        pdf.cell(0, 7, "-Expedientes Abiertos:", 0, 1)
+        pdf.add_metric("-Percentil 90", f"{kpis_semana['percentil_90_abiertos']:.0f} dias")
+        pdf.add_metric(" <=180 dias", f"{kpis_semana['percentil_180_abiertos']:.2f}%".replace(".", ","))
+        pdf.add_metric(" <=120 dias", f"{kpis_semana['percentil_120_abiertos']:.2f}%".replace(".", ","))
         
         # Información del período
         pdf.ln(3)
@@ -1683,6 +1703,7 @@ def calcular_kpis_todas_semanas_optimizado(_df, _semanas, _fecha_referencia, _fe
             'expedientes_cerrados': kpis['expedientes_cerrados'],
             'expedientes_cerrados_totales': kpis['expedientes_cerrados_totales'],
             'total_abiertos': kpis['total_abiertos'],
+            'total_rehabilitados': kpis['total_rehabilitados'],
             'c_abs_cerrados_sem': kpis['c_abs_cerrados_sem'],
             'c_abs_cerrados_tot': kpis['c_abs_cerrados_tot'],
             'expedientes_especiales': kpis['expedientes_especiales'],
@@ -2453,16 +2474,21 @@ elif eleccion == "Vista de Expedientes":
         if fig:
             st.plotly_chart(fig, use_container_width=True)
 
-    # VISTA GENERAL - CON AGGRID
+    # VISTA GENERAL - CON AGGRID MEJORADO
     st.subheader("📋 Vista general de expedientes")
 
     # Crear copia y formatear datos para AgGrid
     df_mostrar = df_filtrado.copy()
 
-    # Formatear TODAS las columnas de fecha
-    for col in df_mostrar.select_dtypes(include='datetime').columns:
-        df_mostrar[col] = df_mostrar[col].dt.strftime("%d/%m/%Y")
-
+    # Identificar columnas de fecha para tratamiento especial
+    columnas_fecha = [col for col in df_mostrar.columns if 'FECHA' in col.upper()]
+    
+    # Formatear columnas de fecha para AgGrid (mantener como datetime para filtros)
+    for col in columnas_fecha:
+        if col in df_mostrar.columns:
+            # Asegurar que es datetime
+            df_mostrar[col] = pd.to_datetime(df_mostrar[col], errors='coerce')
+    
     # 🔥 CORRECCIÓN: Redondear columnas numéricas con decimales
     columnas_antiguedad = [col for col in df_mostrar.columns if 'ANTIGÜEDAD' in col.upper() or 'DÍAS' in col.upper()]
 
@@ -2483,39 +2509,126 @@ elif eleccion == "Vista de Expedientes":
     registros_totales = f"{len(df):,}".replace(",", ".")
     st.write(f"Mostrando {registros_mostrados} de {registros_totales} registros")
 
-    # CONFIGURACIÓN DE AGGRID
+    # =============================================
+    # CONFIGURACIÓN AGGRID CON ANCHOS FORZADOS
+    # =============================================
+
+    # Definir anchos personalizados para columnas basados en tu especificación
+    custom_column_widths = {
+        'RUE': 200,
+        'ESTADO': 100,
+        'FECHA INICIO TRAMITACIÓN': 120,
+        'FECHA APERTURA': 120,
+        'FECHA RESOLUCIÓN': 120,
+        'FECHA FIN TRAMITACIÓN': 120,
+        'FECHA CIERRE': 120,
+        'ANTIGÜEDAD EXP. (DÍAS)': 100,
+        'ETIQ. PENÚLTIMO TRAM.': 120,
+        'FECHA PENÚLTIMO TRAM.': 120,
+        'DÍAS DIF. F. PENÚLT.TRÁM. Y F. APERT.': 100,
+        'ETIQ. ÚLTIMO TRAM.': 120,
+        'FECHA ÚLTIMO TRAM.': 120,
+        'FECHA ACTUALIZACION DATOS': 120,
+        'IMPUESTO ORIGEN': 150,
+        'NATURALEZA': 150,
+        'USUARIO': 100,
+        'EQUIPO': 120,
+        'FECHA NOTIFICACIÓN': 120,
+        'DOCUM.INCORP.': 120,
+        'USUARIO-CSV': 100,
+        'CALIFICACIÓN': 300,
+        'OBSERVACIONES': 150,
+        'FECHA ASIG': 120
+    }
+
+    # Configurar GridOptionsBuilder
     gb = GridOptionsBuilder.from_dataframe(df_mostrar)
-    
-    # Configurar todas las columnas
-    gb.configure_default_column(
-        filterable=True,
-        sortable=True,
-        resizable=True,
-        editable=False,
-        groupable=False,
-        min_column_width=100
-    )
-    
-    # Configurar paginación
-    gb.configure_pagination(
-        paginationAutoPageSize=False,
-        paginationPageSize=50
-    )
-    
-    # Configurar barra lateral de filtros
-    gb.configure_side_bar()
-    
-    # Configurar selección
-    gb.configure_selection(
-        selection_mode="multiple",
-        use_checkbox=True,
-        groupSelectsChildren=True,
-        groupSelectsFiltered=True
-    )
-    
+
+    # Configurar todas las columnas con anchos forzados
+    for column in df_mostrar.columns:
+        column_width = custom_column_widths.get(column, 150)
+        
+        # Configuración común para todas las columnas
+        column_config = {
+            'width': column_width,
+            'minWidth': column_width,  # Forzar ancho mínimo igual al ancho
+            'maxWidth': column_width,  # Forzar ancho máximo igual al ancho
+            'resizable': True,  # Permitir redimensionar manualmente
+            'sortable': True,
+            'filter': True
+        }
+        
+        # Configurar tipo específico de filtro
+        if column in columnas_fecha:
+            column_config.update({
+                'filter': 'agDateColumnFilter',
+                'filterParams': {
+                    'buttons': ['apply', 'reset'],
+                    'closeOnApply': True,
+                },
+                'type': ['customDateTime']
+            })
+        elif df_mostrar[column].dtype in ['int64', 'float64']:
+            column_config.update({
+                'filter': 'agNumberColumnFilter',
+                'filterParams': {
+                    'buttons': ['apply', 'reset'],
+                    'closeOnApply': True,
+                }
+            })
+        else:
+            column_config.update({
+                'filter': 'agTextColumnFilter',
+                'filterParams': {
+                    'buttons': ['apply', 'reset'],
+                    'closeOnApply': True,
+                    'caseSensitive': False,
+                    'debounceMs': 500
+                }
+            })
+        
+        # Aplicar configuración a la columna
+        gb.configure_column(column, **column_config)
+
+    # Configurar opciones del grid para forzar anchos
     grid_options = gb.build()
-    
-    # Mostrar tabla con AgGrid
+
+    # AÑADIR CONFIGURACIONES CRÍTICAS PARA FORZAR ANCHOS
+    grid_options.update({
+        'suppressAutoSize': True,  # Suprimir autoajuste automático
+        'suppressSizeToFit': True,  # Suprimir ajuste al tamaño
+        'suppressColumnVirtualisation': True,  # Mejor para anchos fijos
+        'ensureDomOrder': True,
+        'domLayout': 'normal',  # Usar layout normal, no autoajustable
+        'onGridReady': None,  # Evitar cualquier callback que pueda modificar anchos
+        'pagination': True,
+        'paginationPageSize': 50
+    })
+
+    # Función para formatear fechas en el grid
+    def date_formatter(params):
+        if params.value is None or pd.isna(params.value):
+            return ""
+        try:
+            if isinstance(params.value, (pd.Timestamp, datetime)):
+                return params.value.strftime("%d/%m/%Y")
+            elif isinstance(params.value, str):
+                date_val = pd.to_datetime(params.value, errors='coerce')
+                return date_val.strftime("%d/%m/%Y") if pd.notna(date_val) else ""
+            else:
+                return str(params.value)
+        except:
+            return str(params.value)
+
+    # Aplicar formateador de fechas a las columnas de fecha
+    for col in columnas_fecha:
+        if col in grid_options['columnDefs']:
+            for col_def in grid_options['columnDefs']:
+                if col_def['field'] == col:
+                    col_def['valueFormatter'] = date_formatter
+                    break
+
+    # Mostrar tabla con AgGrid - CONFIGURACIÓN FINAL
     try:
         grid_response = AgGrid(
             df_mostrar,
@@ -2524,28 +2637,53 @@ elif eleccion == "Vista de Expedientes":
             width='100%',
             data_return_mode='AS_INPUT',
             update_mode='MODEL_CHANGED',
-            fit_columns_on_grid_load=False,
-            allow_unsafe_jscode=True,
-            enable_enterprise_modules=True,
-            theme='streamlit'
+            fit_columns_on_grid_load=False,  # CRÍTICO: Desactivar autoajuste
+            allow_unsafe_jscode=False,  # Evitar JS que pueda modificar anchos
+            enable_enterprise_modules=False,  # Desactivar módulos enterprise que puedan interferir
+            theme='streamlit',
+            custom_css={
+                ".ag-header-cell-text": {
+                    "font-size": "12px", 
+                    "font-weight": "bold",
+                    "white-space": "normal",
+                    "line-height": "1.2"
+                },
+                ".ag-cell": {
+                    "font-size": "11px",
+                    "white-space": "normal",
+                    "line-height": "1.2"
+                },
+                ".ag-row-hover": {
+                    "background-color": "#f0f0f0 !important"
+                },
+                ".ag-header": {
+                    "background-color": "#f8f9fa !important"
+                },
+                ".ag-root-wrapper": {
+                    "border": "1px solid #ddd !important", 
+                    "border-radius": "5px"
+                },
+                # Forzar que las columnas mantengan su ancho
+                ".ag-header-cell": {
+                    "min-width": "80px !important"
+                }
+            }
         )
         
-        # MÚLTIPLES FORMAS DE OBTENER LAS FILAS SELECCIONADAS
+        # Obtener filas seleccionadas
         selected_rows = []
-        
-        # Método 1: Intentar con get()
         if isinstance(grid_response, dict):
             selected_rows = grid_response.get('selected_rows', [])
-        # Método 2: Intentar con atributo
         elif hasattr(grid_response, 'selected_rows'):
             selected_rows = grid_response.selected_rows
-        # Método 3: Intentar con getattr
         else:
             selected_rows = getattr(grid_response, 'selected_rows', [])
         
-        # Asegurarnos que selected_rows es una lista
         if not isinstance(selected_rows, list):
             selected_rows = []
+            
+        if selected_rows:
+            st.info(f"📌 {len(selected_rows)} fila(s) seleccionada(s)")
             
     except Exception as e:
         st.error(f"❌ Error en AgGrid: {e}")
@@ -2920,11 +3058,15 @@ elif eleccion == "Indicadores clave (KPI)":
                 label="📊 Coef. Absorción (Cer/Asig)",
                 value=f"{kpis_semana['c_abs_cerrados_tot']:.2f}%".replace(".", ",")
             )
-        
+            st.metric(
+                label="👥 Expedientes Rehabilitados (última semana)",
+                value=f"{int(kpis_semana['total_rehabilitados']):,}".replace(",", ".")
+            )
+                    
         st.markdown("---")
         
         # SEGUNDA FILA - EXPEDIENTES ESPECIALES
-        st.subheader("📋 Expedientes con 029, 033, PRE, RSL, pendiente de firma, de decisión o de completar trámite")
+        st.subheader("📋 Expedientes con 029, 033, PRE, RSL, pendiente de firma, de decisión o de completar trámite (ÚLTIMA SEMANA)")
         col1, col2 = st.columns(2)
         
         with col1:
