@@ -48,9 +48,9 @@ user_env = UserEnvironment()
 FECHA_REFERENCIA = datetime(2022, 11, 1)
 HOJA = "Sheet1"
 ESTADOS_PENDIENTES = ["Abierto"]
-CACHE_TTL = 7200  # 2 horas en segundos
+CACHE_TTL = 14800  # 4 horas en segundos
 CACHE_TTL_STATIC = 86400  # 24 horas para datos estáticos
-CACHE_TTL_DYNAMIC = 3600  # 1 hora para datos dinámicos
+CACHE_TTL_DYNAMIC = 7200  # 2 hora para datos dinámicos
 COL_WIDTHS_OPTIMIZED = [28, 11, 11, 8, 16, 11, 11, 16, 11, 20, 20, 10, 18, 11, 14, 10, 24, 20, 11]
 
 # Test file en directorio único por usuario
@@ -2076,13 +2076,19 @@ elif eleccion == "Vista de Expedientes":
 
     # Botón para resetear filtros
     if st.sidebar.button("🔄 Mostrar todos / Resetear filtros", use_container_width=True):
-        st.session_state.filtro_estado = sorted(df['ESTADO'].dropna().unique())
-        st.session_state.filtro_equipo = sorted(df['EQUIPO'].dropna().unique())
-        st.session_state.filtro_usuario = sorted(df['USUARIO'].dropna().unique())
-        if 'ETIQ. PENÚLTIMO TRAM.' in df.columns:
-            st.session_state.filtro_etiq_penultimo = sorted(df['ETIQ. PENÚLTIMO TRAM.'].dropna().unique())
-        if 'ETIQ. ÚLTIMO TRAM.' in df.columns:
-            st.session_state.filtro_etiq_ultimo = sorted(df['ETIQ. ÚLTIMO TRAM.'].dropna().unique())
+        st.session_state.filtro_estado = []
+        st.session_state.filtro_equipo = []
+        st.session_state.filtro_usuario = []
+        st.session_state.filtro_etiq_penultimo = []
+        st.session_state.filtro_etiq_ultimo = []
+
+        #st.session_state.filtro_estado = sorted(df['ESTADO'].dropna().unique())
+        #st.session_state.filtro_equipo = sorted(df['EQUIPO'].dropna().unique())
+        #st.session_state.filtro_usuario = sorted(df['USUARIO'].dropna().unique())
+        #if 'ETIQ. PENÚLTIMO TRAM.' in df.columns:
+        #    st.session_state.filtro_etiq_penultimo = sorted(df['ETIQ. PENÚLTIMO TRAM.'].dropna().unique())
+        #if 'ETIQ. ÚLTIMO TRAM.' in df.columns:
+        #    st.session_state.filtro_etiq_ultimo = sorted(df['ETIQ. ÚLTIMO TRAM.'].dropna().unique())
         st.rerun()
 
     # 1. Primero aplicar filtros secuencialmente para calcular opciones disponibles
@@ -2395,26 +2401,22 @@ elif eleccion == "Vista de Expedientes":
                 columnas_graficos[i].plotly_chart(fig, use_container_width=True)
 
     # NUEVOS GRÁFICOS PARA LAS ETIQUETAS
-    if 'ETIQ. PENÚLTIMO TRAM.' in df_filtrado.columns:
-        conteo_penultimo = df_filtrado['ETIQ. PENÚLTIMO TRAM.'].value_counts().reset_index()
-        conteo_penultimo.columns = ['ETIQ. PENÚLTIMO TRAM.', 'Cantidad']
-        fig_penultimo = crear_grafico_dinamico(conteo_penultimo, 'ETIQ. PENÚLTIMO TRAM.', 'Distribución por ETIQ. PENÚLTIMO TRAM.')
-        if fig_penultimo:
-            st.plotly_chart(fig_penultimo, use_container_width=True)
+    col1, col2 = st.columns(2)
+    with col1:
+        if 'ETIQ. PENÚLTIMO TRAM.' in df_filtrado.columns:
+            conteo_penultimo = df_filtrado['ETIQ. PENÚLTIMO TRAM.'].value_counts().reset_index()
+            conteo_penultimo.columns = ['ETIQ. PENÚLTIMO TRAM.', 'Cantidad']
+            fig_penultimo = crear_grafico_dinamico(conteo_penultimo, 'ETIQ. PENÚLTIMO TRAM.', 'Distribución por ETIQ. PENÚLTIMO TRAM.')
+            if fig_penultimo:
+                st.plotly_chart(fig_penultimo, use_container_width=False)
 
-    if 'ETIQ. ÚLTIMO TRAM.' in df_filtrado.columns:
-        conteo_ultimo = df_filtrado['ETIQ. ÚLTIMO TRAM.'].value_counts().reset_index()
-        conteo_ultimo.columns = ['ETIQ. ÚLTIMO TRAM.', 'Cantidad']
-        fig_ultimo = crear_grafico_dinamico(conteo_ultimo, 'ETIQ. ÚLTIMO TRAM.', 'Distribución por ETIQ. ÚLTIMO TRAM.')
-        if fig_ultimo:
-            st.plotly_chart(fig_ultimo, use_container_width=True)
-
-    if "NOTIFICADO" in df_filtrado.columns:
-        conteo_notificado = df_filtrado["NOTIFICADO"].value_counts().reset_index()
-        conteo_notificado.columns = ["NOTIFICADO", "Cantidad"]
-        fig = crear_grafico_dinamico(conteo_notificado, "NOTIFICADO", "Expedientes notificados")
-        if fig:
-            st.plotly_chart(fig, use_container_width=True)
+    with col2:
+        if 'ETIQ. ÚLTIMO TRAM.' in df_filtrado.columns:
+            conteo_ultimo = df_filtrado['ETIQ. ÚLTIMO TRAM.'].value_counts().reset_index()
+            conteo_ultimo.columns = ['ETIQ. ÚLTIMO TRAM.', 'Cantidad']
+            fig_ultimo = crear_grafico_dinamico(conteo_ultimo, 'ETIQ. ÚLTIMO TRAM.', 'Distribución por ETIQ. ÚLTIMO TRAM.')
+            if fig_ultimo:
+                st.plotly_chart(fig_ultimo, use_container_width=False)
 
     # VISTA GENERAL - CON AGGRID MEJORADO
     st.subheader("📋 Vista general de expedientes")
@@ -2552,6 +2554,7 @@ elif eleccion == "Vista de Expedientes":
         'suppressContextMenu': False,
         'enableCellTextSelection': True,
         'ensureDomOrder': True,
+        'headerHeight': 60,
     })
 
     # Función para formatear fechas en el grid
@@ -2582,7 +2585,7 @@ elif eleccion == "Vista de Expedientes":
         grid_response = AgGrid(
             df_mostrar,
             gridOptions=grid_options,
-            height=660,
+            height=700,
             width='100%',
             data_return_mode='AS_INPUT',
             update_mode='MODEL_CHANGED',
