@@ -3312,15 +3312,685 @@ elif eleccion == "Análisis del Rendimiento":
         st.warning("⚠️ Primero carga los archivos en la sección 'Carga de Archivos'")
         st.stop()
     
-    st.info("🔧 **Esta sección está en desarrollo.**")
-    st.write("Próximamente se incluirán análisis avanzados de rendimiento y productividad.")
+    # Usar df_combinado en lugar de df
+    df = st.session_state["df_combinado"]
+    df_usuarios = st.session_state.get("df_usuarios", None)
     
-    # Aquí puedes agregar el contenido específico para el análisis de rendimiento
-    st.write("Funcionalidades planificadas:")
-    st.write("- Análisis comparativo entre equipos")
-    st.write("- Tendencias de productividad")
-    st.write("- Análisis de cuellos de botella")
-    st.write("- Recomendaciones de optimización")
+    # Verificar si tenemos el archivo de usuarios
+    if df_usuarios is None or df_usuarios.empty:
+        st.error("❌ No se ha cargado el archivo USUARIOS.xlsx o está vacío")
+        st.info("💡 Necesitas cargar el archivo USUARIOS.xlsx en la sección 'Carga de Archivos' para usar esta funcionalidad")
+        st.stop()
+    
+    # Obtener fecha máxima para cálculos
+    columna_fecha = df.columns[13]
+    df[columna_fecha] = pd.to_datetime(df[columna_fecha], errors='coerce')
+    fecha_max = df[columna_fecha].max()
+    
+    if pd.isna(fecha_max):
+        st.error("No se pudo encontrar la fecha máxima en los datos")
+        st.stop()
+    
+    fecha_max_str = fecha_max.strftime("%d/%m/%Y")
+    
+    st.info(f"📅 **Fecha de referencia para cálculos:** {fecha_max_str}")
+    
+    # =============================================
+    # CÁLCULOS PREVIOS
+    # =============================================
+    
+    @st.cache_data(ttl=CACHE_TTL)
+    def calcular_rendimiento_usuarios(_df, _df_usuarios, _fecha_max):
+        """Calcula todos los indicadores de rendimiento para usuarios y equipos"""
+        
+        # 1. IDENTIFICAR EXPEDIENTES DESPACHADOS
+        fecha_9999 = pd.to_datetime('9999-09-09', errors='coerce')
+        fecha_inicio_totales = datetime(2022, 11, 1)
+        
+        # Expedientes con FECHA RESOLUCIÓN real (distinta de 9999 y no nula)
+        mask_despachados_reales = (
+            _df['FECHA RESOLUCIÓN'].notna() & 
+            (_df['FECHA RESOLUCIÓN'] != fecha_9999) &
+            (_df['FECHA RESOLUCIÓN'] >= fecha_inicio_totales) &
+            (_df['FECHA RESOLUCIÓN'] <= _fecha_max)
+        )
+        
+        # Expedientes CERRADOS con FECHA RESOLUCIÓN = 9999-09-09 o vacía
+        mask_despachados_cerrados = (
+            (_df['ESTADO'] == 'Cerrado') &
+            (_df['FECHA RESOLUCIÓN'].isna() | (_df['FECHA RESOLUCIÓN'] == fecha_9999)) &
+            _df['FECHA CIERRE'].notna() &
+            (_df['FECHA CIERRE'] >= fecha_inicio_totales) &
+            (_df['FECHA CIERRE'] <= _fecha_max)
+        )
+        
+        mask_despachados = mask_despachados_reales | mask_despachados_cerrados
+        df_despachados = _df[mask_despachados].copy()
+        
+        # 2. CALCULAR DESPACHADOS POR USUARIO Y EQUIPO
+        # Verificar que las columnas necesarias existen
+        if 'USUARIO' not in df_despachados.columns or 'EQUIPO' not in df_despachados.columns:
+            st.error("❌ No se encuentran las columnas USUARIO o EQUIPO en los datos")
+            return pd.DataFrame()
+            
+        despachados_por_usuario_equipo = df_despachados.groupby(['USUARIO', 'EQUIPO']).size().reset_index(name='EXPEDIENTES_DESPACHADOS')
+        
+        # 3. PREPARAR DATOS DE USUARIOS
+        usuarios_data = []
+        
+        # Verificar columnas en el archivo de usuarios
+        columnas_usuarios = _df_usuarios.columns.tolist()
+        st.info(f"📋 Columnas en archivo USUARIOS: {', '.join(columnas_usuarios)}")
+        
+        # Buscar nombres alternativos para las columnas
+        columna_usuario = None
+        columna_fecha_inicio = None
+        columna_fecha_fin = None
+        columna_semanas_baja = None
+        
+        # Mapeo de posibles nombres de columnas
+        mapeo_columnas = {
+            'usuario': ['USUARIOS', 'USUARIO', 'NOMBRE', 'NOMBRE USUARIO'],
+            'fecha_inicio': ['FECHA INICIO', 'INICIO', 'FECHA_ALTA', 'ALTA'],
+            'fecha_fin': ['FECHA FIN', 'FIN', 'FECHA_BAJA', 'BAJA', 'FECHA SALIDA'],
+            'semanas_baja': ['SEMANAS DE BAJA', 'SEMANAS_BAJA', 'BAJAS', 'DIAS BAJA']
+        }
+        
+        for col_tipo, posibles_nombres in mapeo_columnas.items():
+            for nombre in posibles_nombres:
+                if nombre in _df_usuarios.columns:
+                    if col_tipo == 'usuario':
+                        columna_usuario = nombre
+                    elif col_tipo == 'fecha_inicio':
+                        columna_fecha_inicio = nombre
+                    elif col_tipo == 'fecha_fin':
+                        columna_fecha_fin = nombre
+                    elif col_tipo == 'semanas_baja':
+                        columna_semanas_baja = nombre
+                    break
+        
+        if not columna_usuario:
+            st.error("❌ No se encuentra la columna de usuarios en el archivo USUARIOS")
+            st.info("💡 Las columnas disponibles son: " + ", ".join(columnas_usuarios))
+            return pd.DataFrame()
+        
+        st.success(f"✅ Columna de usuario identificada: {columna_usuario}")
+        if columna_fecha_inicio:
+            st.info(f"📅 Columna fecha inicio: {columna_fecha_inicio}")
+        if columna_fecha_fin:
+            st.info(f"📅 Columna fecha fin: {columna_fecha_fin}")
+        if columna_semanas_baja:
+            st.info(f"🏥 Columna semanas baja: {columna_semanas_baja}")
+        
+        for _, usuario_row in _df_usuarios.iterrows():
+            usuario_nombre = usuario_row[columna_usuario]
+            
+            # Obtener fechas con nombres alternativos
+            fecha_inicio = usuario_row.get(columna_fecha_inicio, None) if columna_fecha_inicio else None
+            fecha_fin = usuario_row.get(columna_fecha_fin, None) if columna_fecha_fin else None
+            semanas_baja = usuario_row.get(columna_semanas_baja, 0) if columna_semanas_baja else 0
+            
+            # Determinar estado
+            if pd.isna(fecha_fin) or str(fecha_fin).strip() == '':
+                estado = "ACTIVO"
+            else:
+                try:
+                    fecha_fin_dt = pd.to_datetime(fecha_fin, errors='coerce')
+                    if pd.isna(fecha_fin_dt) or fecha_fin_dt > _fecha_max:
+                        estado = "ACTIVO"
+                    else:
+                        estado = "INACTIVO"
+                except:
+                    estado = "ACTIVO"
+            
+            usuarios_data.append({
+                'USUARIO': usuario_nombre,
+                'FECHA_INICIO': fecha_inicio,
+                'FECHA_FIN': fecha_fin,
+                'SEMANAS_BAJA': semanas_baja,
+                'ESTADO': estado
+            })
+        
+        df_usuarios_info = pd.DataFrame(usuarios_data)
+        
+        # 4. COMBINAR DATOS Y CALCULAR INDICADORES
+        resultados = []
+        
+        # Para cada combinación usuario-equipo en los despachados
+        for _, row in despachados_por_usuario_equipo.iterrows():
+            usuario = row['USUARIO']
+            equipo = row['EQUIPO']
+            expedientes_despachados = row['EXPEDIENTES_DESPACHADOS']
+            
+            # Buscar información del usuario
+            usuario_info = None
+            if not df_usuarios_info.empty:
+                usuario_match = df_usuarios_info[df_usuarios_info['USUARIO'] == usuario]
+                if not usuario_match.empty:
+                    usuario_info = usuario_match.iloc[0]
+            
+            # CALCULAR SEMANAS EFECTIVAS
+            semanas_efectivas = 1
+            estado = "INACTIVO"  # Por defecto si no se encuentra en usuarios
+            
+            if usuario_info is not None:
+                # Usuario encontrado en archivo USUARIOS
+                fecha_inicio = pd.to_datetime(usuario_info['FECHA_INICIO'], errors='coerce')
+                fecha_fin = pd.to_datetime(usuario_info['FECHA_FIN'], errors='coerce')
+                semanas_baja = float(usuario_info['SEMANAS_BAJA']) if pd.notna(usuario_info['SEMANAS_BAJA']) and str(usuario_info['SEMANAS_BAJA']).strip() != '' else 0
+                estado = usuario_info['ESTADO']
+                
+                # Calcular fecha fin efectiva
+                fecha_fin_efectiva = fecha_fin if pd.notna(fecha_fin) and fecha_fin <= _fecha_max else _fecha_max
+                
+                # Calcular semanas efectivas de trabajo - CORRECCIÓN: Si fecha_inicio es posterior a fecha_inicio_totales, usar fecha_inicio
+                fecha_inicio_efectiva = max(fecha_inicio, fecha_inicio_totales) if pd.notna(fecha_inicio) else fecha_inicio_totales
+                
+                if pd.notna(fecha_inicio_efectiva):
+                    dias_totales = (fecha_fin_efectiva - fecha_inicio_efectiva).days
+                    semanas_totales = max(dias_totales / 7, 0)
+                    semanas_efectivas = max(semanas_totales - semanas_baja, 0)
+            
+            # CALCULAR RENDIMIENTOS POR PERÍODOS
+            
+            # Definir períodos
+            fecha_inicio_anio = _fecha_max - timedelta(days=365)
+            fecha_inicio_trimestre = _fecha_max - timedelta(days=90)
+            fecha_inicio_mes = _fecha_max - timedelta(days=30)
+            fecha_inicio_semana = _fecha_max - timedelta(days=7)
+            
+            # Ajustar fechas de inicio según fecha_inicio del usuario
+            if usuario_info is not None and pd.notna(usuario_info['FECHA_INICIO']):
+                fecha_inicio_usuario = pd.to_datetime(usuario_info['FECHA_INICIO'])
+                fecha_inicio_anio = max(fecha_inicio_anio, fecha_inicio_usuario)
+                fecha_inicio_trimestre = max(fecha_inicio_trimestre, fecha_inicio_usuario)
+                fecha_inicio_mes = max(fecha_inicio_mes, fecha_inicio_usuario)
+                fecha_inicio_semana = max(fecha_inicio_semana, fecha_inicio_usuario)
+            
+            # Último año (52 semanas antes de fecha_max)
+            despachados_ultimo_anio = len(df_despachados[
+                (df_despachados['USUARIO'] == usuario) & 
+                (df_despachados['EQUIPO'] == equipo) &
+                (estado == 'ACTIVO') &
+                (df_despachados['FECHA RESOLUCIÓN'] >= fecha_inicio_anio) &
+                (df_despachados['FECHA RESOLUCIÓN'] <= _fecha_max)
+            ])
+            # Calcular semanas reales del período anual
+            semanas_anio = min(52, ((_fecha_max - fecha_inicio_anio).days / 7)) if fecha_inicio_anio < _fecha_max else 0
+            rendimiento_anual = despachados_ultimo_anio / semanas_anio if semanas_anio > 0 else 0
+            
+            # Últimos tres meses (13 semanas)
+            despachados_trimestre = len(df_despachados[
+                (df_despachados['USUARIO'] == usuario) & 
+                (df_despachados['EQUIPO'] == equipo) &
+                (estado == 'ACTIVO') &
+                (df_despachados['FECHA RESOLUCIÓN'] >= fecha_inicio_trimestre) &
+                (df_despachados['FECHA RESOLUCIÓN'] <= _fecha_max)
+            ])
+            # Calcular semanas reales del período trimestral
+            semanas_trimestre = min(13, ((_fecha_max - fecha_inicio_trimestre).days / 7)) if fecha_inicio_trimestre < _fecha_max else 0
+            rendimiento_trimestral = despachados_trimestre / semanas_trimestre if semanas_trimestre > 0 else 0
+            
+            # Último mes (4 semanas)
+            despachados_mes = len(df_despachados[
+                (df_despachados['USUARIO'] == usuario) & 
+                (df_despachados['EQUIPO'] == equipo) &
+                (estado == 'ACTIVO') &
+                (df_despachados['FECHA RESOLUCIÓN'] >= fecha_inicio_mes) &
+                (df_despachados['FECHA RESOLUCIÓN'] <= _fecha_max)
+            ])
+            # Calcular semanas reales del período mensual
+            semanas_mes = min(4, ((_fecha_max - fecha_inicio_mes).days / 7)) if fecha_inicio_mes < _fecha_max else 0
+            rendimiento_mensual = despachados_mes / semanas_mes if semanas_mes > 0 else 0
+            
+            # Última semana
+            despachados_semana = len(df_despachados[
+                (df_despachados['USUARIO'] == usuario) & 
+                (df_despachados['EQUIPO'] == equipo) &
+                (estado == 'ACTIVO') &
+                (df_despachados['FECHA RESOLUCIÓN'] >= fecha_inicio_semana) &
+                (df_despachados['FECHA RESOLUCIÓN'] <= _fecha_max)
+            ])
+            # Calcular semanas reales del período semanal
+            semanas_semana = min(1, ((_fecha_max - fecha_inicio_semana).days / 7)) if fecha_inicio_semana < _fecha_max else 0
+            rendimiento_semanal = despachados_semana / semanas_semana if semanas_semana > 0 else 0
+            
+            # Rendimiento total
+            rendimiento_total = expedientes_despachados / semanas_efectivas if semanas_efectivas > 0 else 0
+            
+            resultados.append({
+                'USUARIO': usuario,
+                'EQUIPO': equipo,
+                'ESTADO': estado,
+                'EXPEDIENTES_DESPACHADOS': expedientes_despachados,
+                'SEMANAS_EFECTIVAS': round(semanas_efectivas, 1),
+                'RENDIMIENTO_TOTAL': round(rendimiento_total, 2),
+                'RENDIMIENTO_ANUAL': round(rendimiento_anual, 2),
+                'RENDIMIENTO_TRIMESTRAL': round(rendimiento_trimestral, 2),
+                'RENDIMIENTO_MENSUAL': round(rendimiento_mensual, 2),
+                'RENDIMIENTO_SEMANAL': round(rendimiento_semanal, 2)
+            })
+        
+        return pd.DataFrame(resultados)
+    
+    # Calcular datos de rendimiento
+    with st.spinner("📊 Calculando indicadores de rendimiento..."):
+        df_rendimiento = calcular_rendimiento_usuarios(df, df_usuarios, fecha_max)
+    
+    if df_rendimiento.empty:
+        st.warning("⚠️ No se encontraron datos de rendimiento para mostrar")
+        st.info("💡 Esto puede deberse a que no hay expedientes despachados o no coinciden los nombres de usuarios entre los archivos")
+        
+        # Mostrar información de depuración
+        with st.expander("🔍 Información de depuración"):
+            st.write("**Usuarios en RECTAUTO:**", df['USUARIO'].dropna().unique().tolist() if 'USUARIO' in df.columns else "Columna USUARIO no encontrada")
+            if df_usuarios is not None:
+                columna_usuario = None
+                for col in ['USUARIOS', 'USUARIO', 'NOMBRE']:
+                    if col in df_usuarios.columns:
+                        columna_usuario = col
+                        break
+                if columna_usuario:
+                    st.write(f"**Usuarios en USUARIOS.xlsx ({columna_usuario}):**", df_usuarios[columna_usuario].dropna().unique().tolist())
+        
+        st.stop()
+    
+    # =============================================
+    # FILTROS INTERCONECTADOS EN SIDEBAR
+    # =============================================
+    
+    st.sidebar.header("🔍 Filtros de Rendimiento")
+    
+    # Inicializar variables de sesión para filtros
+    if 'filtro_estado_rendimiento' not in st.session_state:
+        st.session_state.filtro_estado_rendimiento = []
+    
+    if 'filtro_equipo_rendimiento' not in st.session_state:
+        st.session_state.filtro_equipo_rendimiento = []
+    
+    if 'filtro_usuario_rendimiento' not in st.session_state:
+        st.session_state.filtro_usuario_rendimiento = []
+    
+    # Botón para resetear filtros
+    if st.sidebar.button("🔄 Resetear filtros", use_container_width=True, key="reset_rendimiento"):
+        st.session_state.filtro_estado_rendimiento = []
+        st.session_state.filtro_equipo_rendimiento = []
+        st.session_state.filtro_usuario_rendimiento = []
+        st.rerun()
+    
+    # 1. Aplicar filtros secuencialmente para calcular opciones disponibles
+    df_filtrado_temp = df_rendimiento.copy()
+    
+    # Aplicar filtro de ESTADO primero
+    if st.session_state.filtro_estado_rendimiento:
+        df_filtrado_temp = df_filtrado_temp[df_filtrado_temp['ESTADO'].isin(st.session_state.filtro_estado_rendimiento)]
+    
+    # Calcular EQUIPOS disponibles basados en el filtro de ESTADO
+    equipos_disponibles = sorted(df_filtrado_temp['EQUIPO'].dropna().unique())
+    
+    # Aplicar filtro de EQUIPO (si hay selección)
+    equipos_seleccionados = [eq for eq in st.session_state.filtro_equipo_rendimiento if eq in equipos_disponibles]
+    if equipos_seleccionados:
+        df_filtrado_temp = df_filtrado_temp[df_filtrado_temp['EQUIPO'].isin(equipos_seleccionados)]
+    
+    # Calcular USUARIOS disponibles basados en filtros de ESTADO y EQUIPO
+    usuarios_disponibles = sorted(df_filtrado_temp['USUARIO'].dropna().unique())
+    
+    # 2. Crear widgets de filtro con opciones actualizadas
+    st.sidebar.markdown("---")
+    
+    # FILTRO DE ESTADO
+    opciones_estado = sorted(df_rendimiento['ESTADO'].dropna().unique())
+    estado_sel = st.sidebar.multiselect(
+        "🔘 Estado:",
+        options=opciones_estado,
+        default=st.session_state.filtro_estado_rendimiento,
+        key='filtro_estado_rendimiento_selector'
+    )
+    
+    # FILTRO DE EQUIPO
+    equipo_sel = st.sidebar.multiselect(
+        "👥 Equipo:",
+        options=equipos_disponibles,
+        default=equipos_seleccionados,
+        key='filtro_equipo_rendimiento_selector'
+    )
+    
+    # FILTRO DE USUARIO
+    usuario_sel = st.sidebar.multiselect(
+        "👤 Usuario:",
+        options=usuarios_disponibles,
+        default=st.session_state.filtro_usuario_rendimiento,
+        key='filtro_usuario_rendimiento_selector'
+    )
+    
+    # 3. Actualizar session_state cuando cambian los filtros
+    if estado_sel != st.session_state.filtro_estado_rendimiento:
+        st.session_state.filtro_estado_rendimiento = estado_sel
+        st.session_state.filtro_equipo_rendimiento = []
+        st.session_state.filtro_usuario_rendimiento = []
+        st.rerun()
+    
+    if equipo_sel != st.session_state.filtro_equipo_rendimiento:
+        st.session_state.filtro_equipo_rendimiento = equipo_sel
+        st.session_state.filtro_usuario_rendimiento = []
+        st.rerun()
+    
+    if usuario_sel != st.session_state.filtro_usuario_rendimiento:
+        st.session_state.filtro_usuario_rendimiento = usuario_sel
+        st.rerun()
+    
+    # 4. Aplicar filtros finales al DataFrame principal
+    df_filtrado = df_rendimiento.copy()
+    
+    if st.session_state.filtro_estado_rendimiento:
+        df_filtrado = df_filtrado[df_filtrado['ESTADO'].isin(st.session_state.filtro_estado_rendimiento)]
+    
+    if st.session_state.filtro_equipo_rendimiento:
+        df_filtrado = df_filtrado[df_filtrado['EQUIPO'].isin(st.session_state.filtro_equipo_rendimiento)]
+    
+    if st.session_state.filtro_usuario_rendimiento:
+        df_filtrado = df_filtrado[df_filtrado['USUARIO'].isin(st.session_state.filtro_usuario_rendimiento)]
+    
+    # Mostrar resumen de filtros
+    st.sidebar.markdown("---")
+    st.sidebar.subheader("📊 Resumen Filtros")
+    
+    if st.session_state.filtro_estado_rendimiento:
+        st.sidebar.write(f"**Estados:** {len(st.session_state.filtro_estado_rendimiento)}")
+    
+    if st.session_state.filtro_equipo_rendimiento:
+        st.sidebar.write(f"**Equipos:** {len(st.session_state.filtro_equipo_rendimiento)}")
+    
+    if st.session_state.filtro_usuario_rendimiento:
+        st.sidebar.write(f"**Usuarios:** {len(st.session_state.filtro_usuario_rendimiento)}")
+    
+    st.sidebar.write(f"**Registros:** {len(df_filtrado):,}".replace(",", "."))
+    
+    # =============================================
+    # CÁLCULO DE TOTALES AGRUPADOS
+    # =============================================
+    
+    def calcular_totales_agrupados(df_agrupar):
+        """Calcula los totales agrupados correctamente"""
+        if df_agrupar.empty:
+            return None
+            
+        # Sumas directas
+        total_expedientes = df_agrupar['EXPEDIENTES_DESPACHADOS'].sum()
+        total_semanas = df_agrupar['SEMANAS_EFECTIVAS'].sum()
+        
+        # Calcular rendimiento total correcto
+        rendimiento_total_agrupado = total_expedientes / total_semanas if total_semanas > 0 else 0
+        
+        # Para los rendimientos por período, calcular la media ponderada
+        # pero primero necesitamos recalcular los períodos a nivel agrupado
+        # Por simplicidad, calculamos la media de los rendimientos individuales
+        rendimiento_anual_agrupado = df_agrupar['RENDIMIENTO_ANUAL'].mean()
+        rendimiento_trimestral_agrupado = df_agrupar['RENDIMIENTO_TRIMESTRAL'].mean()
+        rendimiento_mensual_agrupado = df_agrupar['RENDIMIENTO_MENSUAL'].mean()
+        rendimiento_semanal_agrupado = df_agrupar['RENDIMIENTO_SEMANAL'].mean()
+        
+        return {
+            'USUARIO': 'TOTAL',
+            'EQUIPO': 'TOTAL',
+            'ESTADO': 'TOTAL',
+            'EXPEDIENTES_DESPACHADOS': total_expedientes,
+            'SEMANAS_EFECTIVAS': round(total_semanas, 1),
+            'RENDIMIENTO_TOTAL': round(rendimiento_total_agrupado, 2),
+            'RENDIMIENTO_ANUAL': round(rendimiento_anual_agrupado, 2),
+            'RENDIMIENTO_TRIMESTRAL': round(rendimiento_trimestral_agrupado, 2),
+            'RENDIMIENTO_MENSUAL': round(rendimiento_mensual_agrupado, 2),
+            'RENDIMIENTO_SEMANAL': round(rendimiento_semanal_agrupado, 2)
+        }
+    
+    # Calcular total general
+    total_general = calcular_totales_agrupados(df_filtrado)
+    
+    # =============================================
+    # VISTA PRINCIPAL CON AgGrid
+    # =============================================
+    
+    st.subheader("📋 Tabla de Rendimiento por Usuario y Equipo")
+    
+    # Mostrar estadísticas rápidas
+    col1, col2, col3, col4 = st.columns(4)
+    
+    with col1:
+        total_usuarios = df_filtrado['USUARIO'].nunique()
+        st.metric("Usuarios únicos", total_usuarios)
+    
+    with col2:
+        total_equipos = df_filtrado['EQUIPO'].nunique()
+        st.metric("Equipos únicos", total_equipos)
+    
+    with col3:
+        total_despachados = df_filtrado['EXPEDIENTES_DESPACHADOS'].sum()
+        st.metric("Expedientes despachados", f"{total_despachados:,}".replace(",", "."))
+    
+    with col4:
+        if total_general:
+            st.metric("Rendimiento total", f"{total_general['RENDIMIENTO_TOTAL']:.2f}")
+        else:
+            st.metric("Rendimiento total", "0.00")
+    
+    # Preparar datos para AgGrid (incluyendo totales)
+    df_mostrar = df_filtrado.copy()
+    
+    # Añadir fila de total general
+    if total_general:
+        df_mostrar = pd.concat([df_mostrar, pd.DataFrame([total_general])], ignore_index=True)
+    
+    # Configurar AgGrid - VERSIÓN CORREGIDA SIN FUNCIONES EN gridOptions
+    gb = GridOptionsBuilder.from_dataframe(df_mostrar)
+    
+    # Configurar todas las columnas
+    column_configs = {
+        'USUARIO': {'width': 120, 'pinned': True},
+        'EQUIPO': {'width': 120, 'pinned': True},
+        'ESTADO': {'width': 100},
+        'EXPEDIENTES_DESPACHADOS': {'width': 100, 'type': ['numericColumn']},
+        'SEMANAS_EFECTIVAS': {'width': 120, 'type': ['numericColumn']},
+        'RENDIMIENTO_TOTAL': {'width': 120, 'type': ['numericColumn']},
+        'RENDIMIENTO_ANUAL': {'width': 120, 'type': ['numericColumn']},
+        'RENDIMIENTO_TRIMESTRAL': {'width': 140, 'type': ['numericColumn']},
+        'RENDIMIENTO_MENSUAL': {'width': 130, 'type': ['numericColumn']},
+        'RENDIMIENTO_SEMANAL': {'width': 130, 'type': ['numericColumn']}
+    }
+    
+    for column, config in column_configs.items():
+        if column in df_mostrar.columns:
+            gb.configure_column(
+                column,
+                width=config['width'],
+                filter=('agNumberColumnFilter' if 'type' in config and 'numericColumn' in config['type'] else 'agTextColumnFilter'),
+                pinned=config.get('pinned', False),
+                sortable=True,
+                resizable=True
+            )
+    
+    # Configurar la barra lateral
+    gb.configure_side_bar(filters_panel=True, columns_panel=True)
+    gb.configure_selection('multiple', use_checkbox=True)
+    gb.configure_pagination(paginationAutoPageSize=False, paginationPageSize=20)
+    
+    grid_options = gb.build()
+    
+    # Mostrar tabla con AgGrid - VERSIÓN CORREGIDA
+    try:
+        grid_response = AgGrid(
+            df_mostrar,
+            gridOptions=grid_options,
+            height=600,
+            width='100%',
+            data_return_mode='AS_INPUT',
+            update_mode='MODEL_CHANGED',
+            fit_columns_on_grid_load=False,
+            allow_unsafe_jscode=True,  # IMPORTANTE: Permitir código JS no seguro
+            enable_enterprise_modules=True,
+            theme='streamlit',
+            custom_css={
+                # Aplicar estilo a la fila TOTAL usando CSS puro
+                ".ag-row:last-child": {
+                    "background-color": "#e6f3ff !important",
+                    "font-weight": "bold !important"
+                },
+                ".ag-header-cell-text": {
+                    "font-size": "12px", 
+                    "font-weight": "bold",
+                    "white-space": "normal",
+                    "line-height": "1.2"
+                },
+                ".ag-cell": {
+                    "font-size": "11px",
+                    "white-space": "normal",
+                    "line-height": "1.2"
+                },
+                ".ag-row-hover": {
+                    "background-color": "#f0f0f0 !important"
+                },
+                ".ag-header": {
+                    "background-color": "#f8f9fa !important"
+                }
+            }
+        )
+        
+    except Exception as e:
+        st.error(f"❌ Error en AgGrid: {e}")
+        # Fallback: mostrar tabla simple
+        st.dataframe(df_mostrar, use_container_width=True)
+    
+    # =============================================
+    # GRÁFICOS DE ANÁLISIS
+    # =============================================
+    
+    st.markdown("---")
+    st.subheader("📊 Gráficos de Análisis")
+    
+    if not df_filtrado.empty:
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            # Gráfico de rendimiento por equipo
+            rendimiento_por_equipo = df_filtrado.groupby('EQUIPO')['RENDIMIENTO_TOTAL'].mean().reset_index()
+            rendimiento_por_equipo = rendimiento_por_equipo.sort_values('RENDIMIENTO_TOTAL', ascending=False)
+            
+            fig_equipo = px.bar(
+                rendimiento_por_equipo,
+                x='EQUIPO',
+                y='RENDIMIENTO_TOTAL',
+                title='Rendimiento Promedio por Equipo',
+                labels={'RENDIMIENTO_TOTAL': 'Rendimiento (expedientes/semana)', 'EQUIPO': 'Equipo'},
+                color='RENDIMIENTO_TOTAL',
+                color_continuous_scale='Viridis'
+            )
+            fig_equipo.update_layout(height=400)
+            st.plotly_chart(fig_equipo, use_container_width=True)
+        
+        with col2:
+            # Gráfico de distribución por estado
+            conteo_estado = df_filtrado['ESTADO'].value_counts().reset_index()
+            conteo_estado.columns = ['ESTADO', 'CANTIDAD']
+            
+            fig_estado = px.pie(
+                conteo_estado,
+                values='CANTIDAD',
+                names='ESTADO',
+                title='Distribución por Estado',
+                color='ESTADO',
+                color_discrete_map={'ACTIVO': '#2ca02c', 'INACTIVO': '#d62728'}
+            )
+            fig_estado.update_layout(height=400)
+            st.plotly_chart(fig_estado, use_container_width=True)
+        
+        # Gráfico de comparación de rendimientos por período
+        st.subheader("📈 Comparación de Rendimientos por Período")
+        
+        # Preparar datos para gráfico comparativo
+        datos_comparativos = []
+        for _, row in df_filtrado.iterrows():
+            datos_comparativos.extend([
+                {'USUARIO': row['USUARIO'], 'EQUIPO': row['EQUIPO'], 'PERIODO': 'Total', 'RENDIMIENTO': row['RENDIMIENTO_TOTAL']},
+                {'USUARIO': row['USUARIO'], 'EQUIPO': row['EQUIPO'], 'PERIODO': 'Anual', 'RENDIMIENTO': row['RENDIMIENTO_ANUAL']},
+                {'USUARIO': row['USUARIO'], 'EQUIPO': row['EQUIPO'], 'PERIODO': 'Trimestral', 'RENDIMIENTO': row['RENDIMIENTO_TRIMESTRAL']},
+                {'USUARIO': row['USUARIO'], 'EQUIPO': row['EQUIPO'], 'PERIODO': 'Mensual', 'RENDIMIENTO': row['RENDIMIENTO_MENSUAL']},
+                {'USUARIO': row['USUARIO'], 'EQUIPO': row['EQUIPO'], 'PERIODO': 'Semanal', 'RENDIMIENTO': row['RENDIMIENTO_SEMANAL']}
+            ])
+        
+        df_comparativo = pd.DataFrame(datos_comparativos)
+        
+        fig_comparativo = px.box(
+            df_comparativo,
+            x='PERIODO',
+            y='RENDIMIENTO',
+            title='Distribución de Rendimientos por Período de Tiempo',
+            labels={'RENDIMIENTO': 'Expedientes/Semana', 'PERIODO': 'Período'},
+            color='PERIODO'
+        )
+        fig_comparativo.update_layout(height=500, showlegend=False)
+        st.plotly_chart(fig_comparativo, use_container_width=True)
+    
+    # =============================================
+    # EXPORTACIÓN DE DATOS
+    # =============================================
+    
+    st.markdown("---")
+    st.subheader("📥 Exportar Datos")
+    
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        # Exportar a CSV
+        csv = df_mostrar.to_csv(index=False, sep=';', decimal=',')
+        st.download_button(
+            label="💾 Descargar CSV",
+            data=csv,
+            file_name=f"rendimiento_usuarios_{fecha_max_str.replace('/', '-')}.csv",
+            mime="text/csv",
+            key='csv_download_rendimiento'
+        )
+    
+    with col2:
+        # Exportar a Excel
+        excel_buffer = io.BytesIO()
+        with pd.ExcelWriter(excel_buffer, engine='openpyxl') as writer:
+            df_mostrar.to_excel(writer, sheet_name='Rendimiento', index=False)
+        
+        excel_buffer.seek(0)
+        st.download_button(
+            label="📊 Descargar Excel",
+            data=excel_buffer.read(),
+            file_name=f"rendimiento_usuarios_{fecha_max_str.replace('/', '-')}.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            key='excel_download_rendimiento'
+        )
+    
+    # =============================================
+    # INFORMACIÓN ADICIONAL
+    # =============================================
+    
+    with st.expander("ℹ️ Información sobre los indicadores"):
+        st.markdown("""
+        **📊 Explicación de los indicadores:**
+        
+        - **EXPEDIENTES_DESPACHADOS**: Número total de expedientes despachados por el usuario en el equipo
+        - **SEMANAS_EFECTIVAS**: Semanas de trabajo efectivas ((MAX(FECHA_FIN, fecha_max) - MAX(FECHA_INICIO, 01/11/2022)) / 7) - SEMANAS_BAJA
+        - **RENDIMIENTO_TOTAL**: Expedientes despachados / Semanas efectivas de trabajo
+        - **RENDIMIENTO_ANUAL**: Expedientes despachados en el último año / semanas reales del período
+        - **RENDIMIENTO_TRIMESTRAL**: Expedientes despachados en los últimos 3 meses / semanas reales del período  
+        - **RENDIMIENTO_MENSUAL**: Expedientes despachados en el último mes / semanas reales del período
+        - **RENDIMIENTO_SEMANAL**: Expedientes despachados en la última semana / semanas reales del período
+        
+        **🔍 Criterios de estado:**
+        - **ACTIVO**: FECHA_FIN vacía o posterior a la fecha máxima de análisis
+        - **INACTIVO**: FECHA_FIN anterior o igual a la fecha máxima de análisis
+        - Usuarios con expedientes despachados pero no en archivo USUARIOS: INACTIVO
+        
+        **📈 Notas sobre cálculos:**
+        - Si la fecha de inicio del período es menor que la FECHA INICIO del usuario, se usan las semanas reales disponibles
+        - Los totales agrupados muestran SUMA de expedientes y SUMA de semanas efectivas
+        - La fila TOTAL muestra el rendimiento calculado correctamente a partir de las sumas
+        """)
 
 # =============================================
 # PÁGINA 5: INFORMES Y CORREOS
