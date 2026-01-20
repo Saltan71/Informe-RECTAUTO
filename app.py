@@ -678,7 +678,6 @@ def combinar_archivos(rectauto_df, notifica_df=None, triaje_df=None, usuarios_df
         if notifica_df is not None:
             st.sidebar.warning("ℹ️ NOTIFICA no tiene columna 'RUE ORIGEN'")
     
-    # Resto del código original para combinar TRIAJE, USUARIOS y DOCUMENTOS...
     # Combinar con TRIAJE
     if triaje_df is not None and 'RUE' in triaje_df.columns:
         df_combinado = pd.merge(
@@ -688,6 +687,22 @@ def combinar_archivos(rectauto_df, notifica_df=None, triaje_df=None, usuarios_df
             how='left'
         )
         st.sidebar.info(f"✅ TRIAJE combinado: {len(triaje_df)} registros")
+    
+    # CORRECCIÓN: Rellenar FECHA ASIG vacías con FECHA APERTURA
+    if 'FECHA ASIG' in df_combinado.columns and 'FECHA APERTURA' in df_combinado.columns:
+        # Contar cuántas fechas ASIG están vacías
+        asig_vacias_antes = df_combinado['FECHA ASIG'].isna().sum()
+        
+        # Rellenar las vacías con FECHA APERTURA
+        mask_vacias = df_combinado['FECHA ASIG'].isna()
+        df_combinado.loc[mask_vacias, 'FECHA ASIG'] = df_combinado.loc[mask_vacias, 'FECHA APERTURA']
+        
+        # Contar cuántas se rellenaron
+        asig_vacias_despues = df_combinado['FECHA ASIG'].isna().sum()
+        rellenadas = asig_vacias_antes - asig_vacias_despues
+        
+        if rellenadas > 0:
+            st.sidebar.info(f"📅 {rellenadas} fechas ASIG vacías rellenadas con FECHA APERTURA")
     
     # Añadir columna DOCUM.INCORP. después de FECHA NOTIFICACIÓN
     if 'FECHA NOTIFICACIÓN' in df_combinado.columns:
