@@ -2293,6 +2293,257 @@ def calcular_rendimiento_usuarios_agrupado(_df, _df_usuarios, _fecha_max):
     return pd.DataFrame(resultados)
 
 # =============================================
+# HANDSONTABLE - VERSIÓN CORREGIDA (VISUALIZACIÓN COMPLETA)
+# =============================================
+def mostrar_con_handsontable(df_filtrado):
+    """
+    Versión funcional que muestra todas las columnas
+    """
+    import io
+    import streamlit.components.v1 as components
+    import json
+    from datetime import datetime
+    
+    # 1. Crear copia y formatear fechas de forma SEGURA
+    df_display = df_filtrado.copy()
+
+    df_display['ANTIGÜEDAD EXP. (DÍAS)'] = df_display['ANTIGÜEDAD EXP. (DÍAS)'].round().astype('Int64')
+    
+    # Función segura para formatear fechas
+    def formatear_fecha(x):
+        try:
+            # Si es NaT o NaN
+            if pd.isna(x):
+                return ""
+            
+            # Si es string que contiene 9999
+            if isinstance(x, str) and '9999' in str(x):
+                return "09/09/9999"
+            
+            # Si es Timestamp 9999
+            if isinstance(x, pd.Timestamp) and hasattr(x, 'year') and x.year == 9999:
+                return "09/09/9999"
+            
+            # Si es datetime válido
+            if isinstance(x, (pd.Timestamp, datetime)):
+                return x.strftime("%d/%m/%Y")
+            
+            # Si es otro tipo, convertir a string
+            return str(x)
+            
+        except Exception:
+            return ""
+    
+    # Aplicar a columnas de fecha
+    columnas_fecha = [col for col in df_display.columns if 'FECHA' in col.upper()]
+    
+    for col in columnas_fecha:
+        if col in df_display.columns:
+            df_display[col] = df_display[col].apply(formatear_fecha)
+    
+    # 2. Preparar datos para Handsontable CORRECTAMENTE
+    # Convertir DataFrame a lista de diccionarios (formato que espera Handsontable)
+    data = df_display.to_dict('records')
+    
+    # Preparar columnas
+    columns = []
+    for idx, col_name in enumerate(df_display.columns):
+        col_config = {
+            'data': col_name,
+            'title': col_name,
+            'type': 'text'
+        }
+        
+        # Configurar columnas de fecha
+        if 'FECHA' in col_name.upper():
+            col_config.update({
+                'type': 'date',
+                'dateFormat': 'DD/MM/YYYY',
+                'correctFormat': True
+            })
+        
+        # Configurar columnas numéricas
+        elif df_display[col_name].dtype in ['int64', 'float64']:
+            col_config.update({
+                'type': 'numeric',
+                'numericFormat': {
+                    'pattern': '0,0'
+                }
+            })
+        
+        columns.append(col_config)
+    
+    # 3. HTML/JavaScript CORREGIDO
+    hot_html = f"""
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <script src="https://cdn.jsdelivr.net/npm/handsontable/dist/handsontable.full.min.js"></script>
+        <link href="https://cdn.jsdelivr.net/npm/handsontable/dist/handsontable.full.min.css" rel="stylesheet">
+        <style>
+            body {{
+                margin: 0;
+                padding: 0;
+            }}
+            #hot-container {{
+                width: 100%;
+                height: 600px;
+                overflow: hidden;
+            }}
+            .handsontable {{
+                font-size: 11px;
+            }}
+            .handsontable thead th {{
+                background-color: #007933 !important;
+                color: white !important;
+                font-weight: bold !important;
+            }}
+        </style>
+    </head>
+    <body>
+        <div id="hot-container"></div>
+        
+        <script>
+            // Datos y columnas
+            var data = {json.dumps(data, default=str)};
+            var columns = {json.dumps(columns)};
+            
+            console.log("Datos cargados:", data.length, "registros");
+            console.log("Columnas:", columns.length);
+            
+            // Configuración
+            var config = {{
+                data: data,
+                columns: columns,
+                colHeaders: true,
+                rowHeaders: true,
+                height: 600,
+                width: '100%',
+                autoColumnSize: {{
+                    useHeaders: false,      // IGNORA los títulos de columna
+                    syncLimit: 100,         // Usar máximo 100 filas para cálculo
+                    samplingRatio: 23       // Ratio de muestreo para mejor performance
+                }},
+                manualColumnResize: true,   // Permitir ajuste manual después
+                manualRowResize: true,
+                stretchH: 'last',           // Cambiado de 'all' a 'last' para mejor ajuste
+                licenseKey: 'non-commercial-and-evaluation',
+                filters: true,
+                dropdownMenu: true,
+                contextMenu: true,
+                autoWrapRow: true,
+                wordWrap: true,             // Cambiado a true para mejor visualización
+                columnSorting: true         // Añadido para mejor UX
+            }};
+            
+            // Inicializar
+            var container = document.getElementById('hot-container');
+            var hot = new Handsontable(container, config);
+            
+            // Asegurar que se renderice completamente
+            setTimeout(function() {{
+                hot.render();
+                console.log("Handsontable renderizado");
+            }}, 100);
+        </script>
+    </body>
+    </html>
+    """
+    
+    # 4. Mostrar Handsontable
+    st.subheader("📊 Vista de expedientes")
+    st.write(f"**Mostrando {len(df_display)} registros - {len(df_display.columns)} columnas**")
+    
+    # Mostrar Handsontable
+    components.html(hot_html, height=650, scrolling=False)
+    
+    # 5. Exportación a Excel (igual que antes, funciona bien)
+    st.markdown("---")
+    st.subheader("💾 Exportar Datos")
+    
+    col1, col2 = st.columns([2, 1])
+    
+    with col1:
+        nombre = st.text_input(
+            "Nombre del archivo:",
+            value=f"RECTAUTO_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx",
+            key="excel_filename_hot"
+        )
+    
+    with col2:
+        if st.button("📥 Exportar a Excel", type="primary", use_container_width=True):
+            with st.spinner("Generando Excel..."):
+                try:
+                    # Preparar DataFrame para exportación
+                    df_export = df_filtrado.copy()
+                    
+                    # Función segura para exportación
+                    def preparar_fecha_export(x):
+                        try:
+                            if pd.isna(x):
+                                return None
+                            if isinstance(x, pd.Timestamp) and x.year == 9999:
+                                return "09/09/9999"
+                            if isinstance(x, datetime) and x.year == 9999:
+                                return "09/09/9999"
+                            return x
+                        except:
+                            return None
+                    
+                    # Aplicar a columnas de fecha
+                    for col in columnas_fecha:
+                        if col in df_export.columns:
+                            df_export[col] = df_export[col].apply(preparar_fecha_export)
+                    
+                    # Crear Excel
+                    output = io.BytesIO()
+                    
+                    # Usar openpyxl directamente
+                    from openpyxl import Workbook
+                    from openpyxl.utils import get_column_letter
+                    
+                    wb = Workbook()
+                    ws = wb.active
+                    ws.title = "Expedientes"
+                    
+                    # Escribir encabezados
+                    for col_num, header in enumerate(df_export.columns, 1):
+                        ws.cell(row=1, column=col_num, value=header)
+                    
+                    # Escribir datos
+                    for row_num, row in enumerate(df_export.values, 2):
+                        for col_num, value in enumerate(row, 1):
+                            ws.cell(row=row_num, column=col_num, value=value)
+                    
+                    # Aplicar formato de fecha
+                    date_format = 'DD/MM/YYYY'
+                    for col_num, col_name in enumerate(df_export.columns, 1):
+                        if 'FECHA' in col_name.upper():
+                            col_letter = get_column_letter(col_num)
+                            for row in ws.iter_rows(min_row=2, max_row=len(df_export)+1, min_col=col_num, max_col=col_num):
+                                cell = row[0]
+                                if isinstance(cell.value, (pd.Timestamp, datetime)):
+                                    cell.number_format = date_format
+                    
+                    wb.save(output)
+                    output.seek(0)
+                    
+                    # Botón de descarga
+                    st.download_button(
+                        label="⬇️ Descargar Excel",
+                        data=output.read(),
+                        file_name=nombre,
+                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                    )
+                    
+                    st.success("✅ Excel generado correctamente")
+                    
+                except Exception as e:
+                    st.error(f"❌ Error: {e}")
+    
+    return df_display
+
+# =============================================
 # PÁGINA 1: CARGA DE ARCHIVOS
 # =============================================
 if eleccion == "Carga de Archivos":
@@ -2947,228 +3198,14 @@ elif eleccion == "Vista de Expedientes":
             if fig_ultimo:
                 st.plotly_chart(fig_ultimo, use_container_width=False)
 
-    # VISTA GENERAL - CON AGGRID MEJORADO
-    st.subheader("📋 Vista general de expedientes")
 
-    # Crear copia y formatear datos para AgGrid
-    df_mostrar = df_filtrado.copy()
+    # Obtener información de la semana si está disponible
+    num_semana_info, fecha_max_str_info, _ = obtener_info_semana_actual(df_filtrado)
 
-    # Identificar columnas de fecha para tratamiento especial
-    columnas_fecha = [col for col in df_mostrar.columns if 'FECHA' in col.upper()]
-    
-    # Formatear columnas de fecha para AgGrid (mantener como datetime para filtros)
-    for col in columnas_fecha:
-        if col in df_mostrar.columns:
-            # Asegurar que es datetime
-            df_mostrar[col] = pd.to_datetime(df_mostrar[col], errors='coerce')
-    
-    # 🔥 CORRECCIÓN: Redondear columnas numéricas con decimales
-    columnas_antiguedad = [col for col in df_mostrar.columns if 'ANTIGÜEDAD' in col.upper() or 'DÍAS' in col.upper()]
-
-    for col in df_mostrar.columns:
-        if df_mostrar[col].dtype in ['float64', 'float32']:
-            if col in columnas_antiguedad:
-                # Redondear antigüedad y convertir a entero
-                df_mostrar[col] = df_mostrar[col].apply(
-                    lambda x: int(round(x)) if pd.notna(x) else 0
-                )
-            else:
-                # Redondear otras columnas flotantes
-                df_mostrar[col] = df_mostrar[col].apply(
-                    lambda x: int(round(x)) if pd.notna(x) else 0
-                )
-
-    registros_mostrados = f"{len(df_mostrar):,}".replace(",", ".")
-    registros_totales = f"{len(df):,}".replace(",", ".")
-    st.write(f"Mostrando {registros_mostrados} de {registros_totales} registros")
-
-    # =============================================
-    # CONFIGURACIÓN AGGRID CON ANCHOS FORZADOS
-    # =============================================
-
-    # Definir anchos personalizados para columnas basados en tu especificación
-    custom_column_widths = {
-        'RUE': 200,
-        'ESTADO': 100,
-        'FECHA INICIO TRAMITACIÓN': 120,
-        'FECHA APERTURA': 120,
-        'FECHA RESOLUCIÓN': 120,
-        'FECHA FIN TRAMITACIÓN': 120,
-        'FECHA CIERRE': 120,
-        'ANTIGÜEDAD EXP. (DÍAS)': 100,
-        'ETIQ. PENÚLTIMO TRAM.': 120,
-        'FECHA PENÚLTIMO TRAM.': 120,
-        'DÍAS DIF. F. PENÚLT.TRÁM. Y F. APERT.': 100,
-        'ETIQ. ÚLTIMO TRAM.': 120,
-        'FECHA ÚLTIMO TRAM.': 120,
-        'FECHA ACTUALIZACION DATOS': 120,
-        'IMPUESTO ORIGEN': 150,
-        'NATURALEZA': 150,
-        'USUARIO': 100,
-        'EQUIPO': 120,
-        'FECHA NOTIFICACIÓN': 120,
-        'DOCUM.INCORP.': 120,
-        'USUARIO-CSV': 100,
-        'CALIFICACIÓN': 300,
-        'OBSERVACIONES': 150,
-        'FECHA ASIG': 120
-    }
-
-    # Configurar GridOptionsBuilder
-    gb = GridOptionsBuilder.from_dataframe(df_mostrar)
-
-    # Configurar todas las columnas con anchos forzados
-    for column in df_mostrar.columns:
-        column_width = custom_column_widths.get(column, 150)
-        
-        # Configuración común para todas las columnas
-        column_config = {
-            'width': column_width,
-            'minWidth': column_width,  # Forzar ancho mínimo igual al ancho
-            'maxWidth': column_width,  # Forzar ancho máximo igual al ancho
-            'resizable': True,  # Permitir redimensionar manualmente
-            'sortable': True,
-            'filter': True
-        }
-        
-        # Configurar tipo específico de filtro
-        if column in columnas_fecha:
-            column_config.update({
-                'filter': 'agDateColumnFilter',
-                'filterParams': {
-                    'buttons': ['apply', 'reset'],
-                    'closeOnApply': True,
-                },
-                'type': ['customDateTime']
-            })
-        elif df_mostrar[column].dtype in ['int64', 'float64']:
-            column_config.update({
-                'filter': 'agNumberColumnFilter',
-                'filterParams': {
-                    'buttons': ['apply', 'reset'],
-                    'closeOnApply': True,
-                }
-            })
-        else:
-            column_config.update({
-                'filter': 'agTextColumnFilter',
-                'filterParams': {
-                    'buttons': ['apply', 'reset'],
-                    'closeOnApply': True,
-                    'caseSensitive': False,
-                    'debounceMs': 500
-                }
-            })
-        
-        # Aplicar configuración a la columna
-        gb.configure_column(column, **column_config)
-
-    # Configurar la barra lateral
-    gb.configure_side_bar(filters_panel=True, columns_panel=True)
-
-    # Configurar opciones del grid para forzar anchos
-    grid_options = gb.build()
-
-    # AÑADIR CONFIGURACIONES CRÍTICAS PARA FORZAR ANCHOS
-    grid_options.update({
-        'suppressAutoSize': True,  # Suprimir autoajuste automático
-        'suppressSizeToFit': True,  # Suprimir ajuste al tamaño
-        'suppressColumnVirtualisation': True,  # Mejor para anchos fijos
-        'ensureDomOrder': True,
-        'domLayout': 'normal',  # Usar layout normal, no autoajustable
-        'onGridReady': None,  # Evitar cualquier callback que pueda modificar anchos
-        'pagination': True,
-        'paginationPageSize': 20,
-        'allowContextMenuWithControlKey': True,
-        'suppressContextMenu': False,
-        'enableCellTextSelection': True,
-        'ensureDomOrder': True,
-        'headerHeight': 60,
-    })
-
-    # Función para formatear fechas en el grid
-    def date_formatter(params):
-        if params.value is None or pd.isna(params.value):
-            return ""
-        try:
-            if isinstance(params.value, (pd.Timestamp, datetime)):
-                return params.value.strftime("%d/%m/%Y")
-            elif isinstance(params.value, str):
-                date_val = pd.to_datetime(params.value, errors='coerce')
-                return date_val.strftime("%d/%m/%Y") if pd.notna(date_val) else ""
-            else:
-                return str(params.value)
-        except:
-            return str(params.value)
-
-    # Aplicar formateador de fechas a las columnas de fecha
-    for col in columnas_fecha:
-        if col in grid_options['columnDefs']:
-            for col_def in grid_options['columnDefs']:
-                if col_def['field'] == col:
-                    col_def['valueFormatter'] = date_formatter
-                    break
-
-    # Mostrar tabla con AgGrid - CONFIGURACIÓN FINAL
-    try:
-        grid_response = AgGrid(
-            df_mostrar,
-            gridOptions=grid_options,
-            height=700,
-            width='100%',
-            data_return_mode='AS_INPUT',
-            update_mode='MODEL_CHANGED',
-            fit_columns_on_grid_load=False,  # CRÍTICO: Desactivar autoajuste
-            allow_unsafe_jscode=True,  # Evitar JS que pueda modificar anchos
-            enable_enterprise_modules=True,  # Desactivar módulos enterprise que puedan interferir
-            theme='streamlit',
-            custom_css={
-                ".ag-header-cell-text": {
-                    "font-size": "12px", 
-                    "font-weight": "bold",
-                    "white-space": "normal",
-                    "line-height": "1.2"
-                },
-                ".ag-cell": {
-                    "font-size": "11px",
-                    "white-space": "normal",
-                    "line-height": "1.2"
-                },
-                ".ag-row-hover": {
-                    "background-color": "#f0f0f0 !important"
-                },
-                ".ag-header": {
-                    "background-color": "#f8f9fa !important"
-                },
-                ".ag-root-wrapper": {
-                    "border": "1px solid #ddd !important", 
-                    "border-radius": "5px"
-                },
-                # Forzar que las columnas mantengan su ancho
-                ".ag-header-cell": {
-                    "min-width": "80px !important"
-                }
-            }
-        )
-        
-        # Obtener filas seleccionadas
-        selected_rows = []
-        if isinstance(grid_response, dict):
-            selected_rows = grid_response.get('selected_rows', [])
-        elif hasattr(grid_response, 'selected_rows'):
-            selected_rows = grid_response.selected_rows
-        else:
-            selected_rows = getattr(grid_response, 'selected_rows', [])
-        
-        if not isinstance(selected_rows, list):
-            selected_rows = []
-            
-        if selected_rows:
-            st.info(f"📌 {len(selected_rows)} fila(s) seleccionada(s)")
-            
-    except Exception as e:
-        st.error(f"❌ Error en AgGrid: {e}")
-        selected_rows = []
+    # Mostrar con Handsontable
+    df_mostrar = mostrar_con_handsontable(
+        df_filtrado
+    )
 
     # Estadísticas generales
     st.markdown("---")
@@ -3832,7 +3869,7 @@ elif eleccion == "Indicadores clave (KPI)":
         st.plotly_chart(fig_percentiles, use_container_width=True)
 
 # =============================================
-# PÁGINA 4: ANÁLISIS DEL RENDIMIENTO - MODIFICADO
+# PÁGINA 4: ANÁLISIS DEL RENDIMIENTO - MODIFICADO CON HANDSONTABLE
 # =============================================
 elif eleccion == "Análisis del Rendimiento":
     st.header("📈 Análisis del Rendimiento")
@@ -3852,10 +3889,6 @@ elif eleccion == "Análisis del Rendimiento":
         st.stop()
     
     # Obtener fecha máxima para cálculos
-    # columna_fecha = df.columns[13]
-    # df[columna_fecha] = pd.to_datetime(df[columna_fecha], errors='coerce')
-    # fecha_max = df[columna_fecha].max()        ya está definida anteriormente
-    
     if pd.isna(fecha_max):
         st.error("No se pudo encontrar la fecha máxima en los datos")
         st.stop()
@@ -3898,7 +3931,7 @@ elif eleccion == "Análisis del Rendimiento":
     
     # Inicializar variables de sesión para filtros
     if 'filtro_estado_rendimiento' not in st.session_state:
-        st.session_state.filtro_estado_rendimiento = ['ACTIVO'] if 'ACTIVO' in df_rendimiento['ESTADO'].values else[]
+        st.session_state.filtro_estado_rendimiento = ['ACTIVO'] if 'ACTIVO' in df_rendimiento['ESTADO'].values else []
     
     if 'filtro_equipo_rendimiento' not in st.session_state:
         st.session_state.filtro_equipo_rendimiento = []
@@ -4072,12 +4105,415 @@ elif eleccion == "Análisis del Rendimiento":
     total_general = calcular_totales_agrupados_usuarios(df_filtrado)
     
     # =============================================
-    # VISTA PRINCIPAL CON AgGrid - MODIFICADA CON 6 MÉTRICAS Y 30 FILAS
+    # FUNCIÓN PARA MOSTRAR CON HANDSONTABLE - ESPECÍFICA PARA RENDIMIENTO
     # =============================================
     
-    st.subheader("📋 Tabla de Rendimiento por Usuario (agrupado)")
+    def mostrar_rendimiento_con_handsontable(df_rendimiento, incluir_totales=True):
+        """
+        Versión funcional que muestra la tabla de rendimiento con Handsontable
+        Incluye formato específico para números
+        """
+        import io
+        import streamlit.components.v1 as components
+        import json
+        from datetime import datetime
+        
+        # 1. Crear copia y formatear datos según especificaciones
+        df_display = df_rendimiento.copy()
+        
+        # Añadir fila de total general si corresponde
+        if incluir_totales and total_general:
+            df_display = pd.concat([df_display, pd.DataFrame([total_general])], ignore_index=True)
+        
+        # 2. Preparar datos para Handsontable con formato específico
+        # Función para formatear números según especificaciones
+        def formatear_numero(valor, es_decimal=True):
+            try:
+                if pd.isna(valor):
+                    return ""
+                
+                # Convertir a float para formatear
+                num_val = float(valor)
+                
+                if es_decimal:
+                    # Formato para números con decimales: 1.000,00
+                    return f"{num_val:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+                else:
+                    # Formato para números enteros: 1.000
+                    return f"{num_val:,.0f}".replace(",", "X").replace(".", ",").replace("X", ".")
+            except:
+                return str(valor) if not pd.isna(valor) else ""
+        
+        # Aplicar formatos específicos a cada columna
+        for col in df_display.columns:
+            if col in ['EXPEDIENTES_DESPACHADOS', 'POTENCIAL_ANUAL']:
+                # Números enteros: 1.000
+                df_display[col] = df_display[col].apply(lambda x: formatear_numero(x, es_decimal=False))
+            elif col in ['SEMANAS_EFECTIVAS', 'RENDIMIENTO_TOTAL', 'RENDIMIENTO_ANUAL', 
+                        'RENDIMIENTO_TRIMESTRAL', 'RENDIMIENTO_MENSUAL', 'RENDIMIENTO_SEMANAL']:
+                # Números con decimales: 1.000,00 (2 decimales)
+                df_display[col] = df_display[col].apply(lambda x: formatear_numero(x, es_decimal=True))
+        
+        # 3. Preparar datos para Handsontable
+        data = df_display.to_dict('records')
+        
+        # 4. Preparar columnas con configuración específica
+        columns = []
+        for idx, col_name in enumerate(df_display.columns):
+            col_config = {
+                'data': col_name,
+                'title': col_name,
+                'type': 'text',
+                'width': 100  # Ancho mínimo
+            }
+            
+            # Configurar columnas numéricas con formato específico
+            if col_name in ['EXPEDIENTES_DESPACHADOS', 'POTENCIAL_ANUAL']:
+                col_config.update({
+                    'type': 'numeric',
+                    'numericFormat': {
+                        'pattern': '0,0',  # Enteros: 1.000
+                        'culture': 'es-ES'  # Usar formato español
+                    }
+                })
+            elif col_name in ['SEMANAS_EFECTIVAS', 'RENDIMIENTO_TOTAL', 'RENDIMIENTO_ANUAL', 
+                             'RENDIMIENTO_TRIMESTRAL', 'RENDIMIENTO_MENSUAL', 'RENDIMIENTO_SEMANAL']:
+                col_config.update({
+                    'type': 'numeric',
+                    'numericFormat': {
+                        'pattern': '0,0.00',  # Decimales: 1.000,00
+                        'culture': 'es-ES'    # Usar formato español
+                    }
+                })
+            
+            columns.append(col_config)
+        
+        # 5. HTML/JavaScript para Handsontable
+        hot_html = f"""
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <script src="https://cdn.jsdelivr.net/npm/handsontable/dist/handsontable.full.min.js"></script>
+            <link href="https://cdn.jsdelivr.net/npm/handsontable/dist/handsontable.full.min.css" rel="stylesheet">
+            <style>
+                body {{
+                    margin: 0;
+                    padding: 0;
+                }}
+                #hot-container {{
+                    width: 100%;
+                    height: 600px;
+                    overflow: hidden;
+                }}
+                .handsontable {{
+                    font-size: 11px;
+                }}
+                .handsontable thead th {{
+                    background-color: #007933 !important;
+                    color: white !important;
+                    font-weight: bold !important;
+                }}
+                /* Estilo para la fila TOTAL */
+                .handsontable tbody tr:last-child td {{
+                    background-color: #e6f3ff !important;
+                    font-weight: bold !important;
+                }}
+                /* Estilo para números */
+                .htRight {{
+                    text-align: right !important;
+                }}
+            </style>
+        </head>
+        <body>
+            <div id="hot-container"></div>
+            
+            <script>
+                // Datos y columnas
+                var data = {json.dumps(data, default=str)};
+                var columns = {json.dumps(columns)};
+                
+                console.log("Datos de rendimiento cargados:", data.length, "registros");
+                console.log("Columnas:", columns.length);
+                
+                // Calcular anchos basados en contenido (mínimo 100px)
+                function calcularAnchosColumnas() {{
+                    var anchos = [];
+                    
+                    // Para cada columna
+                    for (var i = 0; i < columns.length; i++) {{
+                        var maxAncho = 80; // Mínimo 60px
+                        var colName = columns[i].title;
+                        
+                        // Medir encabezado
+                        var anchoEncabezado = colName.length * 8; // Estimación
+                        maxAncho = Math.max(maxAncho, anchoEncabezado);
+                        
+                        // Medir contenido de las primeras filas
+                        for (var j = 0; j < Math.min(data.length, 10); j++) {{
+                            var valor = data[j][colName] || '';
+                            var anchoValor = valor.toString().length * 7; // Estimación
+                            maxAncho = Math.max(maxAncho, anchoValor);
+                        }}
+                        
+                        // Limitar máximo a 300px
+                        anchos.push(Math.min(maxAncho, 300));
+                    }}
+                    return anchos;
+                }}
+                
+                var anchosColumnas = calcularAnchosColumnas();
+                console.log("Anchos calculados:", anchosColumnas);
+                
+                // Configurar anchos en las columnas
+                for (var i = 0; i < 4; i++) {{
+                    columns[i].width = anchosColumnas[i];
+                }}
+                for (var i = 4; i < columns.length; i++) {{
+                    columns[i].width = 125;
+                }}
+
+                // Configuración
+                var config = {{
+                    data: data,
+                    columns: columns,
+                    colHeaders: true,
+                    rowHeaders: true,
+                    height: 600,
+                    width: '100%',
+                    stretchH: 'last',
+                    licenseKey: 'non-commercial-and-evaluation',
+                    filters: true,
+                    dropdownMenu: true,
+                    contextMenu: true,
+                    autoWrapRow: true,
+                    wordWrap: true,
+                    columnSorting: true,
+                    manualColumnResize: true,
+                    manualRowResize: true,
+                    // Configuración de formato numérico
+                    numericFormat: {{
+                        pattern: '0,0.00',
+                        culture: 'es-ES'
+                    }}
+                }};
+                
+                // Inicializar
+                var container = document.getElementById('hot-container');
+                var hot = new Handsontable(container, config);
+                
+                // Aplicar alineación derecha a partir de la 4ta columna (índice 3)
+                for (var col = 3; col < hot.countCols(); col++) {{
+                    // Verificar si es columna numérica
+                    var columnConfig = hot.getSettings().columns[col];
+                    if (columnConfig && columnConfig.type === 'numeric') {{
+                        // Aplicar a TODAS las filas de esta columna
+                        for (var row = 0; row < hot.countRows(); row++) {{
+                            hot.setCellMeta(row, col, 'className', 'htRight');
+                        }}
+                    }}
+                }}
+                
+                // Renderizar todas las filas
+                setTimeout(function() {{
+                    hot.render();
+                    console.log("Handsontable de rendimiento renderizado");
+                    
+                    // Aplicar estilo a la última fila (TOTAL)
+                    var totalFilas = hot.countRows();
+                    if (totalFilas > 0) {{
+                        for (var col = 0; col < hot.countCols(); col++) {{
+                            hot.getCellMeta(totalFilas - 1, col).className = 'htRight htBold htHighlight';
+                        }}
+                        hot.render();
+                    }}
+                }}, 100);
+            </script>
+        </body>
+        </html>
+        """
+        
+        # 6. Mostrar Handsontable
+        st.subheader("📊 Vista de Rendimiento por Usuario")
+        st.write(f"**Mostrando {len(df_display)} registros - {len(df_display.columns)} columnas**")
+        
+        # Mostrar Handsontable
+        components.html(hot_html, height=650, scrolling=False)
+        
+        # 7. Exportación a Excel y CSV
+        st.markdown("---")
+        st.subheader("💾 Exportar Datos de Rendimiento")
+        
+        col1, col2 = st.columns([2, 1])
+        
+        with col1:
+            nombre = st.text_input(
+                "Nombre del archivo:",
+                value=f"RENDIMIENTO_{datetime.now().strftime('%Y%m%d_%H%M%S')}",
+                key="excel_filename_rendimiento"
+            )
+        
+        with col2:
+            formato = st.selectbox(
+                "Formato de exportación:",
+                options=["Excel (.xlsx)", "CSV (.csv)"],
+                key="formato_export_rendimiento"
+            )
+        
+        col_export1, col_export2 = st.columns(2)
+        
+        with col_export1:
+            if st.button("📊 Exportar a Excel", type="primary", use_container_width=True):
+                with st.spinner("Generando Excel..."):
+                    try:
+                        # Preparar DataFrame para exportación
+                        df_export = df_rendimiento.copy()
+                        
+                        # Añadir fila de total general si corresponde
+                        if incluir_totales and total_general:
+                            df_export = pd.concat([df_export, pd.DataFrame([total_general])], ignore_index=True)
+                        
+                        # Crear Excel con formato
+                        output = io.BytesIO()
+                        
+                        # Usar openpyxl directamente para mejor control
+                        from openpyxl import Workbook
+                        from openpyxl.utils import get_column_letter
+                        from openpyxl.styles import Font, Alignment, PatternFill, Border, Side
+                        
+                        wb = Workbook()
+                        ws = wb.active
+                        ws.title = "Rendimiento"
+                        
+                        # Escribir encabezados con formato
+                        header_fill = PatternFill(start_color="007933", end_color="007933", fill_type="solid")
+                        header_font = Font(color="FFFFFF", bold=True)
+                        header_alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
+                        
+                        for col_num, header in enumerate(df_export.columns, 1):
+                            cell = ws.cell(row=1, column=col_num, value=header)
+                            cell.fill = header_fill
+                            cell.font = header_font
+                            cell.alignment = header_alignment
+                        
+                        # Escribir datos con formato
+                        data_font = Font(size=10)
+                        number_alignment = Alignment(horizontal="right", vertical="center")
+                        text_alignment = Alignment(horizontal="left", vertical="center")
+                        
+                        for row_num, row in enumerate(df_export.values, 2):
+                            for col_num, value in enumerate(row, 1):
+                                cell = ws.cell(row=row_num, column=col_num, value=value)
+                                cell.font = data_font
+                                
+                                # Aplicar formato específico según tipo de dato
+                                col_name = df_export.columns[col_num-1]
+                                if col_name in ['EXPEDIENTES_DESPACHADOS', 'POTENCIAL_ANUAL']:
+                                    cell.alignment = number_alignment
+                                    cell.number_format = '#,##0'
+                                elif col_name in ['SEMANAS_EFECTIVAS']:
+                                    cell.alignment = number_alignment
+                                    cell.number_format = '#,##0.0'
+                                elif col_name in ['RENDIMIENTO_TOTAL', 'RENDIMIENTO_ANUAL', 
+                                                'RENDIMIENTO_TRIMESTRAL', 'RENDIMIENTO_MENSUAL', 'RENDIMIENTO_SEMANAL']:
+                                    cell.alignment = number_alignment
+                                    cell.number_format = '#,##0.00'
+                                else:
+                                    cell.alignment = text_alignment
+                        
+                        # Aplicar estilo a la fila TOTAL
+                        if incluir_totales and total_general:
+                            last_row = len(df_export)+1
+                            total_fill = PatternFill(start_color="E6F3FF", end_color="E6F3FF", fill_type="solid")
+                            total_font = Font(bold=True)
+                            
+                            for col_num in range(1, len(df_export.columns) + 1):
+                                cell = ws.cell(row=last_row, column=col_num)
+                                cell.fill = total_fill
+                                cell.font = total_font
+                        
+                        # Ajustar anchos de columna
+                        for col_num, column_title in enumerate(df_export.columns, 1):
+                            max_length = 0
+                            column_letter = get_column_letter(col_num)
+                            
+                            # Calcular longitud máxima del contenido
+                            for row_num in range(1, len(df_export) + 2):  # +2 para encabezados
+                                cell_value = ws.cell(row=row_num, column=col_num).value
+                                if cell_value:
+                                    cell_length = len(str(cell_value))
+                                    max_length = max(max_length, cell_length)
+                            
+                            # Establecer ancho (mínimo 10, máximo 50)
+                            adjusted_width = min(max_length + 2, 50)
+                            ws.column_dimensions[column_letter].width = max(adjusted_width, 10)
+                        
+                        # Aplicar bordes
+                        thin_border = Border(
+                            left=Side(style='thin'),
+                            right=Side(style='thin'),
+                            top=Side(style='thin'),
+                            bottom=Side(style='thin')
+                        )
+                        
+                        for row in ws.iter_rows(min_row=1, max_row=len(df_export)+1, 
+                                              min_col=1, max_col=len(df_export.columns)):
+                            for cell in row:
+                                cell.border = thin_border
+                        
+                        wb.save(output)
+                        output.seek(0)
+                        
+                        # Botón de descarga
+                        nombre_completo = f"{nombre}.xlsx"
+                        st.download_button(
+                            label="⬇️ Descargar Excel",
+                            data=output.read(),
+                            file_name=nombre_completo,
+                            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                            key="download_excel_rendimiento"
+                        )
+                        
+                        st.success("✅ Excel generado correctamente con formato")
+                        
+                    except Exception as e:
+                        st.error(f"❌ Error al generar Excel: {e}")
+        
+        with col_export2:
+            if st.button("📄 Exportar a CSV", type="secondary", use_container_width=True):
+                with st.spinner("Generando CSV..."):
+                    try:
+                        # Preparar DataFrame para exportación CSV
+                        df_export = df_rendimiento.copy()
+                        
+                        # Añadir fila de total general si corresponde
+                        if incluir_totales and total_general:
+                            df_export = pd.concat([df_export, pd.DataFrame([total_general])], ignore_index=True)
+                        
+                        # Convertir a CSV con separador punto y coma (;)
+                        csv_data = df_export.to_csv(index=False, sep=';', decimal=',')
+                        
+                        # Botón de descarga
+                        nombre_completo = f"{nombre}.csv"
+                        st.download_button(
+                            label="⬇️ Descargar CSV",
+                            data=csv_data,
+                            file_name=nombre_completo,
+                            mime="text/csv",
+                            key="download_csv_rendimiento"
+                        )
+                        
+                        st.success("✅ CSV generado correctamente")
+                        
+                    except Exception as e:
+                        st.error(f"❌ Error al generar CSV: {e}")
+        
+        return df_display
     
-    # Mostrar estadísticas rápidas - MODIFICADO: 6 columnas en lugar de 4
+    # =============================================
+    # MOSTRAR TABLA CON HANDSONTABLE
+    # =============================================
+    
+    # Mostrar estadísticas rápidas
     col1, col2, col3, col4, col5, col6, col7 = st.columns(7)
     
     with col1:
@@ -4093,7 +4529,7 @@ elif eleccion == "Análisis del Rendimiento":
         st.metric("Equipos únicos", len(todos_equipos))
     
     with col3:
-        total_despachados = df_filtrado['EXPEDIENTES_DESPACHADOS'].sum()+6 # HAY 6 EXPEDIENTES ASIGNADOS QUE ESTÁN CERRADOS ANTES DEL 1/11/2022
+        total_despachados = df_filtrado['EXPEDIENTES_DESPACHADOS'].sum() + 6
         st.metric("Expedientes despachados", f"{total_despachados:,}".replace(",", "."))
     
     with col4:
@@ -4102,130 +4538,35 @@ elif eleccion == "Análisis del Rendimiento":
         else:
             st.metric("Rendimiento total", "0.00")
     
-    with col5:  # NUEVA COLUMNA: RENDIMIENTO ANUAL
+    with col5:
         if total_general:
             st.metric("Rendimiento anual", f"{total_general['RENDIMIENTO_ANUAL']:.2f}")
         else:
             st.metric("Rendimiento anual", "0.00")
     
-    with col6:  # NUEVA COLUMNA: POTENCIAL ANUAL
+    with col6:
         if total_general:
             st.metric("Potencial anual", f"{total_general['POTENCIAL_ANUAL']:.0f}")
         else:
             st.metric("Potencial anual", "0")
     
-    with col7:  # NUEVA COLUMNA: POTENCIAL ANUAL CONJUNTO
+    with col7:
         if total_general:
             st.metric("Potencial anual conjunto", f"{total_general['POTENCIAL_ANUAL']*total_usuarios:,.0f}".replace(",", "."))
         else:
-            st.metric("Potencial anual", "0")
-
-    # Preparar datos para AgGrid (incluyendo totales)
-    df_mostrar = df_filtrado.copy()
+            st.metric("Potencial anual conjunto", "0")
     
-    # Añadir fila de total general
-    if total_general:
-        df_mostrar = pd.concat([df_mostrar, pd.DataFrame([total_general])], ignore_index=True)
-    
-    # Configurar AgGrid con anchos reducidos para que quepan todas las columnas
-    gb = GridOptionsBuilder.from_dataframe(df_mostrar)
-    
-    # Configurar todas las columnas con anchos ajustados para evitar scroll horizontal
-    column_configs = {
-        'USUARIO': {'width': 100, 'pinned': True},
-        'EQUIPOS': {'width': 250, 'pinned': False},
-        'ESTADO': {'width': 100},
-        'EXPEDIENTES_DESPACHADOS': {'width': 100, 'type': ['numericColumn']},
-        'SEMANAS_EFECTIVAS': {'width': 100, 'type': ['numericColumn']},
-        'RENDIMIENTO_TOTAL': {'width': 100, 'type': ['numericColumn']},
-        'RENDIMIENTO_ANUAL': {'width': 100, 'type': ['numericColumn']},
-        'POTENCIAL_ANUAL': {'width': 100, 'type': ['numericColumn']},  # NUEVA COLUMNA
-        'RENDIMIENTO_TRIMESTRAL': {'width': 100, 'type': ['numericColumn']},
-        'RENDIMIENTO_MENSUAL': {'width': 100, 'type': ['numericColumn']},
-        'RENDIMIENTO_SEMANAL': {'width': 100, 'type': ['numericColumn']}
-    }
-    
-    for column, config in column_configs.items():
-        if column in df_mostrar.columns:
-            gb.configure_column(
-                column,
-                width=config['width'],
-                filter=('agNumberColumnFilter' if 'type' in config and 'numericColumn' in config['type'] else 'agTextColumnFilter'),
-                pinned=config.get('pinned', False),
-                sortable=True,
-                resizable=True
-            )
-    
-    # Configurar la barra lateral
-    gb.configure_side_bar(filters_panel=True, columns_panel=True)
-    gb.configure_selection('multiple', use_checkbox=True)
-    gb.configure_pagination(paginationAutoPageSize=False, paginationPageSize=30)  # MODIFICADO: 30 filas
-    
-    grid_options = gb.build()
-    
-    # Añadir estilo para ancho total ajustado
-    total_width = sum(config['width'] for config in column_configs.values())
-    
-    # Mostrar tabla con AgGrid - CONFIGURACIÓN PARA EVITAR SCROLL HORIZONTAL
-    try:
-        grid_response = AgGrid(
-            df_mostrar,
-            gridOptions=grid_options,
-            height=800,  # Aumentada para 30 filas
-            width='100%',
-            data_return_mode='AS_INPUT',
-            update_mode='MODEL_CHANGED',
-            fit_columns_on_grid_load=False,
-            allow_unsafe_jscode=True,
-            enable_enterprise_modules=True,
-            theme='streamlit',
-            custom_css={
-                # Aplicar estilo a la fila TOTAL usando CSS puro
-                ".ag-row:last-child": {
-                    "background-color": "#e6f3ff !important",
-                    "font-weight": "bold !important"
-                },
-                ".ag-header-cell-text": {
-                    "font-size": "11px",  # Reducido para que quepan más columnas
-                    "font-weight": "bold",
-                    "white-space": "normal",
-                    "line-height": "1.1"
-                },
-                ".ag-cell": {
-                    "font-size": "10px",  # Reducido para que quepan más columnas
-                    "white-space": "normal",
-                    "line-height": "1.1"
-                },
-                ".ag-row-hover": {
-                    "background-color": "#f0f0f0 !important"
-                },
-                ".ag-header": {
-                    "background-color": "#f8f9fa !important"
-                },
-                # Forzar ancho total
-                ".ag-root-wrapper": {
-                    "width": f"{total_width}px !important",
-                    "max-width": "100% !important"
-                },
-                ".ag-center-cols-viewport": {
-                    "width": f"{total_width}px !important"
-                }
-            }
-        )
-        
-    except Exception as e:
-        st.error(f"❌ Error en AgGrid: {e}")
-        # Fallback: mostrar tabla simple
-        st.dataframe(df_mostrar, use_container_width=True)
+    # Mostrar tabla con Handsontable
+    df_mostrar = mostrar_rendimiento_con_handsontable(df_filtrado, incluir_totales=True)
     
     # =============================================
-    # GRÁFICOS DE ANÁLISIS - MODIFICADOS
+    # GRÁFICOS DE ANÁLISIS
     # =============================================
     
     st.markdown("---")
     st.subheader("📊 Gráficos de Análisis")
     
-    if not df_filtrado.empty and len(df_filtrado) > 1:  # Solo mostrar si hay más de un usuario
+    if not df_filtrado.empty and len(df_filtrado) > 1:
         col1, col2 = st.columns(2)
         
         with col1:
@@ -4261,69 +4602,6 @@ elif eleccion == "Análisis del Rendimiento":
             )
             fig_estado.update_layout(height=400)
             st.plotly_chart(fig_estado, use_container_width=True)
-        
-        # Gráfico de comparación de rendimientos por período
-        st.subheader("📈 Comparación de Rendimientos por Período")
-        
-        # Preparar datos para gráfico comparativo
-        datos_comparativos = []
-        for _, row in df_filtrado.iterrows():
-            datos_comparativos.extend([
-                {'USUARIO': row['USUARIO'], 'PERIODO': 'Total', 'RENDIMIENTO': row['RENDIMIENTO_TOTAL']},
-                {'USUARIO': row['USUARIO'], 'PERIODO': 'Anual', 'RENDIMIENTO': row['RENDIMIENTO_ANUAL']},
-                #{'USUARIO': row['USUARIO'], 'PERIODO': 'Potencial Anual', 'RENDIMIENTO': row['POTENCIAL_ANUAL']/52},  # NUEVO
-                {'USUARIO': row['USUARIO'], 'PERIODO': 'Trimestral', 'RENDIMIENTO': row['RENDIMIENTO_TRIMESTRAL']},
-                {'USUARIO': row['USUARIO'], 'PERIODO': 'Mensual', 'RENDIMIENTO': row['RENDIMIENTO_MENSUAL']},
-                {'USUARIO': row['USUARIO'], 'PERIODO': 'Semanal', 'RENDIMIENTO': row['RENDIMIENTO_SEMANAL']}
-            ])
-        
-        df_comparativo = pd.DataFrame(datos_comparativos)
-        
-        fig_comparativo = px.box(
-            df_comparativo,
-            x='PERIODO',
-            y='RENDIMIENTO',
-            title='Distribución de Rendimientos por Período de Tiempo',
-            labels={'RENDIMIENTO': 'Expedientes/Semana', 'PERIODO': 'Período'},
-            color='PERIODO'
-        )
-        fig_comparativo.update_layout(height=500, showlegend=False)
-        st.plotly_chart(fig_comparativo, use_container_width=True)
-    
-    # =============================================
-    # EXPORTACIÓN DE DATOS
-    # =============================================
-    
-    st.markdown("---")
-    st.subheader("📥 Exportar Datos")
-    
-    col1, col2 = st.columns(2)
-    
-    with col1:
-        # Exportar a CSV
-        csv = df_mostrar.to_csv(index=False, sep=';', decimal=',')
-        st.download_button(
-            label="💾 Descargar CSV",
-            data=csv,
-            file_name=f"rendimiento_usuarios_agrupado_{fecha_max_str.replace('/', '-')}.csv",
-            mime="text/csv",
-            key='csv_download_rendimiento'
-        )
-    
-    with col2:
-        # Exportar a Excel
-        excel_buffer = io.BytesIO()
-        with pd.ExcelWriter(excel_buffer, engine='openpyxl') as writer:
-            df_mostrar.to_excel(writer, sheet_name='Rendimiento', index=False)
-        
-        excel_buffer.seek(0)
-        st.download_button(
-            label="📊 Descargar Excel",
-            data=excel_buffer.read(),
-            file_name=f"rendimiento_usuarios_agrupado_{fecha_max_str.replace('/', '-')}.xlsx",
-            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-            key='excel_download_rendimiento'
-        )
     
     # =============================================
     # INFORMACIÓN ADICIONAL
@@ -4340,7 +4618,7 @@ elif eleccion == "Análisis del Rendimiento":
         - **SEMANAS EFECTIVAS**: Semanas de trabajo efectivas del usuario (calculadas UNA SOLA VEZ, no se duplican por equipo)
         - **RENDIMIENTO_TOTAL**: Expedientes despachados / Semanas efectivas de trabajo
         - **RENDIMIENTO_ANUAL**: Expedientes despachados en el último año / semanas reales del período
-        - **POTENCIAL_ANUAL**: NUEVO - Rendimiento anual proyectado a 52 semanas (RENDIMIENTO_ANUAL × 52)
+        - **POTENCIAL_ANUAL**: Rendimiento anual proyectado a 52 semanas (RENDIMIENTO_ANUAL × 52)
         - **RENDIMIENTO_TRIMESTRAL**: Expedientes despachados en los últimos 3 meses / semanas reales del período  
         - **RENDIMIENTO_MENSUAL**: Expedientes despachados en el último mes / semanas reales del período
         - **RENDIMIENTO_SEMANAL**: Expedientes despachados en la última semana / semanas reales del período
@@ -4348,16 +4626,11 @@ elif eleccion == "Análisis del Rendimiento":
         **🔍 Criterios de estado:**
         - **ACTIVO**: FECHA_FIN vacía o posterior a la fecha máxima de análisis
         - **INACTIVO**: FECHA_FIN anterior o igual a la fecha máxima de análisis
-        - Usuarios con expedientes despachados pero no en archivo USUARIOS: INACTIVO
         
-        **📈 Notas sobre cálculos (MODIFICACIONES):**
-        - **Usuarios en múltiples equipos**: Aparecen UNA SOLA vez con la suma de todos sus expedientes
-        - **Semanas efectivas**: Se calculan UNA SOLA VEZ por usuario, evitando duplicaciones
-        - **Rendimientos por período**: Se calculan sobre el TOTAL de expedientes del usuario
-        - **Filtro por equipo**: Busca en la lista de equipos del usuario (columna EQUIPOS)
-        - **Totales**: Calculados correctamente sobre usuarios únicos
-        - **Potencial anual**: Proyección del rendimiento anual a un año completo (52 semanas)
-
+        **📈 Formato de números:**
+        - **Números enteros**: Formato 1.000 (sin decimales)
+        - **Números con decimales**: Formato 1.000,00 (dos decimales)
+        - **Exportación**: Excel y CSV mantienen estos formatos
         """)
 
 # =============================================
