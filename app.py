@@ -2495,27 +2495,79 @@ def mostrar_con_handsontable(df_filtrado):
                         if col in df_export.columns:
                             df_export[col] = df_export[col].apply(preparar_fecha_export)
                     
+                    # APLICAR ROUND Y CONVERSIÓN A INT64 PARA ANTIGÜEDAD
+                    if 'ANTIGÜEDAD EXP. (DÍAS)' in df_export.columns:
+                        # Aplicar round y convertir a Int64 (que admite NaN)
+                        df_export['ANTIGÜEDAD EXP. (DÍAS)'] = df_export['ANTIGÜEDAD EXP. (DÍAS)'].round().astype('Int64')
+                        # Reemplazar <NA> por None para Excel
+                        df_export['ANTIGÜEDAD EXP. (DÍAS)'] = df_export['ANTIGÜEDAD EXP. (DÍAS)'].where(pd.notna, None)
+                    
                     # Crear Excel
                     output = io.BytesIO()
                     
                     # Usar openpyxl directamente
                     from openpyxl import Workbook
                     from openpyxl.utils import get_column_letter
+                    from openpyxl.styles import Font, Alignment, PatternFill, Border, Side
                     
                     wb = Workbook()
                     ws = wb.active
                     ws.title = "Expedientes"
                     
-                    # Escribir encabezados
-                    for col_num, header in enumerate(df_export.columns, 1):
-                        ws.cell(row=1, column=col_num, value=header)
+                    # ============================================================================
+                    # ESCRIBIR ENCABEZADOS DE LA TABLA (FILA 1)
+                    # ============================================================================
                     
-                    # Escribir datos
+                    header_fill = PatternFill(start_color="007933", end_color="007933", fill_type="solid")
+                    header_font = Font(color="FFFFFF", bold=True)
+                    header_alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
+                    
+                    for col_num, header in enumerate(df_export.columns, 1):
+                        cell = ws.cell(row=1, column=col_num, value=header)
+                        cell.fill = header_fill
+                        cell.font = header_font
+                        cell.alignment = header_alignment
+                    
+                    # ============================================================================
+                    # ESCRIBIR DATOS DE LA TABLA (DESDE FILA 2)
+                    # ============================================================================
+                    
+                    data_font = Font(size=10)
+                    number_alignment = Alignment(horizontal="right", vertical="center")
+                    text_alignment = Alignment(horizontal="left", vertical="center")
+                    
                     for row_num, row in enumerate(df_export.values, 2):
                         for col_num, value in enumerate(row, 1):
-                            ws.cell(row=row_num, column=col_num, value=value)
+                            cell = ws.cell(row=row_num, column=col_num, value=value)
+                            cell.font = data_font
+                            
+                            # Aplicar alineación específica según tipo de dato
+                            col_name = df_export.columns[col_num-1]
+                            
+                            # Si es ANTIGÜEDAD o otra columna numérica
+                            if 'ANTIGÜEDAD' in col_name.upper() or 'DÍAS' in col_name.upper():
+                                cell.alignment = number_alignment
+                                # Formato sin decimales para números enteros
+                                if isinstance(value, (int, float)) and not pd.isna(value):
+                                    cell.number_format = '#,##0'
+                            # Si es columna de fecha
+                            elif 'FECHA' in col_name.upper():
+                                cell.alignment = Alignment(horizontal="center", vertical="center")
+                                date_format = 'DD/MM/YYYY'
+                                if isinstance(value, (pd.Timestamp, datetime)):
+                                    cell.number_format = date_format
+                            # Si es columna numérica genérica
+                            elif isinstance(value, (int, float)) and not pd.isna(value):
+                                cell.alignment = number_alignment
+                                # Formato con separador de miles
+                                cell.number_format = '#,##0'
+                            else:
+                                cell.alignment = text_alignment
                     
-                    # Aplicar formato de fecha
+                    # ============================================================================
+                    # APLICAR FORMATO DE FECHA ESPECÍFICO
+                    # ============================================================================
+                    
                     date_format = 'DD/MM/YYYY'
                     for col_num, col_name in enumerate(df_export.columns, 1):
                         if 'FECHA' in col_name.upper():
@@ -2524,6 +2576,70 @@ def mostrar_con_handsontable(df_filtrado):
                                 cell = row[0]
                                 if isinstance(cell.value, (pd.Timestamp, datetime)):
                                     cell.number_format = date_format
+                    
+                    # ============================================================================
+                    # AJUSTAR ANCHOS DE COLUMNA AUTOMÁTICAMENTE
+                    # ============================================================================
+                    
+                    for col_num, column_title in enumerate(df_export.columns, 1):
+                        max_length = 0
+                        column_letter = get_column_letter(col_num)
+                        
+                        # Calcular longitud máxima del contenido
+                        for row_num in range(1, len(df_export) + 2):  # +2 para encabezados
+                            cell_value = ws.cell(row=row_num, column=col_num).value
+                            if cell_value:
+                                # Para números, considerar formato con separador de miles
+                                if isinstance(cell_value, (int, float)):
+                                    formatted_value = f"{cell_value:,.0f}"
+                                    cell_length = len(formatted_value)
+                                else:
+                                    cell_length = len(str(cell_value))
+                                max_length = max(max_length, cell_length)
+                        
+                        # Establecer ancho (mínimo 12, máximo 50)
+                        adjusted_width = min(max_length + 2, 50)
+                        ws.column_dimensions[column_letter].width = max(adjusted_width, 12)
+                    
+                    # ============================================================================
+                    # APLICAR AUTOFILTER
+                    # ============================================================================
+                    
+                    if len(df_export) > 0:
+                        # Determinar el rango de la tabla (encabezados + datos)
+                        start_col = get_column_letter(1)
+                        end_col = get_column_letter(len(df_export.columns))
+                        end_row = len(df_export) + 1  # +1 por los encabezados
+                        
+                        # Aplicar autofilter
+                        ws.auto_filter.ref = f"{start_col}1:{end_col}{end_row}"
+                    
+                    # ============================================================================
+                    # CONGELAR ENCABEZADOS (FILA 1) Y RUE (COLUMNA a)
+                    # ============================================================================
+                    
+                    # Congelar la primera fila para que sea visible al hacer scroll
+                    ws.freeze_panes = 'B2'
+                    
+                    # ============================================================================
+                    # APLICAR BORDES A LA TABLA
+                    # ============================================================================
+                    
+                    thin_border = Border(
+                        left=Side(style='thin'),
+                        right=Side(style='thin'),
+                        top=Side(style='thin'),
+                        bottom=Side(style='thin')
+                    )
+                    
+                    for row in ws.iter_rows(min_row=1, max_row=len(df_export)+1, 
+                                        min_col=1, max_col=len(df_export.columns)):
+                        for cell in row:
+                            cell.border = thin_border
+                    
+                    # ============================================================================
+                    # GUARDAR Y MOSTRAR BOTÓN DE DESCARGA
+                    # ============================================================================
                     
                     wb.save(output)
                     output.seek(0)
