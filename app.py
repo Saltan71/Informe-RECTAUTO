@@ -15,6 +15,7 @@ import uuid
 import getpass
 from PIL import Image
 from st_aggrid import AgGrid, GridOptionsBuilder, GridUpdateMode, ColumnsAutoSizeMode
+import math
 
 # === NUEVA CLASE PARA ENTORNO DE USUARIO ===
 class UserEnvironment:
@@ -679,12 +680,21 @@ def combinar_archivos(rectauto_df, notifica_df=None, triaje_df=None, usuarios_df
             st.sidebar.warning("ℹ️ NOTIFICA no tiene columna 'RUE ORIGEN'")
     
     # Combinar con TRIAJE
+    # Antes de cada merge, verificar duplicados
     if triaje_df is not None and 'RUE' in triaje_df.columns:
+        # Verificar duplicados en triaje_df
+        duplicados_triaje = triaje_df['RUE'].duplicated().sum()
+        if duplicados_triaje > 0:
+            st.sidebar.warning(f"⚠️ TRIAJE tiene {duplicados_triaje} RUEs duplicados")
+            # Mantener el último registro por RUE
+            triaje_df = triaje_df.drop_duplicates(subset='RUE', keep='last')
+        
         df_combinado = pd.merge(
             df_combinado, 
             triaje_df, 
             on='RUE', 
-            how='left'
+            how='left',
+            validate='one_to_one'  # Validar que no haya múltiples matches
         )
         st.sidebar.info(f"✅ TRIAJE combinado: {len(triaje_df)} registros")
     
@@ -798,7 +808,10 @@ def calcular_tiempos_optimizado(_df, fecha_inicio_totales, fin_semana):
         'percentil_120_cerrados': 0,
         'percentil_90_abiertos': 0,
         'percentil_180_abiertos': 0,
-        'percentil_120_abiertos': 0
+        'percentil_120_abiertos': 0,
+        'percentil_90_abiertos_no_despachados': 0,  # NUEVO
+        'percentil_180_abiertos_no_despachados': 0,  # NUEVO
+        'percentil_120_abiertos_no_despachados': 0   # NUEVO
     }
     
     try:
@@ -854,14 +867,14 @@ def calcular_tiempos_optimizado(_df, fecha_inicio_totales, fin_semana):
                 df_despachados.loc[mask_usar_cierre, 'FECHA_FINAL'] = df_despachados.loc[mask_usar_cierre, 'FECHA CIERRE']
                 
                 # CALCULAR DÍAS VECTORIZADO
-                df_despachados['dias_tramitacion'] = (df_despachados['FECHA_FINAL'] - df_despachados['FECHA INICIO TRAMITACIÓN']).dt.days
+                df_despachados['dias_tramitacion'] = (df_despachados['FECHA_FINAL'] - df_despachados['FECHA INICIO TRAMITACIÓN']).dt.days + 1
                 dias_validos = df_despachados['dias_tramitacion'][df_despachados['dias_tramitacion'] >= 0]
                 
                 if not dias_validos.empty:
-                    resultados['tiempo_medio_despachados'] = round(dias_validos.mean(), 1)
-                    resultados['percentil_90_despachados'] = round(dias_validos.quantile(0.9), 1)
-                    resultados['percentil_180_despachados'] = round((dias_validos <= 180).mean() * 100, 1)
-                    resultados['percentil_120_despachados'] = round((dias_validos <= 120).mean() * 100, 1)
+                    resultados['tiempo_medio_despachados'] = round(dias_validos.mean(), 0)
+                    resultados['percentil_90_despachados'] = dias_validos.quantile(0.9, interpolation='higher')
+                    resultados['percentil_180_despachados'] = round((dias_validos <= 180).mean() * 100, 2)
+                    resultados['percentil_120_despachados'] = round((dias_validos <= 120).mean() * 100, 2)
         
         # ===== TIEMPOS CERRADOS - VECTORIZADO =====
         if all(col in df_temp.columns for col in ['FECHA CIERRE', 'FECHA INICIO TRAMITACIÓN']):
@@ -873,14 +886,14 @@ def calcular_tiempos_optimizado(_df, fecha_inicio_totales, fin_semana):
             
             if mask_cerrados.any():
                 df_cerrados = df_temp[mask_cerrados].copy()
-                df_cerrados['dias_tramitacion'] = (df_cerrados['FECHA CIERRE'] - df_cerrados['FECHA INICIO TRAMITACIÓN']).dt.days
+                df_cerrados['dias_tramitacion'] = (df_cerrados['FECHA CIERRE'] - df_cerrados['FECHA INICIO TRAMITACIÓN']).dt.days + 1
                 dias_validos = df_cerrados['dias_tramitacion'][df_cerrados['dias_tramitacion'] >= 0]
                 
                 if not dias_validos.empty:
-                    resultados['tiempo_medio_cerrados'] = round(dias_validos.mean(), 1)
-                    resultados['percentil_90_cerrados'] = round(dias_validos.quantile(0.9), 1)
-                    resultados['percentil_180_cerrados'] = round((dias_validos <= 180).mean() * 100, 1)
-                    resultados['percentil_120_cerrados'] = round((dias_validos <= 120).mean() * 100, 1)
+                    resultados['tiempo_medio_cerrados'] = round(dias_validos.mean(), 0)
+                    resultados['percentil_90_cerrados'] = dias_validos.quantile(0.9, interpolation='higher')
+                    resultados['percentil_180_cerrados'] = round((dias_validos <= 180).mean() * 100, 2)
+                    resultados['percentil_120_cerrados'] = round((dias_validos <= 120).mean() * 100, 2)
         
         # ===== TIEMPOS ABIERTOS - VECTORIZADO =====
         if all(col in df_temp.columns for col in ['FECHA INICIO TRAMITACIÓN', 'FECHA APERTURA', 'FECHA CIERRE']):
@@ -891,13 +904,52 @@ def calcular_tiempos_optimizado(_df, fecha_inicio_totales, fin_semana):
             
             if mask_abiertos.any():
                 df_abiertos = df_temp[mask_abiertos].copy()
-                df_abiertos['dias_tramitacion'] = (fin_semana - df_abiertos['FECHA INICIO TRAMITACIÓN']).dt.days
+                df_abiertos['dias_tramitacion'] = (fin_semana - df_abiertos['FECHA INICIO TRAMITACIÓN']).dt.days + 1
                 dias_validos = df_abiertos['dias_tramitacion'][df_abiertos['dias_tramitacion'] >= 0]
                 
                 if not dias_validos.empty:
-                    resultados['percentil_90_abiertos'] = round(dias_validos.quantile(0.9), 1)
-                    resultados['percentil_180_abiertos'] = round((dias_validos <= 180).mean() * 100, 1)
-                    resultados['percentil_120_abiertos'] = round((dias_validos <= 120).mean() * 100, 1)
+                    resultados['percentil_90_abiertos'] = dias_validos.quantile(0.9, interpolation='higher')
+                    resultados['percentil_180_abiertos'] = round((dias_validos <= 180).mean() * 100, 2)
+                    resultados['percentil_120_abiertos'] = round((dias_validos <= 120).mean() * 100, 2)
+
+        # ===== TIEMPOS ABIERTOS NO DESPACHADOS - VECTORIZADO =====
+        if all(col in df_temp.columns for col in ['FECHA INICIO TRAMITACIÓN', 'FECHA APERTURA', 'FECHA CIERRE', 'FECHA RESOLUCIÓN', 'ESTADO']):
+            # Expedientes abiertos
+            mask_abiertos = (
+                (df_temp['FECHA APERTURA'] <= fin_semana) & 
+                ((df_temp['FECHA CIERRE'] > fin_semana) | (df_temp['FECHA CIERRE'].isna()))
+            )
+            
+            # Expedientes despachados hasta fin_semana
+            mask_despachados_reales = (
+                df_temp['FECHA RESOLUCIÓN'].notna() & 
+                (df_temp['FECHA RESOLUCIÓN'] != fecha_9999) &
+                (df_temp['FECHA RESOLUCIÓN'] >= fecha_inicio_totales) &
+                (df_temp['FECHA RESOLUCIÓN'] <= fin_semana)
+            )
+            
+            mask_despachados_cerrados = (
+                (df_temp['ESTADO'] == 'Cerrado') &
+                (df_temp['FECHA RESOLUCIÓN'].isna() | (df_temp['FECHA RESOLUCIÓN'] == fecha_9999)) &
+                df_temp['FECHA CIERRE'].notna() &
+                (df_temp['FECHA CIERRE'] >= fecha_inicio_totales) &
+                (df_temp['FECHA CIERRE'] <= fin_semana)
+            )
+            
+            mask_despachados_total = mask_despachados_reales | mask_despachados_cerrados
+            
+            # Expedientes abiertos no despachados = Abiertos - Despachados
+            mask_abiertos_no_despachados = mask_abiertos & (~mask_despachados_total)
+            
+            if mask_abiertos_no_despachados.any():
+                df_abiertos_no_desp = df_temp[mask_abiertos_no_despachados].copy()
+                df_abiertos_no_desp['dias_tramitacion'] = (fin_semana - df_abiertos_no_desp['FECHA INICIO TRAMITACIÓN']).dt.days + 1
+                dias_validos = df_abiertos_no_desp['dias_tramitacion'][df_abiertos_no_desp['dias_tramitacion'] >= 0]
+                
+                if not dias_validos.empty:
+                    resultados['percentil_90_abiertos_no_despachados'] = dias_validos.quantile(0.9, interpolation='higher')
+                    resultados['percentil_180_abiertos_no_despachados'] = round((dias_validos <= 180).mean() * 100, 2)
+                    resultados['percentil_120_abiertos_no_despachados'] = round((dias_validos <= 120).mean() * 100, 2)
         
     except Exception as e:
         # Error silencioso para no interrumpir
@@ -935,6 +987,7 @@ def calcular_kpis_para_semana_optimizado(_df, semana_fin, es_semana_actual=False
         'expedientes_cerrados': 0,
         'expedientes_cerrados_totales': 0,
         'total_abiertos': 0,
+        'total_abiertos_no_despachados': 0,  # NUEVO KPI
         'total_rehabilitados': 0,
         'expedientes_especiales': 0,
         'porcentaje_especiales': 0,
@@ -943,7 +996,7 @@ def calcular_kpis_para_semana_optimizado(_df, semana_fin, es_semana_actual=False
         'dias_semana': dias_semana,
         'es_semana_actual': es_semana_actual
     }
-    
+
     try:
         # NUEVOS EXPEDIENTES
         if 'FECHA ASIG' in _df.columns:
@@ -985,6 +1038,33 @@ def calcular_kpis_para_semana_optimizado(_df, semana_fin, es_semana_actual=False
         if 'FECHA CIERRE' in _df.columns and 'FECHA APERTURA' in _df.columns:
             mask_abiertos = (_df['FECHA APERTURA'] <= fin_semana) & ((_df['FECHA CIERRE'] > fin_semana) | (_df['FECHA CIERRE'].isna()))
             resultados['total_abiertos'] = mask_abiertos.sum()
+
+        # EXPEDIENTES ABIERTOS NO DESPACHADOS (NUEVO KPI)
+        if all(col in _df.columns for col in ['FECHA APERTURA', 'FECHA CIERRE', 'FECHA RESOLUCIÓN', 'ESTADO']):
+            # Fecha 9999 para comparación
+            fecha_9999 = pd.to_datetime('9999-09-09', errors='coerce')
+            
+            # Expedientes despachados hasta fin_semana (misma lógica que calcular_despachados_optimizado)
+            # 1. Expedientes con FECHA RESOLUCIÓN real (distinta de 9999 y no nula) hasta fin_semana
+            mask_despachados_reales = (
+                _df['FECHA RESOLUCIÓN'].notna() & 
+                (_df['FECHA RESOLUCIÓN'] != fecha_9999) &
+                (_df['FECHA RESOLUCIÓN'] <= fin_semana)
+            )
+            
+            # 2. Expedientes CERRADOS con FECHA RESOLUCIÓN = 9999-09-09 o vacía hasta fin_semana
+            mask_despachados_cerrados = (
+                (_df['ESTADO'] == 'Cerrado') &
+                (_df['FECHA RESOLUCIÓN'].isna() | (_df['FECHA RESOLUCIÓN'] == fecha_9999)) &
+                _df['FECHA CIERRE'].notna() &
+                (_df['FECHA CIERRE'] <= fin_semana)
+            )
+            
+            mask_despachados_total = mask_despachados_reales | mask_despachados_cerrados
+            
+            # Expedientes abiertos no despachados = Abiertos - Despachados
+            mask_abiertos_no_despachados = mask_abiertos & (~mask_despachados_total)
+            resultados['total_abiertos_no_despachados'] = mask_abiertos_no_despachados.sum()
         
         # EXPEDIENTES REHABILITADOS
         if 'ETIQ. PENÚLTIMO TRAM.' in _df.columns:
@@ -1451,6 +1531,7 @@ def generar_pdf_resumen_kpi_optimizado(df_kpis_semanales, num_semana, fecha_max_
         pdf.add_metric("-Expedientes Cerrados", f"{int(kpis_semana['expedientes_cerrados']):,}".replace(",", "."))
         pdf.add_metric("-Coef. Absorcion (Cer/Asig)", f"{kpis_semana['c_abs_cerrados_sem']:.2f}%".replace(".", ","))
         pdf.add_metric("-Expedientes Abiertos", f"{int(kpis_semana['total_abiertos']):,}".replace(",", "."))
+        pdf.add_metric("-Expedientes Abiertos no Despachados", f"{int(kpis_semana.get('total_abiertos_no_despachados', 0)):,}".replace(",", "."))
         pdf.add_metric("-Expedientes Rehabilitados", f"{int(kpis_semana['total_rehabilitados']):,}".replace(",", "."))
         
         # Totales
@@ -1461,6 +1542,7 @@ def generar_pdf_resumen_kpi_optimizado(df_kpis_semanales, num_semana, fecha_max_
         pdf.add_metric("-Coef. Absorcion (Desp/Nuevos)", f"{kpis_semana['c_abs_despachados_tot']:.2f}%".replace(".", ","))
         pdf.add_metric("-Expedientes Cerrados", f"{int(kpis_semana['expedientes_cerrados_totales']):,}".replace(",", "."))
         pdf.add_metric("-Coef. Absorcion (Cer/Asig)", f"{kpis_semana['c_abs_cerrados_tot']:.2f}%".replace(".", ","))
+        pdf.add_metric("-Total Expedientes Asignados", f"{int(kpis_semana['despachados_totales'] + kpis_semana['total_abiertos_no_despachados']):,}".replace(",", "."))
         
         pdf.ln(3)
         
@@ -1471,34 +1553,123 @@ def generar_pdf_resumen_kpi_optimizado(df_kpis_semanales, num_semana, fecha_max_
         
         pdf.ln(3)
         
-        # SECCIÓN 3: TIEMPOS DE TRAMITACION
+        # SECCIÓN 3: TIEMPOS DE TRAMITACION - DISEÑO EN DOS COLUMNAS
         pdf.add_section_title("TIEMPOS DE TRAMITACION (en dias)")
         
-        # Expedientes Despachados
-        pdf.set_font('Arial', 'B', 10)
-        pdf.cell(0, 7, "Expedientes Despachados:", 0, 1)
-        pdf.add_metric("-Tiempo Medio", f"{kpis_semana['tiempo_medio_despachados']:.0f} dias")
-        pdf.add_metric("-Percentil 90", f"{kpis_semana['percentil_90_despachados']:.0f} dias")
-        pdf.add_metric(" <=180 dias", f"{kpis_semana['percentil_180_despachados']:.2f}%".replace(".", ","))
-        pdf.add_metric(" <=120 dias", f"{kpis_semana['percentil_120_despachados']:.2f}%".replace(".", ","))
+        # Guardar posición Y inicial para las columnas
+        y_inicial = pdf.get_y()
         
-        # Expedientes Cerrados
+        # PRIMERA FILA - TÍTULOS
         pdf.set_font('Arial', 'B', 10)
-        pdf.cell(0, 7, "Expedientes Cerrados:", 0, 1)
-        pdf.add_metric("-Tiempo Medio", f"{kpis_semana['tiempo_medio_cerrados']:.0f} dias")
-        pdf.add_metric("-Percentil 90", f"{kpis_semana['percentil_90_cerrados']:.0f} dias")
-        pdf.add_metric(" <=180 dias", f"{kpis_semana['percentil_180_cerrados']:.2f}%".replace(".", ","))
-        pdf.add_metric(" <=120 dias", f"{kpis_semana['percentil_120_cerrados']:.2f}%".replace(".", ","))
         
-        # Expedientes Abiertos
+        # Columna izquierda - Expedientes Despachados
+        pdf.cell(95, 7, "Expedientes Despachados:", 0, 0, 'L')
+        
+        # Columna derecha - Expedientes Cerrados
+        pdf.set_x(105)  # Posicionar en la segunda columna
+        pdf.cell(95, 7, "Expedientes Cerrados:", 0, 1, 'L')
+        
+        # PRIMERA FILA - DATOS
+        # Posicionar para columna izquierda (Despachados)
+        pdf.set_y(y_inicial + 7)
+        pdf.set_x(10)
+        pdf.set_font('Arial', '', 9)
+        
+        # Despachados - Tiempo Medio
+        pdf.cell(85, 6, "-Tiempo Medio:", 0, 0, 'L')
+        pdf.cell(10, 6, f"{kpis_semana['tiempo_medio_despachados']:.0f} dias", 0, 1, 'R')
+        
+        # Despachados - Percentil 90
+        pdf.set_x(10)
+        pdf.cell(85, 6, "-Percentil 90:", 0, 0, 'L')
+        pdf.cell(10, 6, f"{kpis_semana['percentil_90_despachados']:.0f} dias", 0, 1, 'R')
+        
+        # Despachados - <=180 dias
+        pdf.set_x(10)
+        pdf.cell(85, 6, " <=180 dias:", 0, 0, 'L')
+        pdf.cell(10, 6, f"{kpis_semana['percentil_180_despachados']:.2f}%".replace(".", ","), 0, 1, 'R')
+        
+        # Despachados - <=120 dias
+        pdf.set_x(10)
+        pdf.cell(85, 6, " <=120 dias:", 0, 0, 'L')
+        pdf.cell(10, 6, f"{kpis_semana['percentil_120_despachados']:.2f}%".replace(".", ","), 0, 1, 'R')
+        
+        # Posicionar para columna derecha (Cerrados)
+        pdf.set_y(y_inicial + 7)
+        pdf.set_x(105)
+        
+        # Cerrados - Tiempo Medio
+        pdf.cell(85, 6, "-Tiempo Medio:", 0, 0, 'L')
+        pdf.cell(10, 6, f"{kpis_semana['tiempo_medio_cerrados']:.0f} dias", 0, 1, 'R')
+        
+        # Cerrados - Percentil 90
+        pdf.set_x(105)
+        pdf.cell(85, 6, "-Percentil 90:", 0, 0, 'L')
+        pdf.cell(10, 6, f"{kpis_semana['percentil_90_cerrados']:.0f} dias", 0, 1, 'R')
+        
+        # Cerrados - <=180 dias
+        pdf.set_x(105)
+        pdf.cell(85, 6, " <=180 dias:", 0, 0, 'L')
+        pdf.cell(10, 6, f"{kpis_semana['percentil_180_cerrados']:.2f}%".replace(".", ","), 0, 1, 'R')
+        
+        # Cerrados - <=120 dias
+        pdf.set_x(105)
+        pdf.cell(85, 6, " <=120 dias:", 0, 0, 'L')
+        pdf.cell(10, 6, f"{kpis_semana['percentil_120_cerrados']:.2f}%".replace(".", ","), 0, 1, 'R')
+        
+        # SEGUNDA FILA - TÍTULOS
+        y_segunda_fila = pdf.get_y() + 3  # Espacio entre filas
+        
+        pdf.set_y(y_segunda_fila)
         pdf.set_font('Arial', 'B', 10)
-        pdf.cell(0, 7, "-Expedientes Abiertos:", 0, 1)
-        pdf.add_metric("-Percentil 90", f"{kpis_semana['percentil_90_abiertos']:.0f} dias")
-        pdf.add_metric(" <=180 dias", f"{kpis_semana['percentil_180_abiertos']:.2f}%".replace(".", ","))
-        pdf.add_metric(" <=120 dias", f"{kpis_semana['percentil_120_abiertos']:.2f}%".replace(".", ","))
+        
+        # Columna izquierda - Expedientes Abiertos
+        pdf.cell(95, 7, "Expedientes Abiertos:", 0, 0, 'L')
+        
+        # Columna derecha - Expedientes Abiertos no Despachados
+        pdf.set_x(105)
+        pdf.cell(95, 7, "Expedientes Abiertos no Despachados:", 0, 1, 'L')
+        
+        # SEGUNDA FILA - DATOS
+        # Posicionar para columna izquierda (Abiertos)
+        pdf.set_y(y_segunda_fila + 7)
+        pdf.set_x(10)
+        pdf.set_font('Arial', '', 9)
+        
+        # Abiertos - Percentil 90
+        pdf.cell(85, 6, "-Percentil 90:", 0, 0, 'L')
+        pdf.cell(10, 6, f"{kpis_semana['percentil_90_abiertos']:.0f} dias", 0, 1, 'R')
+        
+        # Abiertos - <=180 dias
+        pdf.set_x(10)
+        pdf.cell(85, 6, " <=180 dias:", 0, 0, 'L')
+        pdf.cell(10, 6, f"{kpis_semana['percentil_180_abiertos']:.2f}%".replace(".", ","), 0, 1, 'R')
+        
+        # Abiertos - <=120 dias
+        pdf.set_x(10)
+        pdf.cell(85, 6, " <=120 dias:", 0, 0, 'L')
+        pdf.cell(10, 6, f"{kpis_semana['percentil_120_abiertos']:.2f}%".replace(".", ","), 0, 1, 'R')
+        
+        # Posicionar para columna derecha (Abiertos no Despachados)
+        pdf.set_y(y_segunda_fila + 7)
+        pdf.set_x(105)
+        
+        # Abiertos no Despachados - Percentil 90
+        pdf.cell(85, 6, "-Percentil 90:", 0, 0, 'L')
+        pdf.cell(10, 6, f"{kpis_semana.get('percentil_90_abiertos_no_despachados', 0):.0f} dias", 0, 1, 'R')
+        
+        # Abiertos no Despachados - <=180 dias
+        pdf.set_x(105)
+        pdf.cell(85, 6, " <=180 dias:", 0, 0, 'L')
+        pdf.cell(10, 6, f"{kpis_semana.get('percentil_180_abiertos_no_despachados', 0):.2f}%".replace(".", ","), 0, 1, 'R')
+        
+        # Abiertos no Despachados - <=120 dias
+        pdf.set_x(105)
+        pdf.cell(85, 6, " <=120 dias:", 0, 0, 'L')
+        pdf.cell(10, 6, f"{kpis_semana.get('percentil_120_abiertos_no_despachados', 0):.2f}%".replace(".", ","), 0, 1, 'R')
         
         # Información del período
-        pdf.ln(3)
+        pdf.ln(8)
         pdf.set_font('Arial', 'I', 8)
         if kpis_semana['es_semana_actual']:
             periodo_texto = f"Periodo de la semana (ACTUAL): {kpis_semana['inicio_semana'].strftime('%d/%m/%Y')} a {kpis_semana['fin_semana'].strftime('%d/%m/%Y')} - {kpis_semana['dias_semana']} dias"
@@ -3668,6 +3839,10 @@ elif eleccion == "Indicadores clave (KPI)":
                 label="👥 Expedientes Abiertos",
                 value=f"{int(kpis_semana['total_abiertos']):,}".replace(",", ".")
             )
+            st.metric(
+                label="👥 Expedientes Abiertos no Despachados",
+                value=f"{int(kpis_semana['total_abiertos_no_despachados']):,}".replace(",", ".")
+            )
 
         with col2:
             st.markdown("### Totales (desde 01/11/2022)")
@@ -3693,10 +3868,14 @@ elif eleccion == "Indicadores clave (KPI)":
                 value=f"{kpis_semana['c_abs_cerrados_tot']:.2f}%".replace(".", ",")
             )
             st.metric(
+                label="👥 Total Expedientes Asignados",
+                value=f"{int(kpis_semana['despachados_totales'] + kpis_semana['total_abiertos_no_despachados']):,}".replace(",", ".")
+            )
+            st.metric(
                 label="👥 Expedientes Rehabilitados (última semana)",
                 value=f"{int(kpis_semana['total_rehabilitados']):,}".replace(",", ".")
             )
-                    
+
         st.markdown("---")
         
         # SEGUNDA FILA - EXPEDIENTES ESPECIALES
@@ -3806,6 +3985,36 @@ elif eleccion == "Indicadores clave (KPI)":
                     label="≤120 días",
                     value=f"{kpis_semana['percentil_120_abiertos']:.2f}%".replace(".", ",")
                 )
+
+        # Expedientes Abiertos no Despachados
+        st.markdown("#### 📤 Expedientes Abiertos no Despachados")
+        col1, col2, col3 = st.columns(3)
+        
+        #with col1:
+        #    st.metric(
+        #        label="📊 Tiempo Actual",
+        #        value="-"  # No hay tiempo medio para abiertos
+        #    )
+        
+        with col2:
+            st.metric(
+                label="🎯 Percentil 90",
+                value=f"{kpis_semana['percentil_90_abiertos_no_despachados']:.0f}"
+            )
+        
+        with col3:
+            col3a, col3b = st.columns(2)
+            with col3a:
+                st.metric(
+                    label="≤180 días",
+                    value=f"{kpis_semana['percentil_180_abiertos_no_despachados']:.2f}%".replace(".", ",")
+                )
+            with col3b:
+                st.metric(
+                    label="≤120 días",
+                    value=f"{kpis_semana['percentil_120_abiertos_no_despachados']:.2f}%".replace(".", ",")
+                )
+
 
     # Mostrar dashboard principal
     mostrar_kpis_principales(df_kpis_semanales, semana_seleccionada, num_semana_seleccionada)
