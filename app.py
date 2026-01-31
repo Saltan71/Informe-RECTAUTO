@@ -2591,13 +2591,14 @@ def mostrar_con_handsontable(df_filtrado):
                 height: 600,
                 width: '100%',
                 autoColumnSize: {{
-                    useHeaders: false,      // IGNORA los títulos de columna
-                    syncLimit: 100,         // Usar máximo 100 filas para cálculo
-                    samplingRatio: 23       // Ratio de muestreo para mejor performance
+                    useHeaders: true,       // IMPORTANTE: Considerar encabezados
+                    syncLimit: 50,          // Reducir para mejor rendimiento
+                    samplingRatio: 10,      // Menor ratio para cálculo más rápido
+                    limitToWindowSize: false // Permitir anchos mayores que la ventana
                 }},
                 manualColumnResize: true,   // Permitir ajuste manual después
                 manualRowResize: true,
-                stretchH: 'last',           // Cambiado de 'all' a 'last' para mejor ajuste
+                stretchH: 'all',           // Cambiado de 'last' a 'all' para mejor ajuste
                 licenseKey: 'non-commercial-and-evaluation',
                 filters: true,
                 dropdownMenu: true,
@@ -2647,6 +2648,50 @@ def mostrar_con_handsontable(df_filtrado):
                 try:
                     # Preparar DataFrame para exportación
                     df_export = df_filtrado.copy()
+
+                    # Identificar columnas de usuario y equipo
+                    columnas_usuario = [col for col in df_export.columns if 'USUARIO' in col.upper()]
+                    columnas_equipo = [col for col in df_export.columns if 'EQUIPO' in col.upper()]
+                    
+                    col_usuario = columnas_usuario[0] if columnas_usuario else None
+                    col_equipo = columnas_equipo[0] if columnas_equipo else None
+                    
+                    # ============================================================
+                    # SOLUCIÓN 1: REORDENAR COLUMNAS - USUARIO Y EQUIPO AL PRINCIPIO
+                    # ============================================================
+                    
+                    # Crear lista de columnas ordenadas
+                    columnas_ordenadas = []
+                    
+                    # 1. Primero las columnas clave que queremos al principio
+                    columnas_prioridad = []
+                    
+                    if 'RUE' in df_export.columns:
+                        columnas_prioridad.append('RUE')
+                    
+                    if col_usuario:
+                        columnas_prioridad.append(col_usuario)
+                    
+                    if col_equipo:
+                        columnas_prioridad.append(col_equipo)
+                    
+                    # 2. Otras columnas importantes
+                    otras_importantes = ['FECHA DE ENTRADA', 'ANTIGÜEDAD EXP. (DÍAS)', 
+                                        'ETIQ. PENÚLTIMO TRAM.', 'PENÚLTIMO TRAMITE']
+                    
+                    for col in otras_importantes:
+                        if col in df_export.columns:
+                            columnas_prioridad.append(col)
+                    
+                    # 3. Eliminar duplicados y añadir el resto de columnas
+                    columnas_ordenadas = columnas_prioridad.copy()
+                    
+                    for col in df_export.columns:
+                        if col not in columnas_ordenadas:
+                            columnas_ordenadas.append(col)
+                    
+                    # Reordenar el DataFrame
+                    df_export = df_export[columnas_ordenadas]
                     
                     # Función segura para exportación
                     def preparar_fecha_export(x):
@@ -3584,12 +3629,17 @@ elif eleccion == "Vista de Expedientes":
             # Crear interfaz para editar la documentación
             st.subheader("Editar Documentación Incorporada")
             
+            # Diccionario temporal para almacenar cambios (si no existe)
+            if 'cambios_documentacion_temp' not in st.session_state:
+                st.session_state.cambios_documentacion_temp = {}
+            
             # Mostrar tabla editable
+            cambios_realizados = False
             for idx, row in df_incdocu.iterrows():
                 rue = row['RUE']
                 docum_actual = row.get('DOCUM.INCORP.', '')
                 
-                col1, col2, col3 = st.columns([2, 3, 1])
+                col1, col2 = st.columns([2, 3])  # Reducir a 2 columnas
                 
                 with col1:
                     st.write(f"**RUE:** {rue}")
@@ -3605,77 +3655,72 @@ elif eleccion == "Vista de Expedientes":
                         label_visibility="collapsed"
                     )
                     
-                    # Guardar cambio en session_state
+                    # Almacenar cambio temporalmente (sin grabar aún)
                     if nueva_docum != docum_actual:
-                        st.session_state.cambios_documentacion[rue] = nueva_docum
-                
-                with col3:
-                    if st.button("💾 Guardar", key=f"btn_{rue}"):
-                        # Actualizar el DataFrame combinado
-                        df_combinado = st.session_state["df_combinado"]
-                        df_combinado.loc[df_combinado['RUE'] == rue, 'DOCUM.INCORP.'] = nueva_docum
-                        st.session_state["df_combinado"] = df_combinado
-                        st.success(f"✅ Documentación actualizada para RUE {rue}")
+                        st.session_state.cambios_documentacion_temp[rue] = nueva_docum
+                        cambios_realizados = True
+                    elif rue in st.session_state.cambios_documentacion_temp:
+                        # Si vuelve al valor original, eliminar del diccionario
+                        del st.session_state.cambios_documentacion_temp[rue]
             
-            # Botón para guardar todos los cambios en el archivo DOCUMENTOS.xlsx
+            # Botón único para guardar todos los cambios
             st.markdown("---")
             col1, col2 = st.columns([3, 1])
             
             with col2:
-                # En la sección de guardar documentos, busca esta parte y actualízala:
-                if st.button("💾 Guardar Todos los Cambios en DOCUMENTOS.xlsx", type="primary", key="guardar_documentos"):
-                    with st.spinner("Guardando cambios..."):
-                        df_combinado = st.session_state["df_combinado"]
-
-# Filtrar solo los registros con ETIQ. PENÚLTIMO TRAM. = "90 INCDOCU" y DOCUM.INCORP. no vacío
-                        df_documentos_actualizado = df_combinado[
-                            (df_combinado['ETIQ. PENÚLTIMO TRAM.'] == "90 INCDOCU") &
-                            (df_combinado['DOCUM.INCORP.'].notna()) &
-                            (df_combinado['DOCUM.INCORP.'] != '')
-                        ][['RUE', 'DOCUM.INCORP.']].copy()
-
-
-                        # Guardar en el archivo DOCUMENTOS.xlsx (esto reemplazará completamente el contenido anterior)
-                        contenido_actualizado = guardar_documentos_actualizados(
-                            datos_documentos['archivo'], 
-                            df_documentos_actualizado
-                        )
-                        
-                        if contenido_actualizado:
-                            st.session_state.documentos_actualizados = contenido_actualizado
-                            st.session_state.mostrar_descarga = True
-                            st.success("✅ Archivo DOCUMENTOS.xlsx actualizado correctamente")
+                if st.button("💾 Guardar Todos los Cambios", type="primary", key="guardar_todos_documentos"):
+                    if not st.session_state.cambios_documentacion_temp:
+                        st.warning("⚠️ No hay cambios para guardar")
+                    else:
+                        with st.spinner("Guardando cambios..."):
+                            # Obtener DataFrame combinado
+                            df_combinado = st.session_state["df_combinado"]
                             
-                            # Limpiar cambios
-                            st.session_state.cambios_documentacion = {}
+                            # Aplicar todos los cambios al DataFrame
+                            for rue, nueva_docum in st.session_state.cambios_documentacion_temp.items():
+                                df_combinado.loc[df_combinado['RUE'] == rue, 'DOCUM.INCORP.'] = nueva_docum
                             
-                            # Actualizar cache
-                            st.cache_data.clear()
+                            # Actualizar session_state
+                            st.session_state["df_combinado"] = df_combinado
                             
-                        else:
-                            st.error("❌ Error al guardar el archivo DOCUMENTOS.xlsx")
+                            # Filtrar para guardar en archivo
+                            df_documentos_actualizado = df_combinado[
+                                (df_combinado['ETIQ. PENÚLTIMO TRAM.'] == "90 INCDOCU") &
+                                (df_combinado['DOCUM.INCORP.'].notna()) &
+                                (df_combinado['DOCUM.INCORP.'] != '')
+                            ][['RUE', 'DOCUM.INCORP.']].copy()
+                            
+                            # Guardar en archivo
+                            contenido_actualizado = guardar_documentos_actualizados(
+                                datos_documentos['archivo'], 
+                                df_documentos_actualizado
+                            )
+                            
+                            if contenido_actualizado:
+                                st.session_state.documentos_actualizados = contenido_actualizado
+                                st.session_state.mostrar_descarga = True
+                                
+                                # Mostrar resumen de cambios
+                                st.success(f"✅ {len(st.session_state.cambios_documentacion_temp)} cambios guardados correctamente")
+                                
+                                # Limpiar cambios temporales
+                                st.session_state.cambios_documentacion_temp = {}
+                                
+                                # Actualizar cache
+                                st.cache_data.clear()
+                                
+                                # Rerun para actualizar la vista
+                                st.rerun()
+                            else:
+                                st.error("❌ Error al guardar el archivo DOCUMENTOS.xlsx")
             
-            # Mostrar botón de descarga si hay archivo actualizado
-            if st.session_state.get('mostrar_descarga', False) and st.session_state.get('documentos_actualizados'):
-                st.markdown("---")
-                st.subheader("📥 Descargar Archivo Actualizado")
+            # Mostrar cambios pendientes
+            if st.session_state.cambios_documentacion_temp:
+                st.info(f"📝 **Cambios pendientes:** {len(st.session_state.cambios_documentacion_temp)} expediente(s) modificado(s)")
                 
-                # Generar nombre de archivo con timestamp
-                from datetime import datetime
-                timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-                nombre_archivo = f"DOCUMENTOS_actualizado_{timestamp}.xlsx"
-                
-                st.download_button(
-                    label="⬇️ Descargar DOCUMENTOS.xlsx actualizado",
-                    data=st.session_state.documentos_actualizados,
-                    file_name=nombre_archivo,
-                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                    key="descarga_documentos"
-                )
-                
-                # Opción para continuar sin descargar
-                if st.button("Continuar sin descargar", key="continuar_sin_descargar"):
-                    st.session_state.mostrar_descarga = False
+                # Botón para descartar cambios
+                if st.button("🗑️ Descartar Cambios", key="descartar_cambios"):
+                    st.session_state.cambios_documentacion_temp = {}
                     st.rerun()
     else:
         st.warning("⚠️ Carga el archivo DOCUMENTOS.xlsx para gestionar la documentación incorporada")
@@ -5244,7 +5289,7 @@ elif eleccion == "Informes y Correos":
                     'cuerpo_mensaje': f"{obtener_saludo()},\n\nSe adjunta el resumen de KPIs de la semana {num_semana}, el informe de rendimiento por usuario y los listados de expedientes prioritarios de todos los equipos.\n\n__________________\n\nEquipo RECTAUTO.",
                     'recibir_resumen': True
                 })
-                st.info(f"📊 {usuario_nombre} - Recibirá resumen KPI + informe rendimiento + expedientes prioritarios de todos los equipos")
+                st.info(f"📊 {usuario_nombre} - Recibirán resumen KPI + informe rendimiento + expedientes prioritarios de todos los equipos")
             
             else:
                 # Usuario sin expedientes y sin marcar para resumen
@@ -5321,6 +5366,8 @@ elif eleccion == "Informes y Correos":
 
     st.warning("""
     **⚠️ Importante antes de enviar:**
+    - Exclusivamente con ejecución de la app en escritorio
+    - Para enviar correo con ejecución web de la app, utilizar el archivo .zip descargado.
     - Se usará la cuenta de Outlook predeterminada
     - No es necesario tener Outlook abierto
     - Los correos se enviarán inmediatamente
