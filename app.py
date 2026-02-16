@@ -388,7 +388,7 @@ class PDFResumenKPI(FPDF):
         
     def header(self):
         self.set_font('Arial', 'B', 12)
-        self.cell(0, 10, 'Resumen de KPIs Semanales', 0, 1, 'C')
+        self.cell(0, 10, 'RECTAUTO - Resumen de KPIs Semanales', 0, 1, 'C')
         self.ln(5)
     
     def footer(self):
@@ -2050,7 +2050,7 @@ class PDFRendimiento(FPDF):
         
     def header(self):
         self.set_font('Arial', 'B', 12)
-        self.cell(0, 10, 'Informe de Rendimiento por Usuario', 0, 1, 'C')
+        self.cell(0, 10, 'RECTAUTO - Informe de Rendimiento por Usuario', 0, 1, 'C')
         self.ln(5)
     
     def footer(self):
@@ -3714,13 +3714,27 @@ elif eleccion == "Vista de Expedientes":
                             else:
                                 st.error("❌ Error al guardar el archivo DOCUMENTOS.xlsx")
             
-            # Mostrar cambios pendientes
-            if st.session_state.cambios_documentacion_temp:
-                st.info(f"📝 **Cambios pendientes:** {len(st.session_state.cambios_documentacion_temp)} expediente(s) modificado(s)")
+            # Mostrar botón de descarga si hay archivo actualizado
+            if st.session_state.get('mostrar_descarga', False) and st.session_state.get('documentos_actualizados'):
+                st.markdown("---")
+                st.subheader("📥 Descargar Archivo Actualizado")
                 
-                # Botón para descartar cambios
-                if st.button("🗑️ Descartar Cambios", key="descartar_cambios"):
-                    st.session_state.cambios_documentacion_temp = {}
+                # Generar nombre de archivo con timestamp
+                from datetime import datetime
+                timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                nombre_archivo = f"DOCUMENTOS_actualizado_{timestamp}.xlsx"
+                
+                st.download_button(
+                    label="⬇️ Descargar DOCUMENTOS.xlsx actualizado",
+                    data=st.session_state.documentos_actualizados,
+                    file_name=nombre_archivo,
+                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                    key="descarga_documentos"
+                )
+                
+                # Opción para continuar sin descargar
+                if st.button("Continuar sin descargar", key="continuar_sin_descargar"):
+                    st.session_state.mostrar_descarga = False
                     st.rerun()
     else:
         st.warning("⚠️ Carga el archivo DOCUMENTOS.xlsx para gestionar la documentación incorporada")
@@ -5349,6 +5363,22 @@ elif eleccion == "Informes y Correos":
         with st.expander("📋 Ver usuarios con expedientes"):
             df_envio = pd.DataFrame(usuarios_para_envio_individual)
             st.dataframe(df_envio[['usuario', 'email', 'expedientes', 'recibir_resumen']], use_container_width=True)
+            # BOTÓN DE DESCARGA SIMPLE
+            if not df_envio.empty:
+                # Convertir a Excel en memoria
+                from io import BytesIO
+                output = BytesIO()
+                with pd.ExcelWriter(output, engine='openpyxl') as writer:
+                    df_envio[['usuario', 'email', 'expedientes', 'recibir_resumen']].to_excel(writer, index=False, sheet_name='Usuarios')
+                
+                # Botón de descarga
+                st.download_button(
+                    label="📥 Descargar Excel",
+                    data=output.getvalue(),
+                    file_name="usuarios_expedientes.xlsx",
+                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                )
+            
 
     if usuarios_para_resumen_solo:
         st.success(f"📊 {len(usuarios_para_resumen_solo)} usuarios recibirán el resumen KPI + informe rendimiento")
