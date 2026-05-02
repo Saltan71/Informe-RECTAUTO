@@ -9,3 +9,4 @@ matplotlib
 kaleido==0.2.1
 Pillow
 streamlit-aggrid
+reportlab
