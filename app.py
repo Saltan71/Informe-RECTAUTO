@@ -16,6 +16,7 @@ import getpass
 from PIL import Image
 from st_aggrid import AgGrid, GridOptionsBuilder, GridUpdateMode, ColumnsAutoSizeMode
 import math
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 # === NUEVA CLASE PARA ENTORNO DE USUARIO ===
 class UserEnvironment:
@@ -827,16 +828,12 @@ def calcular_tiempos_optimizado(_df, fecha_inicio_totales, fin_semana):
         if not columnas_existentes:
             return resultados
             
-        df_temp = _df[columnas_existentes].copy()
-        
-        # CONVERSIÓN RÁPIDA DE FECHAS
+        # Las fechas ya vienen convertidas desde combinar_archivos/convertir_fechas.
+        df_temp = _df[columnas_existentes]
+
         fecha_9999 = pd.to_datetime('9999-09-09', errors='coerce')
         fin_semana = pd.to_datetime(fin_semana)
         fecha_inicio_totales = pd.to_datetime(fecha_inicio_totales)
-        
-        for col in df_temp.columns:
-            if 'FECHA' in col:
-                df_temp[col] = pd.to_datetime(df_temp[col], errors='coerce')
         
         # ===== TIEMPOS DESPACHADOS - VECTORIZADO =====
         if all(col in df_temp.columns for col in ['FECHA RESOLUCIÓN', 'FECHA INICIO TRAMITACIÓN', 'ESTADO', 'FECHA CIERRE']):
@@ -859,7 +856,7 @@ def calcular_tiempos_optimizado(_df, fecha_inicio_totales, fin_semana):
             mask_despachados = mask_resolucion_valida | mask_cierre_valido
             
             if mask_despachados.any():
-                df_despachados = df_temp[mask_despachados].copy()
+                df_despachados = df_temp[mask_despachados]
                 
                 # CALCULAR FECHA FINAL VECTORIZADO
                 df_despachados['FECHA_FINAL'] = df_despachados['FECHA RESOLUCIÓN']
@@ -885,7 +882,7 @@ def calcular_tiempos_optimizado(_df, fecha_inicio_totales, fin_semana):
             )
             
             if mask_cerrados.any():
-                df_cerrados = df_temp[mask_cerrados].copy()
+                df_cerrados = df_temp[mask_cerrados]
                 df_cerrados['dias_tramitacion'] = (df_cerrados['FECHA CIERRE'] - df_cerrados['FECHA INICIO TRAMITACIÓN']).dt.days + 1
                 dias_validos = df_cerrados['dias_tramitacion'][df_cerrados['dias_tramitacion'] >= 0]
                 
@@ -903,7 +900,7 @@ def calcular_tiempos_optimizado(_df, fecha_inicio_totales, fin_semana):
             )
             
             if mask_abiertos.any():
-                df_abiertos = df_temp[mask_abiertos].copy()
+                df_abiertos = df_temp[mask_abiertos]
                 df_abiertos['dias_tramitacion'] = (fin_semana - df_abiertos['FECHA INICIO TRAMITACIÓN']).dt.days + 1
                 dias_validos = df_abiertos['dias_tramitacion'][df_abiertos['dias_tramitacion'] >= 0]
                 
@@ -942,7 +939,7 @@ def calcular_tiempos_optimizado(_df, fecha_inicio_totales, fin_semana):
             mask_abiertos_no_despachados = mask_abiertos & (~mask_despachados_total)
             
             if mask_abiertos_no_despachados.any():
-                df_abiertos_no_desp = df_temp[mask_abiertos_no_despachados].copy()
+                df_abiertos_no_desp = df_temp[mask_abiertos_no_despachados]
                 df_abiertos_no_desp['dias_tramitacion'] = (fin_semana - df_abiertos_no_desp['FECHA INICIO TRAMITACIÓN']).dt.days + 1
                 dias_validos = df_abiertos_no_desp['dias_tramitacion'][df_abiertos_no_desp['dias_tramitacion'] >= 0]
                 
@@ -1221,30 +1218,76 @@ def dataframe_to_pdf_bytes(df_mostrar, title, df_original):
         imprimir_encabezados()
         pdf.set_font("Arial", "", 5)
 
+        # --- PRE-CÁLCULO: columnas visibles con anchos acumulados ---
+        cols_info = [
+            (i, col_name, COL_WIDTHS_OPTIMIZED[i])
+            for i, col_name in enumerate(df_mostrar.columns)
+            if "FECHA DE ACTUALIZACIÓN DATOS" not in col_name.upper()
+            and i < len(COL_WIDTHS_OPTIMIZED)
+        ]
+        anchos_acum = []
+        acum = 0
+        for _, _, w in cols_info:
+            anchos_acum.append(acum)
+            acum += w
+
+        ANCHO_MIN = min(COL_WIDTHS_OPTIMIZED) - 2
+
+        # --- PRE-CALCULAR MASKS DE COLOR (vectorizado, una sola vez) ---
+        n = len(df_original)
+        mask_amarillo = [False] * n
+        mask_rojo     = [False] * n
+        mask_azul     = [False] * n
+
+        try:
+            if 'ETIQ. PENÚLTIMO TRAM.' in df_original.columns:
+                _prio = identificar_filas_prioritarias(df_original)
+                mask_amarillo = (_prio['_prioridad'] == 1).tolist()
+        except Exception:
+            pass
+
+        try:
+            if 'USUARIO' in df_original.columns and 'USUARIO-CSV' in df_original.columns:
+                _u1 = df_original['USUARIO'].astype(str).str.strip()
+                _u2 = df_original['USUARIO-CSV'].astype(str).str.strip()
+                mask_rojo = (
+                    df_original['USUARIO'].notna() &
+                    df_original['USUARIO-CSV'].notna() &
+                    (_u1 != _u2)
+                ).tolist()
+        except Exception:
+            pass
+
+        try:
+            if 'DOCUM.INCORP.' in df_original.columns:
+                _d = df_original['DOCUM.INCORP.'].astype(str).str.strip()
+                mask_azul = (
+                    df_original['DOCUM.INCORP.'].notna() &
+                    (_d != '') & (_d != 'nan') &
+                    (~_d.str.upper().isin(["SOLICITUD", "REITERA SOLICITUD"]))
+                ).tolist()
+        except Exception:
+            pass
+
+        # --- Convertir a lista Python pura para acceso O(1) ---
+        datos_lista = df_mostrar.values.tolist()
+
         # --- Filas de datos ---
-        for idx, (_, row) in enumerate(df_mostrar.iterrows()):
+        for idx, row_datos in enumerate(datos_lista):
+            # Calcular altura de fila
             max_lineas = 1
-            for col_idx, (col_name, col_data) in enumerate(zip(df_mostrar.columns, row)):
-                # EXCLUIR columna "FECHA DE ACTUALIZACIÓN DATOS"
-                if "FECHA DE ACTUALIZACIÓN DATOS" in col_name.upper():
+            for ci, (col_idx, col_name, col_width) in enumerate(cols_info):
+                texto = str(row_datos[col_idx]).replace("\n", " ")
+                if texto.lower() in ("nan", "") or not texto.strip():
                     continue
-                    
-                texto = str(col_data).replace("\n", " ")
-                # REEMPLAZAR "nan" por vacío
-                if texto.lower() == "nan" or texto.strip() == "":
-                    texto = ""
-                    
-                if not texto.strip():
-                    continue
-                ancho_disponible = min(COL_WIDTHS_OPTIMIZED) - 2
                 ancho_texto = pdf.get_string_width(texto)
-                if ancho_texto > ancho_disponible:
-                    lineas_necesarias = max(1, int(ancho_texto / ancho_disponible) + 1)
-                    max_lineas = max(max_lineas, lineas_necesarias)
+                if ancho_texto > ANCHO_MIN:
+                    lineas = max(1, int(ancho_texto / ANCHO_MIN) + 1)
+                    if lineas > max_lineas:
+                        max_lineas = lineas
 
             altura_fila = ALTURA_BASE_FILA + ((max_lineas - 1) * ALTURA_LINEA) / 2
 
-            # Saltar de página si es necesario
             if pdf.get_y() + altura_fila > 190:
                 pdf.add_page()
                 imprimir_encabezados()
@@ -1252,37 +1295,38 @@ def dataframe_to_pdf_bytes(df_mostrar, title, df_original):
             x_inicio = pdf.get_x()
             y_inicio = pdf.get_y()
 
-            # Bordes de las celdas (excluyendo FECHA DE ACTUALIZACIÓN DATOS)
-            ancho_total = 0
-            for i, col_name in enumerate(df_mostrar.columns):
-                if "FECHA DE ACTUALIZACIÓN DATOS" in col_name.upper():
-                    continue
-                ancho_total += COL_WIDTHS_OPTIMIZED[i]
-                pdf.rect(x_inicio + sum(COL_WIDTHS_OPTIMIZED[:i]), y_inicio, COL_WIDTHS_OPTIMIZED[i], altura_fila)
+            # Bordes
+            for ci, (col_idx, col_name, col_width) in enumerate(cols_info):
+                pdf.rect(x_inicio + anchos_acum[ci], y_inicio, col_width, altura_fila)
 
-            # Contenido con formato condicional (excluyendo FECHA DE ACTUALIZACIÓN DATOS)
-            col_idx_visible = 0
-            for i, (col_name, col_data) in enumerate(zip(df_mostrar.columns, row)):
-                # EXCLUIR columna "FECHA DE ACTUALIZACIÓN DATOS"
-                if "FECHA DE ACTUALIZACIÓN DATOS" in col_name.upper():
-                    continue
-                    
-                texto = str(col_data).replace("\n", " ")
-                # REEMPLAZAR "nan" por vacío
-                if texto.lower() == "nan" or texto.strip() == "":
+            # Contenido + color (usando masks pre-calculadas)
+            es_am = mask_amarillo[idx] if idx < n else False
+            es_ro = mask_rojo[idx]     if idx < n else False
+            es_az = mask_azul[idx]     if idx < n else False
+
+            for ci, (col_idx, col_name, col_width) in enumerate(cols_info):
+                texto = str(row_datos[col_idx]).replace("\n", " ")
+                if texto.lower() in ("nan", ""):
                     texto = ""
-                    
-                x_celda = x_inicio + sum(COL_WIDTHS_OPTIMIZED[:col_idx_visible])
-                y_celda = y_inicio
 
-                pdf.aplicar_formato_condicional_pdf(
-                    df_original, idx, col_name, COL_WIDTHS_OPTIMIZED[col_idx_visible], altura_fila, x_celda, y_celda
-                )
+                x_celda = x_inicio + anchos_acum[ci]
 
-                pdf.set_xy(x_celda, y_celda)
-                pdf.multi_cell(COL_WIDTHS_OPTIMIZED[col_idx_visible], ALTURA_LINEA, texto, 0, 'L')
-                
-                col_idx_visible += 1
+                # Aplicar color de fondo sin llamar a iloc
+                if col_name == 'RUE' and es_am:
+                    pdf.set_fill_color(255, 255, 0)
+                    pdf.rect(x_celda, y_inicio, col_width, altura_fila, 'F')
+                    pdf.set_fill_color(255, 255, 255)
+                elif col_name == 'USUARIO-CSV' and es_ro:
+                    pdf.set_fill_color(255, 0, 0)
+                    pdf.rect(x_celda, y_inicio, col_width, altura_fila, 'F')
+                    pdf.set_fill_color(255, 255, 255)
+                elif col_name == 'DOCUM.INCORP.' and es_az:
+                    pdf.set_fill_color(173, 216, 230)
+                    pdf.rect(x_celda, y_inicio, col_width, altura_fila, 'F')
+                    pdf.set_fill_color(255, 255, 255)
+
+                pdf.set_xy(x_celda, y_inicio)
+                pdf.multi_cell(col_width, ALTURA_LINEA, texto, 0, 'L')
 
             pdf.set_xy(pdf.l_margin, y_inicio + altura_fila)
 
@@ -1356,6 +1400,7 @@ def ordenar_dataframe_por_prioridad_y_antiguedad(df):
         st.error(f"❌ Error al ordenar DataFrame: {e}")
         return df
 
+@st.cache_data(ttl=CACHE_TTL, show_spinner=False)
 def generar_pdf_usuario(usuario, df_pendientes, num_semana, fecha_max_str):
     """Genera el PDF para un usuario específico con nombre único - CORREGIDA PARA DECIMALES"""
     # Crear copia para no modificar el original
@@ -1385,32 +1430,17 @@ def generar_pdf_usuario(usuario, df_pendientes, num_semana, fecha_max_str):
     # Crear DataFrame para mostrar (SOLO para visualización)
     df_pdf_mostrar = df_user_ordenado[NOMBRES_COLUMNAS_PDF].copy()
     
-    # Formatear para visualización - CORREGIDO PARA DECIMALES
+    # Formatear para visualización - VECTORIZADO
     for col in df_pdf_mostrar.columns:
-        if df_pdf_mostrar[col].dtype == 'object':
-            df_pdf_mostrar[col] = df_pdf_mostrar[col].apply(
-                lambda x: "" if pd.isna(x) or str(x).lower() in ["nan", "nat", "none"] else str(x)
-            )
-        elif 'fecha' in col.lower():
-            df_pdf_mostrar[col] = df_pdf_mostrar[col].apply(
-                lambda x: x.strftime("%d/%m/%Y") if pd.notna(x) else ""
-            )
-        # 🔥 CORRECCIÓN DEFINITIVA: REDONDEAR EN LUGAR DE TRUNCAR
+        if 'fecha' in col.lower():
+            df_pdf_mostrar[col] = pd.to_datetime(df_pdf_mostrar[col], errors='coerce')                                     .dt.strftime("%d/%m/%Y").fillna("")
         elif df_pdf_mostrar[col].dtype in ['float64', 'float32']:
-            # Para columnas flotantes (como antigüedad con decimales), REDONDEAR
-            if col in columnas_antiguedad:
-                df_pdf_mostrar[col] = df_pdf_mostrar[col].apply(
-                    lambda x: str(round(x)) if pd.notna(x) else "0"
-                )
-            else:
-                df_pdf_mostrar[col] = df_pdf_mostrar[col].apply(
-                    lambda x: str(round(x)) if pd.notna(x) else "0"
-                )
+            df_pdf_mostrar[col] = df_pdf_mostrar[col].fillna(0).round(0).astype(int).astype(str)
         elif df_pdf_mostrar[col].dtype in ['int64', 'int32']:
-            # Para columnas enteras, mostrar normalmente
-            df_pdf_mostrar[col] = df_pdf_mostrar[col].apply(
-                lambda x: str(int(x)) if pd.notna(x) else "0"
-            )
+            df_pdf_mostrar[col] = df_pdf_mostrar[col].fillna(0).astype(int).astype(str)
+        else:
+            s = df_pdf_mostrar[col].astype(str)
+            df_pdf_mostrar[col] = s.where(~s.str.lower().isin(["nan", "nat", "none", "<na>"]), "")
 
     num_expedientes = len(df_pdf_mostrar)
     
@@ -1469,32 +1499,17 @@ def generar_pdf_equipo_prioritarios(equipo, df_pendientes, num_semana, fecha_max
     # Crear DataFrame para mostrar (SOLO para visualización)
     df_pdf_mostrar = df_prioritarios[NOMBRES_COLUMNAS_PDF].copy()
     
-    # Formatear para visualización - CORREGIDO PARA DECIMALES
+    # Formatear para visualización - VECTORIZADO
     for col in df_pdf_mostrar.columns:
-        if df_pdf_mostrar[col].dtype == 'object':
-            df_pdf_mostrar[col] = df_pdf_mostrar[col].apply(
-                lambda x: "" if pd.isna(x) or str(x).lower() in ["nan", "nat", "none"] else str(x)
-            )
-        elif 'fecha' in col.lower():
-            df_pdf_mostrar[col] = df_pdf_mostrar[col].apply(
-                lambda x: x.strftime("%d/%m/%Y") if pd.notna(x) else ""
-            )
-        # 🔥 CORRECCIÓN DEFINITIVA: REDONDEAR EN LUGAR DE TRUNCAR
+        if 'fecha' in col.lower():
+            df_pdf_mostrar[col] = pd.to_datetime(df_pdf_mostrar[col], errors='coerce')                                     .dt.strftime("%d/%m/%Y").fillna("")
         elif df_pdf_mostrar[col].dtype in ['float64', 'float32']:
-            # Para columnas flotantes (como antigüedad con decimales), REDONDEAR
-            if col in columnas_antiguedad:
-                df_pdf_mostrar[col] = df_pdf_mostrar[col].apply(
-                    lambda x: str(round(x)) if pd.notna(x) else "0"
-                )
-            else:
-                df_pdf_mostrar[col] = df_pdf_mostrar[col].apply(
-                    lambda x: str(round(x)) if pd.notna(x) else "0"
-                )
+            df_pdf_mostrar[col] = df_pdf_mostrar[col].fillna(0).round(0).astype(int).astype(str)
         elif df_pdf_mostrar[col].dtype in ['int64', 'int32']:
-            # Para columnas enteras, mostrar normalmente
-            df_pdf_mostrar[col] = df_pdf_mostrar[col].apply(
-                lambda x: str(int(x)) if pd.notna(x) else "0"
-            )
+            df_pdf_mostrar[col] = df_pdf_mostrar[col].fillna(0).astype(int).astype(str)
+        else:
+            s = df_pdf_mostrar[col].astype(str)
+            df_pdf_mostrar[col] = s.where(~s.str.lower().isin(["nan", "nat", "none", "<na>"]), "")
 
     num_expedientes = len(df_pdf_mostrar)
     
@@ -2091,6 +2106,21 @@ class PDFRendimiento(FPDF):
 def generar_pdf_rendimiento(df_rendimiento_completo, num_semana, fecha_max_str):
     """Genera un PDF con la tabla de rendimiento por usuario"""
     
+    def fmt_es(valor, decimales=2):
+        """Formato numerico espanol: 1.234,56"""
+        try:
+            if pd.isna(valor):
+                return "0" if decimales == 0 else "0," + "0" * decimales
+            v = float(valor)
+            if decimales == 0:
+                return f"{int(round(v)):,}".replace(",", ".")
+            fmt = f"{v:,.{decimales}f}"
+            izq, der = fmt.split(".")
+            izq = izq.replace(",", ".")
+            return izq + "," + der
+        except Exception:
+            return str(valor)
+
     try:
         # Verificar que haya datos
         if df_rendimiento_completo.empty:
@@ -2130,14 +2160,14 @@ def generar_pdf_rendimiento(df_rendimiento_completo, num_semana, fecha_max_str):
             equipos_lista = [eq.strip() for eq in str(equipos_str).split(',')]
             todos_equipos.update(equipos_lista)
         
-        pdf.add_metric("Total de Usuarios", total_usuarios)
-        pdf.add_metric("Total de Expedientes Despachados", f"{total_expedientes:,}".replace(",", "."))
-        pdf.add_metric("Total de Semanas Efectivas", f"{total_semanas:.1f}")
-        pdf.add_metric("Rendimiento Promedio", f"{rendimiento_promedio:.2f}")
-        pdf.add_metric("Rendimiento Anual Promedio", f"{rendimiento_anual_promedio:.2f}")
-        pdf.add_metric("Potencial Anual Promedio", f"{potencial_anual_promedio:.0f}")
-        pdf.add_metric("Potencial Anual Conjunto", f"{potencial_anual_conjunto:,.0f}".replace(",", "."))
-        pdf.add_metric("Equipos Analizados", len(todos_equipos))
+        pdf.add_metric("Total de Usuarios",                fmt_es(total_usuarios, 0))
+        pdf.add_metric("Total de Expedientes Despachados",  fmt_es(total_expedientes, 0))
+        pdf.add_metric("Total de Semanas Efectivas",        fmt_es(total_semanas, 1))
+        pdf.add_metric("Rendimiento Promedio",              fmt_es(rendimiento_promedio, 2))
+        pdf.add_metric("Rendimiento Anual Promedio",        fmt_es(rendimiento_anual_promedio, 2))
+        pdf.add_metric("Potencial Anual Promedio",          fmt_es(potencial_anual_promedio, 0))
+        pdf.add_metric("Potencial Anual Conjunto",          fmt_es(potencial_anual_conjunto, 0))
+        pdf.add_metric("Equipos Analizados",                len(todos_equipos))
         
         pdf.ln(5)
         
@@ -2169,27 +2199,51 @@ def generar_pdf_rendimiento(df_rendimiento_completo, num_semana, fecha_max_str):
         
         # Imprimir datos
         pdf.set_font('Arial', '', 6)
+        ALTURA_LINEA_REND = 6
+        ALTURA_FILA_REND  = 12
+
         for _, row in df_rendimiento_completo.iterrows():
-            # Formatear datos
-            usuario = str(row['USUARIO'])[:6]  # Limitar longitud
-            equipos = str(row['EQUIPOS'])[:45] if pd.notna(row['EQUIPOS']) else ""
-            estado = str(row['ESTADO'])
-            exp_desp = str(int(row['EXPEDIENTES_DESPACHADOS'])) if pd.notna(row['EXPEDIENTES_DESPACHADOS']) else "0"
-            sem_efec = f"{row['SEMANAS_EFECTIVAS']:.1f}" if pd.notna(row['SEMANAS_EFECTIVAS']) else "0.0"
-            rend_tot = f"{row['RENDIMIENTO_TOTAL']:.2f}" if pd.notna(row['RENDIMIENTO_TOTAL']) else "0.00"
-            rend_anual = f"{row['RENDIMIENTO_ANUAL']:.2f}" if pd.notna(row['RENDIMIENTO_ANUAL']) else "0.00"
-            pot_anual = f"{row['POTENCIAL_ANUAL']:.0f}" if pd.notna(row['POTENCIAL_ANUAL']) else "0"
-            rend_tri = f"{row['RENDIMIENTO_TRIMESTRAL']:.2f}" if pd.notna(row['RENDIMIENTO_TRIMESTRAL']) else "0.00"
-            rend_mes = f"{row['RENDIMIENTO_MENSUAL']:.2f}" if pd.notna(row['RENDIMIENTO_MENSUAL']) else "0.00"
-            rend_sem = f"{row['RENDIMIENTO_SEMANAL']:.2f}" if pd.notna(row['RENDIMIENTO_SEMANAL']) else "0.00"
-            
-            datos_fila = [usuario, equipos, estado, exp_desp, sem_efec, 
-                        rend_tot, rend_anual, pot_anual, rend_tri, 
-                        rend_mes, rend_sem]
-            
+            usuario   = str(row['USUARIO'])[:6]
+            equipos   = str(row['EQUIPOS']) if pd.notna(row['EQUIPOS']) else ""
+            estado    = str(row['ESTADO'])
+            exp_desp  = fmt_es(row['EXPEDIENTES_DESPACHADOS'], 0)
+            sem_efec  = fmt_es(row['SEMANAS_EFECTIVAS'],       1)
+            rend_tot  = fmt_es(row['RENDIMIENTO_TOTAL'],       2)
+            rend_anual= fmt_es(row['RENDIMIENTO_ANUAL'],       2)
+            pot_anual = fmt_es(row['POTENCIAL_ANUAL'],         0)
+            rend_tri  = fmt_es(row['RENDIMIENTO_TRIMESTRAL'],  2)
+            rend_mes  = fmt_es(row['RENDIMIENTO_MENSUAL'],     2)
+            rend_sem  = fmt_es(row['RENDIMIENTO_SEMANAL'],     2)
+
+            datos_fila = [usuario, equipos, estado, exp_desp, sem_efec,
+                          rend_tot, rend_anual, pot_anual, rend_tri,
+                          rend_mes, rend_sem]
+
+            if pdf.get_y() + ALTURA_FILA_REND > pdf.h - pdf.b_margin:
+                pdf.add_page()
+                pdf.set_font('Arial', 'B', 6)
+                for i, header in enumerate(headers):
+                    pdf.cell(column_widths[i], 8, header, 1, 0, 'C')
+                pdf.ln()
+                pdf.set_font('Arial', '', 6)
+
+            x_inicio = pdf.get_x()
+            y_inicio = pdf.get_y()
+
             for i, dato in enumerate(datos_fila):
-                pdf.cell(column_widths[i], 6, dato, 1, 0, 'C')
-            pdf.ln()
+                x_celda = x_inicio + sum(column_widths[:i])
+                pdf.set_xy(x_celda, y_inicio)
+                if i == 1:  # EQUIPOS: borde fijo 2 lineas, texto centrado
+                    pdf.rect(x_celda, y_inicio, column_widths[i], ALTURA_FILA_REND)
+                    ancho_texto = pdf.get_string_width(dato)
+                    n_lineas = min(2, math.ceil(ancho_texto / (column_widths[i] - 2)) if ancho_texto > 0 else 1)
+                    y_texto = y_inicio + (ALTURA_FILA_REND - n_lineas * ALTURA_LINEA_REND) / 2
+                    pdf.set_xy(x_celda, y_texto)
+                    pdf.multi_cell(column_widths[i], ALTURA_LINEA_REND, dato, 0, 'C')
+                else:
+                    pdf.cell(column_widths[i], ALTURA_FILA_REND, dato, 1, 0, 'C')
+
+            pdf.set_xy(pdf.l_margin, y_inicio + ALTURA_FILA_REND)
         
         pdf.ln(5)
         
@@ -2210,11 +2264,11 @@ def generar_pdf_rendimiento(df_rendimiento_completo, num_semana, fecha_max_str):
         pdf.set_font('Arial', '', 6)
         for _, row in df_top10.iterrows():
             usuario = str(row['USUARIO'])[:25]
-            pdf.cell(30, 6, usuario, 1, 0, 'L')
-            pdf.cell(20, 6, f"{row['RENDIMIENTO_TOTAL']:.2f}", 1, 0, 'C')
-            pdf.cell(20, 6, f"{row['RENDIMIENTO_ANUAL']:.2f}", 1, 0, 'C')
-            pdf.cell(20, 6, f"{row['POTENCIAL_ANUAL']:.0f}", 1, 0, 'C')
-            pdf.cell(25, 6, str(int(row['EXPEDIENTES_DESPACHADOS'])), 1, 0, 'C')
+            pdf.cell(30, 6, usuario,                                  1, 0, 'L')
+            pdf.cell(20, 6, fmt_es(row['RENDIMIENTO_TOTAL'],       2), 1, 0, 'C')
+            pdf.cell(20, 6, fmt_es(row['RENDIMIENTO_ANUAL'],       2), 1, 0, 'C')
+            pdf.cell(20, 6, fmt_es(row['POTENCIAL_ANUAL'],         0), 1, 0, 'C')
+            pdf.cell(25, 6, fmt_es(row['EXPEDIENTES_DESPACHADOS'], 0), 1, 0, 'C')
             pdf.ln()
         
         # EXPORTAR A BYTES
@@ -4918,15 +4972,15 @@ elif eleccion == "Análisis del Rendimiento":
     
     with col4:
         if total_general:
-            st.metric("Rendimiento total", f"{total_general['RENDIMIENTO_TOTAL']:.2f}")
+            st.metric("Rendimiento total", f"{total_general['RENDIMIENTO_TOTAL']:.2f}".replace(".", ","))
         else:
-            st.metric("Rendimiento total", "0.00")
+            st.metric("Rendimiento total", "0,00")
     
     with col5:
         if total_general:
-            st.metric("Rendimiento anual", f"{total_general['RENDIMIENTO_ANUAL']:.2f}")
+            st.metric("Rendimiento anual", f"{total_general['RENDIMIENTO_ANUAL']:.2f}".replace(".", ","))
         else:
-            st.metric("Rendimiento anual", "0.00")
+            st.metric("Rendimiento anual", "0,00")
     
     with col6:
         if total_general:
@@ -5047,6 +5101,18 @@ elif eleccion == "Informes y Correos":
 
     # NUEVO: Generar también PDFs por equipo (solo prioritarios) y resumen KPI y RENDIMIENTO
     equipos_pendientes = df_pendientes["EQUIPO"].dropna().unique()
+
+    # --- Advertencia expedientes sin asignar (usuario "NI") ---
+    exp_ni = df_pendientes[df_pendientes["USUARIO"].astype(str).str.strip().str.upper() == "NI"]
+    if not exp_ni.empty:
+        equipos_ni = exp_ni["EQUIPO"].dropna().unique()
+        equipos_str = ", ".join(sorted(equipos_ni)) if len(equipos_ni) > 0 else "desconocido"
+        st.warning(
+            f"⚠️ Hay **{len(exp_ni)} expediente{'s' if len(exp_ni) > 1 else ''}** "
+            f"asignado{'s' if len(exp_ni) > 1 else ''} al usuario **NI** (sin asignar). "
+            f"Se generará su PDF pero no se enviará por correo. "
+            f"Equipo{'s' if len(equipos_ni) > 1 else ''}: **{equipos_str}**."
+        )
     
     if st.button(f"Generar {len(usuarios_pendientes)} Informes PDF + Equipos + Resumen KPI + Rendimiento", key="generar_pdfs_completos"):
         if usuarios_pendientes.size == 0:
@@ -5067,7 +5133,7 @@ elif eleccion == "Informes y Correos":
                 for equipo in equipos_pendientes:
                     pdf_data = generar_pdf_equipo_prioritarios(equipo, df_pendientes, num_semana, fecha_max_str)
                     if pdf_data:
-                        file_name = f"{num_semana}{equipo}_PRIORITARIOS.pdf"
+                        file_name = f"{num_semana}{equipo.replace('.', '_')}_PRIORITARIOS.pdf"
                         zip_file.writestr(file_name, pdf_data)
                 
                 # 3. PDF de resumen de KPIs
@@ -5545,7 +5611,7 @@ elif eleccion == "Informes y Correos":
                     )
                     
                     if pdf_prioritarios_equipo:
-                        nombre_prioritarios = f"Expedientes_Prioritarios_{equipo}_Semana_{num_semana}.pdf"
+                        nombre_prioritarios = f"Expedientes_Prioritarios_{equipo.replace('.', '_')}_Semana_{num_semana}.pdf"
                         archivos_adjuntos.append((nombre_prioritarios, pdf_prioritarios_equipo))
                 
                 # Actualizar el cuerpo del mensaje para reflejar los nuevos adjuntos
