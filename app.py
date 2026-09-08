@@ -3,6 +3,7 @@ import pandas as pd
 import numpy as np
 import plotly.express as px
 from datetime import datetime, timedelta
+from dateutil.relativedelta import relativedelta
 import io
 import zipfile
 from fpdf import FPDF
@@ -2442,10 +2443,16 @@ def calcular_rendimiento_usuarios_agrupado(_df, _df_usuarios, _fecha_max):
         # CALCULAR RENDIMIENTOS POR PERÍODOS
         
         # Definir períodos
-        fecha_inicio_anio = _fecha_max - timedelta(days=365)
-        fecha_inicio_trimestre = _fecha_max - timedelta(days=90)
-        fecha_inicio_mes = _fecha_max - timedelta(days=30)
-        fecha_inicio_semana = _fecha_max - timedelta(days=7)
+        #fecha_inicio_anio = _fecha_max - timedelta(days=365)
+        #fecha_inicio_trimestre = _fecha_max - timedelta(days=90)
+        #fecha_inicio_mes = _fecha_max - timedelta(days=30)
+        #fecha_inicio_semana = _fecha_max - timedelta(days=7)
+
+        fecha_inicio_anio = _fecha_max - relativedelta(years=1, days=1)        # 1 año + 1 día
+        fecha_inicio_trimestre = _fecha_max - relativedelta(months=3, days=1)  # 3 meses + 1 día
+        fecha_inicio_mes = _fecha_max - relativedelta(months=1, days=1)        # 1 mes + 1 día
+        fecha_inicio_semana = _fecha_max - timedelta(days=8)                   # 8 días (o también relativedelta(days=8))
+        
         
         # Ajustar fechas de inicio según fecha_inicio del usuario
         if usuario_info is not None and pd.notna(usuario_info['FECHA_INICIO']):
