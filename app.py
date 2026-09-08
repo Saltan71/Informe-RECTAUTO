@@ -2443,16 +2443,15 @@ def calcular_rendimiento_usuarios_agrupado(_df, _df_usuarios, _fecha_max):
         # CALCULAR RENDIMIENTOS POR PERÍODOS
         
         # Definir períodos
-        fecha_inicio_anio = _fecha_max - timedelta(days=365)
-        fecha_inicio_trimestre = _fecha_max - timedelta(days=90)
-        fecha_inicio_mes = _fecha_max - timedelta(days=30)
-        fecha_inicio_semana = _fecha_max - timedelta(days=7)
+        #fecha_inicio_anio = _fecha_max - timedelta(days=365)
+        #fecha_inicio_trimestre = _fecha_max - timedelta(days=90)
+        #fecha_inicio_mes = _fecha_max - timedelta(days=30)
+        #fecha_inicio_semana = _fecha_max - timedelta(days=7)
 
-        #fecha_inicio_anio = _fecha_max - relativedelta(years=1, days=1)        # 1 año + 1 día
-        #fecha_inicio_trimestre = _fecha_max - relativedelta(months=3, days=1)  # 3 meses + 1 día
-        #fecha_inicio_mes = _fecha_max - relativedelta(months=1, days=1)        # 1 mes + 1 día
-        #fecha_inicio_semana = _fecha_max - timedelta(days=8)                   # 8 días (o también relativedelta(days=8))
-        
+        fecha_inicio_anio = _fecha_max - relativedelta(years=1, days=1)        # 1 año + 1 día
+        fecha_inicio_trimestre = _fecha_max - relativedelta(months=3, days=1)  # 3 meses + 1 día
+        fecha_inicio_mes = _fecha_max - relativedelta(months=1, days=1)        # 1 mes + 1 día
+        fecha_inicio_semana = _fecha_max - timedelta(days=8)                   # 8 días (o también relativedelta(days=8))
         
         # Ajustar fechas de inicio según fecha_inicio del usuario
         if usuario_info is not None and pd.notna(usuario_info['FECHA_INICIO']):
@@ -2704,7 +2703,7 @@ def mostrar_con_handsontable(df_filtrado):
         )
     
     with col2:
-        if st.button("📥 Exportar a Excel", type="primary", use_container_width=True):
+        if st.button("📥 Exportar a Excel", type="primary", width='stretch'):
             with st.spinner("Generando Excel..."):
                 try:
                     # Preparar DataFrame para exportación
@@ -2737,12 +2736,12 @@ def mostrar_con_handsontable(df_filtrado):
                         columnas_prioridad.append(col_equipo)
                     
                     # 2. Otras columnas importantes
-                    otras_importantes = ['FECHA DE ENTRADA', 'ANTIGÜEDAD EXP. (DÍAS)', 
-                                        'ETIQ. PENÚLTIMO TRAM.', 'PENÚLTIMO TRAMITE']
+                    #otras_importantes = ['FECHA DE ENTRADA', 'ANTIGÜEDAD EXP. (DÍAS)', 
+                    #                    'ETIQ. PENÚLTIMO TRAM.', 'PENÚLTIMO TRAMITE']
                     
-                    for col in otras_importantes:
-                        if col in df_export.columns:
-                            columnas_prioridad.append(col)
+                    #for col in otras_importantes:
+                    #    if col in df_export.columns:
+                    #        columnas_prioridad.append(col)
                     
                     # 3. Eliminar duplicados y añadir el resto de columnas
                     columnas_ordenadas = columnas_prioridad.copy()
@@ -2949,7 +2948,7 @@ if eleccion == "Carga de Archivos":
         col1, col2 = st.columns(2)
         
         with col1:
-            if st.button("🔄 Limpiar cache", help="Limpiar toda la cache y recargar", use_container_width=True):
+            if st.button("🔄 Limpiar cache", help="Limpiar toda la cache y recargar", width='stretch'):
                 st.cache_data.clear()
                 # Mantener solo los datos esenciales
                 keys_to_keep = ['df_combinado', 'df_usuarios', 'archivos_hash', 'filtro_estado', 'filtro_equipo', 'filtro_usuario']
@@ -2960,7 +2959,7 @@ if eleccion == "Carga de Archivos":
                 st.rerun()
         
         with col2:
-            if st.button("🧹 Limpiar temp", help="Limpiar archivos temporales", use_container_width=True):
+            if st.button("🧹 Limpiar temp", help="Limpiar archivos temporales", width='stretch'):
                 user_env.cleanup()
                 st.success("Archivos temporales limpiados")
 
@@ -3187,7 +3186,7 @@ if eleccion == "Carga de Archivos":
         for col in df_mostrar_preview.select_dtypes(include='datetime').columns:
             df_mostrar_preview[col] = df_mostrar_preview[col].dt.strftime("%d/%m/%Y")
         
-        st.dataframe(df_mostrar_preview, use_container_width=True)
+        st.dataframe(df_mostrar_preview, width='stretch')
         
         # Mostrar columnas disponibles
         st.write("**Columnas disponibles:**")
@@ -3248,7 +3247,7 @@ elif eleccion == "Vista de Expedientes":
         st.session_state.filtro_etiq_ultimo = []
 
     # Botón para resetear filtros
-    if st.sidebar.button("🔄 Mostrar todos / Resetear filtros", use_container_width=True):
+    if st.sidebar.button("🔄 Mostrar todos / Resetear filtros", width='stretch'):
         st.session_state.filtro_estado = []
         st.session_state.filtro_equipo = []
         st.session_state.filtro_usuario = []
@@ -3571,7 +3570,7 @@ elif eleccion == "Vista de Expedientes":
             # Crear gráfico con datos actualizados (SIN CACHE)
             fig = crear_grafico_dinamico(conteo_actual, col, titulo)
             if fig:
-                columnas_graficos[i].plotly_chart(fig, use_container_width=True)
+                columnas_graficos[i].plotly_chart(fig, width='stretch')
 
     # NUEVOS GRÁFICOS PARA LAS ETIQUETAS
     col1, col2 = st.columns(2)
@@ -3581,7 +3580,7 @@ elif eleccion == "Vista de Expedientes":
             conteo_penultimo.columns = ['ETIQ. PENÚLTIMO TRAM.', 'Cantidad']
             fig_penultimo = crear_grafico_dinamico(conteo_penultimo, 'ETIQ. PENÚLTIMO TRAM.', 'Distribución por ETIQ. PENÚLTIMO TRAM.')
             if fig_penultimo:
-                st.plotly_chart(fig_penultimo, use_container_width=False)
+                st.plotly_chart(fig_penultimo, width='content')
 
     with col2:
         if 'ETIQ. ÚLTIMO TRAM.' in df_filtrado.columns:
@@ -3589,7 +3588,7 @@ elif eleccion == "Vista de Expedientes":
             conteo_ultimo.columns = ['ETIQ. ÚLTIMO TRAM.', 'Cantidad']
             fig_ultimo = crear_grafico_dinamico(conteo_ultimo, 'ETIQ. ÚLTIMO TRAM.', 'Distribución por ETIQ. ÚLTIMO TRAM.')
             if fig_ultimo:
-                st.plotly_chart(fig_ultimo, use_container_width=False)
+                st.plotly_chart(fig_ultimo, width='content')
 
 
     # Obtener información de la semana si está disponible
@@ -3888,14 +3887,14 @@ elif eleccion == "Indicadores clave (KPI)":
         col1, col2 = st.columns(2)
         
         with col1:
-            if st.button("◀️ Anterior", use_container_width=True, key="btn_anterior_kpi"):
+            if st.button("◀️ Anterior", width='stretch', key="btn_anterior_kpi"):
                 nuevo_indice = st.session_state.kpi_semana_index - 1
                 if nuevo_indice >= 0:
                     st.session_state.kpi_semana_index = nuevo_indice
                     st.rerun()
         
         with col2:
-            if st.button("Siguiente ▶️", use_container_width=True, key="btn_siguiente_kpi"):
+            if st.button("Siguiente ▶️", width='stretch', key="btn_siguiente_kpi"):
                 nuevo_indice = st.session_state.kpi_semana_index + 1
                 if nuevo_indice < len(semanas_disponibles):
                     st.session_state.kpi_semana_index = nuevo_indice
@@ -3903,7 +3902,7 @@ elif eleccion == "Indicadores clave (KPI)":
         
         st.write(f"**Posición:** {st.session_state.kpi_semana_index + 1} de {len(semanas_disponibles)}")
         
-        if st.button("📅 Ir a semana actual", use_container_width=True, key="btn_actual_kpi"):
+        if st.button("📅 Ir a semana actual", width='stretch', key="btn_actual_kpi"):
             st.session_state.kpi_semana_index = len(semanas_disponibles) - 1
             st.rerun()
 
@@ -4175,7 +4174,7 @@ elif eleccion == "Indicadores clave (KPI)":
             annotation_text=f"Semana {num_semana_seleccionada}",
             annotation_position="top left"
         )
-        st.plotly_chart(fig1, use_container_width=True)
+        st.plotly_chart(fig1, width='stretch')
 
     # --- Gráfico 2: Solo "Expedientes Abiertos" ---
     with col2:
@@ -4201,7 +4200,7 @@ elif eleccion == "Indicadores clave (KPI)":
             annotation_text=f"Semana {num_semana_seleccionada}",
             annotation_position="top left"
         )
-        st.plotly_chart(fig2, use_container_width=True)
+        st.plotly_chart(fig2, width='stretch')
 
     # --- Gráfico 3: Porcentajes (4) ---
     with col3:
@@ -4235,7 +4234,7 @@ elif eleccion == "Indicadores clave (KPI)":
             annotation_text=f"Semana {num_semana_seleccionada}",
             annotation_position="top left"
         )
-        st.plotly_chart(fig3, use_container_width=True)
+        st.plotly_chart(fig3, width='stretch')
 
     # -------------------------------------------------------------
     # SEGUNDO BLOQUE: TIEMPOS DE TRAMITACIÓN
@@ -4277,7 +4276,7 @@ elif eleccion == "Indicadores clave (KPI)":
             annotation_text=f"Semana {num_semana_seleccionada}",
             annotation_position="top left"
         )
-        st.plotly_chart(fig_tiempo, use_container_width=True)
+        st.plotly_chart(fig_tiempo, width='stretch')
 
     # --- Gráfico 2: Porcentajes 120/180 ---
     with col2:
@@ -4311,7 +4310,7 @@ elif eleccion == "Indicadores clave (KPI)":
             annotation_text=f"Semana {num_semana_seleccionada}",
             annotation_position="top left"
         )
-        st.plotly_chart(fig_percentiles, use_container_width=True)
+        st.plotly_chart(fig_percentiles, width='stretch')
 
 # =============================================
 # PÁGINA 4: ANÁLISIS DEL RENDIMIENTO - MODIFICADO CON HANDSONTABLE
@@ -4385,7 +4384,7 @@ elif eleccion == "Análisis del Rendimiento":
         st.session_state.filtro_usuario_rendimiento = []
     
     # Botón para resetear filtros
-    if st.sidebar.button("🔄 Resetear filtros", use_container_width=True, key="reset_rendimiento"):
+    if st.sidebar.button("🔄 Resetear filtros", width='stretch', key="reset_rendimiento"):
         st.session_state.filtro_estado_rendimiento = []
         st.session_state.filtro_equipo_rendimiento = []
         st.session_state.filtro_usuario_rendimiento = []
@@ -4519,11 +4518,11 @@ elif eleccion == "Análisis del Rendimiento":
         rendimiento_total_agrupado = total_expedientes / total_semanas if total_semanas > 0 else 0
         
         # Para los rendimientos por período, calcular la media
-        rendimiento_anual_agrupado = df_agrupar['RENDIMIENTO_ANUAL'].mean()
-        potencial_anual_agrupado = df_agrupar['POTENCIAL_ANUAL'].mean()  # NUEVO
-        rendimiento_trimestral_agrupado = df_agrupar['RENDIMIENTO_TRIMESTRAL'].mean()
-        rendimiento_mensual_agrupado = df_agrupar['RENDIMIENTO_MENSUAL'].mean()
-        rendimiento_semanal_agrupado = df_agrupar['RENDIMIENTO_SEMANAL'].mean()
+        rendimiento_anual_agrupado = df_agrupar['RENDIMIENTO_ANUAL'].sum()
+        potencial_anual_agrupado = df_agrupar['POTENCIAL_ANUAL'].sum()  # NUEVO
+        rendimiento_trimestral_agrupado = df_agrupar['RENDIMIENTO_TRIMESTRAL'].sum()
+        rendimiento_mensual_agrupado = df_agrupar['RENDIMIENTO_MENSUAL'].sum()
+        rendimiento_semanal_agrupado = df_agrupar['RENDIMIENTO_SEMANAL'].sum()
         
         # Obtener lista de equipos únicos
         todos_equipos = set()
@@ -4807,7 +4806,7 @@ elif eleccion == "Análisis del Rendimiento":
         col_export1, col_export2 = st.columns(2)
         
         with col_export1:
-            if st.button("📊 Exportar a Excel", type="primary", use_container_width=True):
+            if st.button("📊 Exportar a Excel", type="primary", width='stretch'):
                 with st.spinner("Generando Excel..."):
                     try:
                         # Preparar DataFrame para exportación
@@ -4924,7 +4923,7 @@ elif eleccion == "Análisis del Rendimiento":
                         st.error(f"❌ Error al generar Excel: {e}")
         
         with col_export2:
-            if st.button("📄 Exportar a CSV", type="secondary", use_container_width=True):
+            if st.button("📄 Exportar a CSV", type="secondary", width='stretch'):
                 with st.spinner("Generando CSV..."):
                     try:
                         # Preparar DataFrame para exportación CSV
@@ -5030,7 +5029,7 @@ elif eleccion == "Análisis del Rendimiento":
             )
             fig_rendimiento.update_traces(texttemplate='%{text:.2f}', textposition='outside')
             fig_rendimiento.update_layout(height=400, xaxis_tickangle=-45)
-            st.plotly_chart(fig_rendimiento, use_container_width=True)
+            st.plotly_chart(fig_rendimiento, width='stretch')
         
         with col2:
             # Gráfico de distribución por estado
@@ -5046,7 +5045,7 @@ elif eleccion == "Análisis del Rendimiento":
                 color_discrete_map={'ACTIVO': '#2ca02c', 'INACTIVO': '#d62728'}
             )
             fig_estado.update_layout(height=400)
-            st.plotly_chart(fig_estado, use_container_width=True)
+            st.plotly_chart(fig_estado, width='stretch')
     
     # =============================================
     # INFORMACIÓN ADICIONAL
@@ -5109,17 +5108,51 @@ elif eleccion == "Informes y Correos":
     # NUEVO: Generar también PDFs por equipo (solo prioritarios) y resumen KPI y RENDIMIENTO
     equipos_pendientes = df_pendientes["EQUIPO"].dropna().unique()
 
-    # --- Advertencia expedientes sin asignar (usuario "NI") ---
-    exp_ni = df_pendientes[df_pendientes["USUARIO"].astype(str).str.strip().str.upper() == "NI"]
-    if not exp_ni.empty:
-        equipos_ni = exp_ni["EQUIPO"].dropna().unique()
-        equipos_str = ", ".join(sorted(equipos_ni)) if len(equipos_ni) > 0 else "desconocido"
-        st.warning(
-            f"⚠️ Hay **{len(exp_ni)} expediente{'s' if len(exp_ni) > 1 else ''}** "
-            f"asignado{'s' if len(exp_ni) > 1 else ''} al usuario **NI** (sin asignar). "
-            f"Se generará su PDF pero no se enviará por correo. "
-            f"Equipo{'s' if len(equipos_ni) > 1 else ''}: **{equipos_str}**."
+    # --- Advertencia: expedientes con usuario NO ACTIVO (o no registrado) ---
+    if df_usuarios is not None and "USUARIOS" in df_usuarios.columns:
+        # Determinar qué usuarios se consideran "válidos para recibir correo"
+        # Fallback: todos los que aparecen en la tabla (comportamiento anterior)
+        usuarios_validos = set(
+            df_usuarios["USUARIOS"]
+            .astype(str)
+            .str.strip()
+            .str.upper()
+            .dropna()
+            .unique()
         )
+            
+    else:
+        usuarios_validos = set()
+        st.info("ℹ️ No se encontró un DataFrame de usuarios válido o no tiene la columna 'USUARIOS'. No se puede verificar.")
+
+    # El resto del código para detectar faltantes sigue igual...
+    df_pendientes_con_usuario = df_pendientes.dropna(subset=["USUARIO"]).copy()
+    df_pendientes_con_usuario["USUARIO_norm"] = (
+        df_pendientes_con_usuario["USUARIO"]
+        .astype(str)
+        .str.strip()
+        .str.upper()
+    )
+
+    mascara_faltante = ~df_pendientes_con_usuario["USUARIO_norm"].isin(usuarios_validos)
+    df_faltantes = df_pendientes_con_usuario[mascara_faltante]
+
+    if not df_faltantes.empty:
+        usuarios_faltantes = df_faltantes["USUARIO_norm"].value_counts()
+        total_expedientes = len(df_faltantes)
+        equipos_implicados = df_faltantes["EQUIPO"].dropna().unique()
+        equipos_str = ", ".join(sorted(equipos_implicados)) if len(equipos_implicados) > 0 else "desconocido"
+        lista_usuarios = ", ".join([f"{usr} ({cnt} exp.)" for usr, cnt in usuarios_faltantes.items()])
+        
+        st.warning(
+            f"⚠️ Hay **{total_expedientes} expediente{'s' if total_expedientes > 1 else ''}** "
+            f"cuyo usuario **no está activo** (o no registrado) en `df_usuarios`.\n\n"
+            f"**Usuarios afectados:** {lista_usuarios}\n\n"
+            f"**Equipo{'s' if len(equipos_implicados) > 1 else ''}:** {equipos_str}\n\n"
+            f"Se generará su PDF pero **no se enviará por correo**."
+        )
+    else:
+        st.success("✅ Todos los usuarios de expedientes pendientes están activos en df_usuarios.")
     
     if st.button(f"Generar {len(usuarios_pendientes)} Informes PDF + Equipos + Resumen KPI + Rendimiento", key="generar_pdfs_completos"):
         if usuarios_pendientes.size == 0:
@@ -5435,7 +5468,7 @@ elif eleccion == "Informes y Correos":
         st.success(f"✅ {len(usuarios_para_envio_individual)} usuarios recibirán sus expedientes pendientes")
         with st.expander("📋 Ver usuarios con expedientes"):
             df_envio = pd.DataFrame(usuarios_para_envio_individual)
-            st.dataframe(df_envio[['usuario', 'email', 'expedientes', 'recibir_resumen']], use_container_width=True)
+            st.dataframe(df_envio[['usuario', 'email', 'expedientes', 'recibir_resumen']], width='stretch')
             # BOTÓN DE DESCARGA SIMPLE
             if not df_envio.empty:
                 # Convertir a Excel en memoria
@@ -5457,7 +5490,7 @@ elif eleccion == "Informes y Correos":
         st.success(f"📊 {len(usuarios_para_resumen_solo)} usuarios recibirán el resumen KPI + informe rendimiento")
         with st.expander("📋 Ver usuarios para resumen"):
             df_resumen = pd.DataFrame(usuarios_para_resumen_solo)
-            st.dataframe(df_resumen[['usuario', 'email']], use_container_width=True)
+            st.dataframe(df_resumen[['usuario', 'email']], width='stretch')
 
     if not usuarios_para_envio_individual and not usuarios_para_resumen_solo:
         st.warning("⚠️ No hay usuarios para enviar correos")
