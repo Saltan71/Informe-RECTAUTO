@@ -4515,9 +4515,10 @@ elif eleccion == "Análisis del Rendimiento":
         total_semanas = df_agrupar['SEMANAS_EFECTIVAS'].sum()
         
         # Calcular rendimiento total correcto
-        rendimiento_total_agrupado = total_expedientes / total_semanas if total_semanas > 0 else 0
+        #rendimiento_total_agrupado = total_expedientes / total_semanas if total_semanas > 0 else 0
         
-        # Para los rendimientos por período, calcular la media
+        # Para los rendimientos por período, calcular la suma
+        rendimiento_total_agrupado = df_agrupar['RENDIMIENTO_TOTAL'].sum()    # Consideramos la suma, en lugar del cálculo anterior
         rendimiento_anual_agrupado = df_agrupar['RENDIMIENTO_ANUAL'].sum()
         potencial_anual_agrupado = df_agrupar['POTENCIAL_ANUAL'].sum()  # NUEVO
         rendimiento_trimestral_agrupado = df_agrupar['RENDIMIENTO_TRIMESTRAL'].sum()
