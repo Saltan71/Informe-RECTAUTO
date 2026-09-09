@@ -2150,11 +2150,16 @@ def generar_pdf_rendimiento(df_rendimiento_completo, num_semana, fecha_max_str):
         total_usuarios = df_rendimiento_completo['USUARIO'].nunique()
         total_expedientes = df_rendimiento_completo['EXPEDIENTES_DESPACHADOS'].sum()
         total_semanas = df_rendimiento_completo['SEMANAS_EFECTIVAS'].sum()
-        rendimiento_promedio = total_expedientes/total_semanas
-        rendimiento_anual_promedio = df_rendimiento_completo['RENDIMIENTO_ANUAL'].mean()
-        potencial_anual_promedio = df_rendimiento_completo['POTENCIAL_ANUAL'].mean()
-        potencial_anual_conjunto = potencial_anual_promedio*total_usuarios
-        
+        #rendimiento_promedio = total_expedientes/total_semanas
+        rendimiento_promedio = df_rendimiento_completo['RENDIMIENTO_TOTAL'].sum()
+        rendimiento_anual_promedio = df_rendimiento_completo['RENDIMIENTO_ANUAL'].sum()
+        #potencial_anual_promedio = df_rendimiento_completo['POTENCIAL_ANUAL'].sum()
+        #potencial_anual_conjunto = potencial_anual_promedio*total_usuarios
+        potencial_anual_conjunto = df_rendimiento_completo['POTENCIAL_ANUAL'].sum()
+        rendimiento_trimestral_promedio = df_rendimiento_completo['RENDIMIENTO_TRIMESTRAL'].sum()
+        rendimiento_mensual_promedio = df_rendimiento_completo['RENDIMIENTO_MENSUAL'].sum()
+        rendimiento_semanal = df_rendimiento_completo['RENDIMIENTO_SEMANAL'].sum()
+
         # Obtener lista de equipos únicos
         todos_equipos = set()
         for equipos_str in df_rendimiento_completo['EQUIPOS'].dropna():
@@ -2164,10 +2169,15 @@ def generar_pdf_rendimiento(df_rendimiento_completo, num_semana, fecha_max_str):
         pdf.add_metric("Total de Usuarios",                fmt_es(total_usuarios, 0))
         pdf.add_metric("Total de Expedientes Despachados",  fmt_es(total_expedientes, 0))
         pdf.add_metric("Total de Semanas Efectivas",        fmt_es(total_semanas, 1))
-        pdf.add_metric("Rendimiento Promedio",              fmt_es(rendimiento_promedio, 2))
-        pdf.add_metric("Rendimiento Anual Promedio",        fmt_es(rendimiento_anual_promedio, 2))
-        pdf.add_metric("Potencial Anual Promedio",          fmt_es(potencial_anual_promedio, 0))
-        pdf.add_metric("Potencial Anual Conjunto",          fmt_es(potencial_anual_conjunto, 0))
+        pdf.add_metric("Rendimiento Semanal (Desde Inicio)",              fmt_es(rendimiento_promedio, 2))
+        pdf.add_metric("Rendimiento Semanal (Últ. Año)",        fmt_es(rendimiento_anual_promedio, 2))
+        #pdf.add_metric("Potencial Anual Promedio",          fmt_es(potencial_anual_promedio, 0))
+        pdf.add_metric("Potencial Semanal (Últ. Año)",          fmt_es(potencial_anual_conjunto, 0))
+        pdf.add_metric("Rendimiento Semanal (Últ. Trimestre)",        fmt_es(rendimiento_trimestral_promedio, 2))
+        pdf.add_metric("Rendimiento Semanal (Últ. Mes)",        fmt_es(rendimiento_mensual_promedio, 2))
+        pdf.add_metric("Rendimiento Última Semana",        fmt_es(rendimiento_semanal, 2))
+
+
         pdf.add_metric("Equipos Analizados",                len(todos_equipos))
         
         pdf.ln(5)
