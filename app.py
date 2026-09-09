@@ -4827,7 +4827,7 @@ elif eleccion == "Análisis del Rendimiento":
                         
                         wb = Workbook()
                         ws = wb.active
-                        ws.title = "Rendimiento"
+                        ws.title = "Rendimiento_por_Semana"
                         
                         # Escribir encabezados con formato
                         header_fill = PatternFill(start_color="007933", end_color="007933", fill_type="solid")
