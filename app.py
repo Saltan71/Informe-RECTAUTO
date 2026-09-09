@@ -2172,7 +2172,7 @@ def generar_pdf_rendimiento(df_rendimiento_completo, num_semana, fecha_max_str):
         pdf.add_metric("Rendimiento Semanal (Desde Inicio)",              fmt_es(rendimiento_promedio, 2))
         pdf.add_metric("Rendimiento Semanal (Últ. Año)",        fmt_es(rendimiento_anual_promedio, 2))
         #pdf.add_metric("Potencial Anual Promedio",          fmt_es(potencial_anual_promedio, 0))
-        pdf.add_metric("Potencial Semanal (Últ. Año)",          fmt_es(potencial_anual_conjunto, 0))
+        pdf.add_metric("Potencial Anual (Últ. Año)",          fmt_es(potencial_anual_conjunto, 0))
         pdf.add_metric("Rendimiento Semanal (Últ. Trimestre)",        fmt_es(rendimiento_trimestral_promedio, 2))
         pdf.add_metric("Rendimiento Semanal (Últ. Mes)",        fmt_es(rendimiento_mensual_promedio, 2))
         pdf.add_metric("Rendimiento Última Semana",        fmt_es(rendimiento_semanal, 2))
